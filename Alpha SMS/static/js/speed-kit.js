@@ -66,17 +66,49 @@ function zy2Render(id) {
   const isColVisible = (i) => !t.hiddenCols[i];
   const visibleColsCount = t.cols.filter((_, i) => isColVisible(i)).length;
 
-  const rows = zy2Data(t);
-  const total = rows.length;
-  const pages = Math.max(1, Math.ceil(total / t.perPage));
-  const page = t.page = Math.min(t.page, pages);
-  const from = total ? (page - 1) * t.perPage + 1 : 0;
-  const to = Math.min(total, page * t.perPage);
-  const slice = rows.slice((page - 1) * t.perPage, page * t.perPage);
+  let slice = [];
+  let total = 0;
+  let pages = 1;
+  let page = 1;
+  let from = 0;
+  let to = 0;
+
+  if (t.serverMode) {
+    total = t.totalRecords != null ? t.totalRecords : t.rows.length;
+    pages = t.totalPages || Math.max(1, Math.ceil(total / (t.perPage || 25)));
+    page = t.page = Math.max(1, Math.min(t.page || 1, pages));
+    from = total > 0 ? (page - 1) * (t.perPage || 25) + 1 : 0;
+    to = Math.min(total, from + t.rows.length - 1);
+    slice = t.rows;
+  } else {
+    const rows = zy2Data(t);
+    total = rows.length;
+    pages = Math.max(1, Math.ceil(total / t.perPage));
+    page = t.page = Math.min(t.page, pages);
+    from = total ? (page - 1) * t.perPage + 1 : 0;
+    to = Math.min(total, page * t.perPage);
+    slice = rows.slice((page - 1) * t.perPage, page * t.perPage);
+  }
 
   const nums = [];
-  const startN = Math.max(1, Math.min(page - 2, pages - 4));
-  for (let i = startN; i <= Math.min(pages, startN + 4); i++) nums.push(i);
+  if (pages <= 7) {
+    for (let i = 1; i <= pages; i++) nums.push(i);
+  } else {
+    nums.push(1);
+    if (page > 3) nums.push('...');
+    const start = Math.max(2, page - 1);
+    const end = Math.min(pages - 1, page + 1);
+    for (let i = start; i <= end; i++) {
+      if (!nums.includes(i)) nums.push(i);
+    }
+    if (page < pages - 2) nums.push('...');
+    if (!nums.includes(pages)) nums.push(pages);
+  }
+
+  const pagerButtons = nums.map(n => {
+    if (n === '...') return `<span class="zy-pager-ellipsis" style="display:inline-flex;align-items:center;padding:0 6px;color:#94a3b8;font-size:12px;">…</span>`;
+    return `<button class="${n === page ? 'on active' : ''}" onclick="zy2Page('${id}',${n})">${n}</button>`;
+  }).join('');
 
   const head =
     (t.check ? `<th class="zy-cbcol"><input type="checkbox" onclick="zy2All('${id}',this)">${zyImg('ui_sort_asc','zy-cbsort')}</th>` : '') +
@@ -135,20 +167,48 @@ function zy2Render(id) {
       ${footHtml}
     </table></div>
     <div class="zy-dt2-foot">
-      <div class="zy-info">Showing ${from} to ${to} of ${total} entries</div>
+      <div class="zy-info">Showing ${from ? from.toLocaleString() : 0} to ${to ? to.toLocaleString() : 0} of ${total.toLocaleString()} entries</div>
       <div class="zy-pager">
-        <button ${page === 1 ? 'disabled' : ''} onclick="zy2Page('${id}',1)">First</button>
-        <button ${page === 1 ? 'disabled' : ''} onclick="zy2Page('${id}',${page - 1})">Previous</button>
-        ${nums.map(n => `<button class="${n === page ? 'on' : ''}" onclick="zy2Page('${id}',${n})">${n}</button>`).join('')}
-        <button ${page === pages ? 'disabled' : ''} onclick="zy2Page('${id}',${page + 1})">Next</button>
-        <button ${page === pages ? 'disabled' : ''} onclick="zy2Page('${id}',${pages})">Last</button>
+        <button ${page <= 1 ? 'disabled' : ''} onclick="zy2Page('${id}',1)" title="First Page">«</button>
+        <button ${page <= 1 ? 'disabled' : ''} onclick="zy2Page('${id}',${page - 1})" title="Previous Page">‹</button>
+        ${pagerButtons}
+        <button ${page >= pages ? 'disabled' : ''} onclick="zy2Page('${id}',${page + 1})" title="Next Page">›</button>
+        <button ${page >= pages ? 'disabled' : ''} onclick="zy2Page('${id}',${pages})" title="Last Page">»</button>
       </div>
     </div>`;
 }
-function zy2Sort(id, i) { const t = ZYT2[id]; if (t.sort === i) t.dir = -t.dir; else { t.sort = i; t.dir = 1; } t.page = 1; zy2Render(id); }
-function zy2Page(id, p) { const t = ZYT2[id]; t.page = Math.max(1, p); zy2Render(id); }
-function zy2Size(id, v) { const t = ZYT2[id]; t.perPage = parseInt(v); t.page = 1; zy2Render(id); }
-function zy2Search(id, v) { const t = ZYT2[id]; t.search = v; t.page = 1; zy2Render(id); const el = document.querySelector(`#${id} .zy-search input`); if (el) { el.focus(); el.setSelectionRange(v.length, v.length); } }
+function zy2Sort(id, i) {
+  const t = ZYT2[id];
+  if (!t) return;
+  if (t.sort === i) t.dir = -t.dir; else { t.sort = i; t.dir = 1; }
+  t.page = 1;
+  zy2Render(id);
+}
+function zy2Page(id, p) {
+  const t = ZYT2[id];
+  if (!t) return;
+  const targetPage = Math.max(1, p);
+  if (t.serverMode && typeof t.onPageChange === 'function') {
+    t.page = targetPage;
+    t.onPageChange(targetPage);
+    return;
+  }
+  t.page = targetPage;
+  zy2Render(id);
+}
+function zy2Size(id, v) {
+  const t = ZYT2[id];
+  if (!t) return;
+  const newSize = parseInt(v, 10) || 25;
+  t.perPage = newSize;
+  t.page = 1;
+  if (t.serverMode && typeof t.onSizeChange === 'function') {
+    t.onSizeChange(newSize);
+    return;
+  }
+  zy2Render(id);
+}
+function zy2Search(id, v) { const t = ZYT2[id]; if (!t) return; t.search = v; t.page = 1; zy2Render(id); const el = document.querySelector(`#${id} .zy-search input`); if (el) { el.focus(); el.setSelectionRange(v.length, v.length); } }
 function zy2All(id, el) {
   document.querySelectorAll(`.zy-cb-${id}`).forEach(c => c.checked = el.checked);
   if (typeof window.zySyncSelectionBar === 'function') window.zySyncSelectionBar(id);

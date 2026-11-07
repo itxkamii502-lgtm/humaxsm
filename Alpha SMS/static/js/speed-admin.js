@@ -919,10 +919,23 @@ window.zyExportCdrAdminStream = function() {
 };
 window.zyExportCdrVideoFormat = window.zyExportCdrAdminStream;
 
-async function renderMySmsLoad(summary = false) {
+async function renderMySmsLoad(pageOrSummary = 1) {
+  const targetPage = typeof pageOrSummary === 'number' ? pageOrSummary : 1;
+  const isSummaryMode = typeof pageOrSummary === 'boolean' ? pageOrSummary : false;
+
   const body = document.getElementById('rp-body');
   if (!body) return;
-  body.innerHTML = '<div class="zy-loading" style="padding:40px;text-align:center;color:#64748b;">Loading CDR records…</div>';
+
+  if (window._adminCdrAbortController) {
+    try { window._adminCdrAbortController.abort(); } catch (_) {}
+  }
+  window._adminCdrAbortController = new AbortController();
+  const reqSignal = window._adminCdrAbortController.signal;
+
+  body.innerHTML = `<div class="zy-loading" style="padding:40px;text-align:center;color:#64748b;">
+    <div style="display:inline-block;margin-bottom:8px;"><i class="fas fa-spinner fa-spin fa-2x" style="color:#0ea5e9;"></i></div>
+    <div>Loading CDR records…</div>
+  </div>`;
 
   const val = id => (document.getElementById(id) || {}).value || '';
   const from = val('rp-from'), to = val('rp-to');
@@ -946,11 +959,15 @@ async function renderMySmsLoad(summary = false) {
   if (cli) params.append('cli', cli);
   if (status && status !== 'All') params.append('status', status);
   if (checkedBoxes.length) params.append('group_by', checkedBoxes.join(','));
+
   const limitVal = val('rp-limit') || '25';
+  const limitNum = limitVal === 'all' ? 10000 : (parseInt(limitVal, 10) || 25);
   params.append('limit', limitVal);
+  params.append('page', String(targetPage));
 
   try {
-    const logs = await apiFetch(`/api/sms/logs?${params.toString()}`);
+    const logs = await apiFetch(`/api/sms/logs?${params.toString()}`, { signal: reqSignal });
+    if (!logs) return;
     const data = (logs && logs.data) || [];
 
     if (logs && logs.grouped && checkedBoxes.length) {
@@ -987,14 +1004,14 @@ async function renderMySmsLoad(summary = false) {
 
       const sumTotals = typeof zyBuildCdrTotalRow === 'function' ? zyBuildCdrTotalRow(data, true, { summary: logs.summary }) : null;
       const totalGroups = sumTotals ? sumTotals.count : data.length;
-      const totalSms = sumTotals ? sumTotals.totalSms : data.reduce((s, g) => s + (g.sms_count || 0), 0);
-      const totalPayout = sumTotals ? sumTotals.totalPayout : data.reduce((s, g) => s + (parseFloat(g.payout) || 0), 0);
-      const totalAgentPayout = sumTotals ? sumTotals.totalClientPayout : data.reduce((s, g) => s + (parseFloat(g.agent_payout != null ? g.agent_payout : g.client_payout) || 0), 0);
-      const totalProfit = sumTotals ? sumTotals.totalProfit : data.reduce((s, g) => s + (parseFloat(g.profit != null ? g.profit : ((g.payout || 0) - (g.client_payout || 0))) || 0), 0);
+      const totalSms = sumTotals ? sumTotals.totalSms : (logs.summary && logs.summary.total_sms != null ? logs.summary.total_sms : data.reduce((s, g) => s + (g.sms_count || 0), 0));
+      const totalPayout = sumTotals ? sumTotals.totalPayout : (logs.summary && logs.summary.payout != null ? logs.summary.payout : data.reduce((s, g) => s + (parseFloat(g.payout) || 0), 0));
+      const totalAgentPayout = sumTotals ? sumTotals.totalClientPayout : (logs.summary && logs.summary.client_payout != null ? logs.summary.client_payout : data.reduce((s, g) => s + (parseFloat(g.agent_payout != null ? g.agent_payout : g.client_payout) || 0), 0));
+      const totalProfit = sumTotals ? sumTotals.totalProfit : (logs.summary && logs.summary.profit != null ? logs.summary.profit : Math.max(0, totalPayout - totalAgentPayout));
 
-      const footRow = `<td><b>Total Groups: ${totalGroups}</b><br><small>Total SMS: ${totalSms}</small></td>` +
+      const footRow = `<td><b>Total Groups: ${totalGroups}</b><br><small>Total SMS: ${totalSms.toLocaleString()}</small></td>` +
         '<td></td>'.repeat(Math.max(0, checkedBoxes.length - 1)) +
-        `<td><b>${totalSms}</b></td>` +
+        `<td><b>${totalSms.toLocaleString()}</b></td>` +
         `<td><b>$</b></td>` +
         `<td><b>${totalPayout.toFixed(4)}</b></td>` +
         `<td><b>${totalAgentPayout.toFixed(4)}</b></td>` +
@@ -1005,12 +1022,13 @@ async function renderMySmsLoad(summary = false) {
         rows,
         sort: checkedBoxes.length,
         dir: -1,
+        perPage: limitNum,
+        serverMode: false,
         footRow
       });
       zy2Render('dt-cdr');
     } else {
       // ── Detailed Ungrouped Mode (Matching Video Columns 1:1) ──
-      // Columns: Date, Provider, Range, Type, Number, CLI, SMS, Agent, Manager, Currency, My Payout, Agent Payout, Profit, Cause, IP
       const cols = [
         'Date',
         'Provider',
@@ -1058,10 +1076,11 @@ async function renderMySmsLoad(summary = false) {
         ];
       });
 
-      const totalSms = rows.length;
+      const sum = logs.summary || {};
+      const totalSms = (sum.total_sms != null) ? sum.total_sms : (logs.total != null ? logs.total : rows.length);
+
       let sumMyPayout = 0;
       let sumAgentPayout = 0;
-
       rows.forEach(r => {
         sumMyPayout += parseFloat(zyCell2(r[10]).v) || 0;
         sumAgentPayout += parseFloat(zyCell2(r[11]).v) || 0;
@@ -1069,16 +1088,16 @@ async function renderMySmsLoad(summary = false) {
       const sumProfit = Math.max(0, sumMyPayout - sumAgentPayout);
 
       // Foot row matching AURA Softswitch: Total SMS, Multi-currency Payouts (USD, EUR, GBP) and Profit
-      const mc = (logs && logs.summary && logs.summary.multi_currency) || {};
-      const usdIn = mc.USD ? mc.USD.in : sumMyPayout;
+      const mc = sum.multi_currency || {};
+      const usdIn = mc.USD ? mc.USD.in : (sum.payout != null ? sum.payout : sumMyPayout);
       const eurIn = mc.EUR ? mc.EUR.in : 0;
       const gbpIn = mc.GBP ? mc.GBP.in : 0;
 
-      const usdOut = mc.USD ? mc.USD.out : sumAgentPayout;
+      const usdOut = mc.USD ? mc.USD.out : (sum.client_payout != null ? sum.client_payout : sumAgentPayout);
       const eurOut = mc.EUR ? mc.EUR.out : 0;
       const gbpOut = mc.GBP ? mc.GBP.out : 0;
 
-      const usdPr = mc.USD ? mc.USD.profit : sumProfit;
+      const usdPr = mc.USD ? mc.USD.profit : (sum.profit != null ? sum.profit : sumProfit);
       const eurPr = mc.EUR ? mc.EUR.profit : 0;
       const gbpPr = mc.GBP ? mc.GBP.profit : 0;
 
@@ -1100,7 +1119,7 @@ async function renderMySmsLoad(summary = false) {
         <span class="aura-badge-gbp apx-badge-gbp">GBP: ${zyFmtMoney(gbpPr, 4)}</span>
       </div>`;
 
-      const footRow = `<td><b>Total SMS<br>${totalSms}</b></td>` +
+      const footRow = `<td><b>Total SMS<br>${totalSms.toLocaleString()}</b></td>` +
         '<td></td>'.repeat(8) +
         `<td><b>Multi</b></td>` +
         `<td><b>My Payout</b><br>${myPayoutBlock}</td>` +
@@ -1113,11 +1132,23 @@ async function renderMySmsLoad(summary = false) {
         rows,
         sort: 0,
         dir: -1,
+        perPage: limitNum,
+        serverMode: true,
+        totalRecords: logs.total != null ? logs.total : data.length,
+        totalPages: logs.total_pages || 1,
+        page: logs.page || targetPage,
+        onPageChange: (p) => renderMySmsLoad(p),
+        onSizeChange: (s) => {
+          const sel = document.getElementById('rp-limit');
+          if (sel) sel.value = String(s);
+          renderMySmsLoad(1);
+        },
         footRow
       });
       zy2Render('dt-cdr');
     }
   } catch (err) {
+    if (err && err.name === 'AbortError') return;
     console.error('SMS CDR Stats load error:', err);
     body.innerHTML = '<div class="zy-empty" style="padding:40px;text-align:center;color:#ef4444;">Failed to load SMS CDR stats. Please try again.</div>';
   }

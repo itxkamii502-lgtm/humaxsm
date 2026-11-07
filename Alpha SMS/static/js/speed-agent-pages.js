@@ -1420,10 +1420,24 @@ window.zyAgentExportReport = function() {
   });
 };
 
-async function zyCdrLoad(summary = false) {
+async function zyCdrLoad(pageOrSummary = 1) {
+  const targetPage = typeof pageOrSummary === 'number' ? pageOrSummary : 1;
+  const isSummaryMode = typeof pageOrSummary === 'boolean' ? pageOrSummary : false;
+
   const body = document.getElementById('rp-body');
   if (!body) return;
-  body.innerHTML = `<div class="zy-loading" style="padding:40px;text-align:center;color:#64748b;">Loading CDR records…</div>`;
+
+  // Cancel prior in-flight request if user quickly clicks page/filters
+  if (window._agentCdrAbortController) {
+    try { window._agentCdrAbortController.abort(); } catch (_) {}
+  }
+  window._agentCdrAbortController = new AbortController();
+  const reqSignal = window._agentCdrAbortController.signal;
+
+  body.innerHTML = `<div class="zy-loading" style="padding:40px;text-align:center;color:#64748b;">
+    <div style="display:inline-block;margin-bottom:8px;"><i class="fas fa-spinner fa-spin fa-2x" style="color:#0ea5e9;"></i></div>
+    <div>Loading CDR records…</div>
+  </div>`;
 
   const val = id => (document.getElementById(id) || {}).value || '';
   const from = val('rp-from'), to = val('rp-to');
@@ -1443,11 +1457,15 @@ async function zyCdrLoad(summary = false) {
   if (cli) params.append('cli', cli);
   if (status && status !== 'All') params.append('status', status);
   if (checkedBoxes.length) params.append('group_by', checkedBoxes.join(','));
+
   const limitVal = val('rp-limit') || '25';
+  const limitNum = limitVal === 'all' ? 10000 : (parseInt(limitVal, 10) || 25);
   params.append('limit', limitVal);
+  params.append('page', String(targetPage));
 
   try {
-    const logs = await apiFetch(`/api/sms/logs?${params.toString()}`);
+    const logs = await apiFetch(`/api/sms/logs?${params.toString()}`, { signal: reqSignal });
+    if (!logs) return;
     const data = (logs && logs.data) || [];
 
     if (logs && logs.grouped && checkedBoxes.length) {
@@ -1480,21 +1498,22 @@ async function zyCdrLoad(summary = false) {
 
       const sumTotals = typeof zyBuildCdrTotalRow === 'function' ? zyBuildCdrTotalRow(data, true, { summary: logs.summary }) : null;
       const totalGroups = sumTotals ? sumTotals.count : data.length;
-      const totalSms = sumTotals ? sumTotals.totalSms : data.reduce((sum, g) => sum + (g.sms_count || 0), 0);
-      const totalPayout = sumTotals ? sumTotals.totalPayout : data.reduce((sum, g) => sum + (parseFloat(g.payout) || 0), 0);
-      const totalClientPayout = sumTotals ? sumTotals.totalClientPayout : data.reduce((sum, g) => sum + (parseFloat(g.client_payout) || 0), 0);
-      const totalProfit = sumTotals ? sumTotals.totalProfit : data.reduce((sum, g) => sum + (parseFloat(g.profit != null ? g.profit : ((g.payout || 0) - (g.client_payout || 0))) || 0), 0);
+      const totalSms = sumTotals ? sumTotals.totalSms : (logs.summary && logs.summary.total_sms != null ? logs.summary.total_sms : data.reduce((sum, g) => sum + (g.sms_count || 0), 0));
+      const totalPayout = sumTotals ? sumTotals.totalPayout : (logs.summary && logs.summary.payout != null ? logs.summary.payout : data.reduce((sum, g) => sum + (parseFloat(g.payout) || 0), 0));
+      const totalClientPayout = sumTotals ? sumTotals.totalClientPayout : (logs.summary && logs.summary.client_payout != null ? logs.summary.client_payout : data.reduce((sum, g) => sum + (parseFloat(g.client_payout) || 0), 0));
+      const totalProfit = sumTotals ? sumTotals.totalProfit : (logs.summary && logs.summary.profit != null ? logs.summary.profit : Math.max(0, totalPayout - totalClientPayout));
 
       body.innerHTML = zyDT2('dt-cdr', {
         cols,
         rows,
         sort: checkedBoxes.length,
         dir: -1,
-        perPage: 25,
+        perPage: limitNum,
+        serverMode: false,
         searchPlaceholder: 'Number, CLI, message, range',
         footRow: `<td><b>Total Groups: ${totalGroups}</b></td>` +
                  '<td></td>'.repeat(Math.max(0, checkedBoxes.length - 1)) +
-                 `<td><b>${totalSms}</b></td>` +
+                 `<td><b>${totalSms.toLocaleString()}</b></td>` +
                  `<td><b>$</b></td>` +
                  `<td><b>${totalPayout.toFixed(4)}</b></td>` +
                  `<td><b>${totalClientPayout.toFixed(4)}</b></td>` +
@@ -1524,36 +1543,41 @@ async function zyCdrLoad(summary = false) {
         ];
       });
 
-      const totalSms = rows.length;
-      let sumMyPayout = 0;
-      let sumClientPayout = 0;
+      const sum = logs.summary || {};
+      const totalSms = (sum.total_sms != null) ? sum.total_sms : (logs.total != null ? logs.total : rows.length);
+      const totalPayout = (sum.payout != null) ? sum.payout : (data.reduce((acc, s) => acc + (parseFloat(s.agent_payout != null ? s.agent_payout : (s.payout || 0)) || 0), 0));
+      const totalClientPayout = (sum.client_payout != null) ? sum.client_payout : (data.reduce((acc, s) => acc + (parseFloat(s.client_payout != null ? s.client_payout : (s.client_rate || 0)) || 0), 0));
+      const totalProfit = (sum.profit != null) ? sum.profit : Math.max(0, totalPayout - totalClientPayout);
 
-      data.forEach(s => {
-        const myP = parseFloat(s.agent_payout != null ? s.agent_payout : (s.payout || 0)) || 0;
-        const clP = parseFloat(s.client_payout != null ? s.client_payout : (s.client_rate || 0)) || 0;
-        sumMyPayout += myP;
-        sumClientPayout += clP;
-      });
-      const sumProfit = Math.max(0, sumMyPayout - sumClientPayout);
-
-      const footRow = `<td><b>Total SMS<br>${totalSms}</b></td>` +
+      const footRow = `<td><b>Total SMS<br>${totalSms.toLocaleString()}</b></td>` +
         '<td></td><td></td><td></td><td></td><td></td>' +
-        `<td><b>My Payout<br>${sumMyPayout.toFixed(4)}</b></td>` +
-        `<td><b>Client Payout<br>${sumClientPayout.toFixed(4)}</b></td>` +
-        `<td><b>My Profit<br>${sumProfit.toFixed(4)}</b></td>`;
+        `<td><b>My Payout<br>${Number(totalPayout).toFixed(4)}</b></td>` +
+        `<td><b>Client Payout<br>${Number(totalClientPayout).toFixed(4)}</b></td>` +
+        `<td><b>My Profit<br>${Number(totalProfit).toFixed(4)}</b></td>`;
 
       body.innerHTML = zyDT2('dt-cdr', {
         cols,
         rows,
         sort: 0,
         dir: -1,
-        perPage: 25,
+        perPage: limitNum,
+        serverMode: true,
+        totalRecords: logs.total != null ? logs.total : data.length,
+        totalPages: logs.total_pages || 1,
+        page: logs.page || targetPage,
+        onPageChange: (p) => zyCdrLoad(p),
+        onSizeChange: (s) => {
+          const sel = document.getElementById('rp-limit');
+          if (sel) sel.value = String(s);
+          zyCdrLoad(1);
+        },
         searchPlaceholder: 'Number, CLI, message, range',
         footRow
       });
       zy2Render('dt-cdr');
     }
   } catch (err) {
+    if (err && err.name === 'AbortError') return;
     console.error('Agent CDR stats load error:', err);
     body.innerHTML = '<div class="zy-empty" style="padding:40px;text-align:center;color:#ef4444;">Failed to load CDR records. Please try again.</div>';
   }

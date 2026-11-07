@@ -1,4 +1,5 @@
 import express from 'express';
+import compression from 'compression';
 import http from 'http';
 import path from 'path';
 import fs from 'fs';
@@ -355,6 +356,24 @@ function rotateSmsLog() {
   } catch (e) { console.error('SMS rotation error:', e); }
 }
 // Current log + archives (for payments / long reports)
+const archiveFileCache = new Map();
+function readArchivedJsonCached(filePath) {
+  try {
+    const stat = fs.statSync(filePath);
+    const cached = archiveFileCache.get(filePath);
+    if (cached && cached.mtime === stat.mtimeMs) {
+      return cached.data;
+    }
+    const raw = fs.readFileSync(filePath, 'utf-8');
+    const parsed = JSON.parse(raw);
+    const data = Array.isArray(parsed) ? parsed : [];
+    archiveFileCache.set(filePath, { mtime: stat.mtimeMs, data });
+    return data;
+  } catch (e) {
+    return [];
+  }
+}
+
 function readSmsWithArchive(fromDate) {
   const current = readDb('sms_log') || [];
   const out = [];
@@ -370,18 +389,14 @@ function readSmsWithArchive(fromDate) {
       for (const f of files) {
         const m = /^sms_log_(\d{4}-\d{2})\.json$/.exec(f);
         if (!m || m[1] < fromMonth) continue;
-        try {
-          const archived = JSON.parse(fs.readFileSync(path.join(ARCHIVE_DIR, f), 'utf-8'));
-          if (Array.isArray(archived)) {
-            for (const r of archived) {
-              const idStr = r && r.id != null ? String(r.id) : null;
-              if (!idStr || !seenIds.has(idStr)) {
-                if (idStr) seenIds.add(idStr);
-                out.push(r);
-              }
-            }
+        const archived = readArchivedJsonCached(path.join(ARCHIVE_DIR, f));
+        for (const r of archived) {
+          const idStr = r && r.id != null ? String(r.id) : null;
+          if (!idStr || !seenIds.has(idStr)) {
+            if (idStr) seenIds.add(idStr);
+            out.push(r);
           }
-        } catch (e) { /* skip unreadable */ }
+        }
       }
     }
   } catch (e) { /* ignore */ }
@@ -1471,6 +1486,15 @@ setInterval(async () => {
 }, 2000);
 
 // ── Middleware ───────────────────────────────────────────────
+// Enable high-efficiency gzip/deflate compression for fast responses over slow networks
+app.use(compression({
+  filter: (req, res) => {
+    if (req.headers['x-no-compression']) return false;
+    return compression.filter(req, res);
+  },
+  threshold: 512
+}));
+
 // Large bodies only on the few routes that really need them; everything else is capped at 1 MB
 app.use(['/api/numbers/import-to-range', '/api/numbers/bulk-range-import', '/api/numbers/upload', '/api/backup/restore'], express.json({ limit: '25mb' }));
 app.use(['/api/settings', '/api/settings/upload-logo'], express.json({ limit: '5mb' }));

@@ -1303,10 +1303,21 @@ window.zyMgrExportReport = function() {
   window.location.href = `/api/sms/logs?${params.toString()}`;
 };
 
-async function pgSmsReportsLoad() {
+async function pgSmsReportsLoad(pageOrSummary = 1) {
+  const targetPage = typeof pageOrSummary === 'number' ? pageOrSummary : 1;
   const panelBody = document.getElementById('rp-body') || document.querySelector('.zy-panel-body');
   if (!panelBody) return;
-  panelBody.innerHTML = `<div class="zy-loading" style="padding:40px;text-align:center;color:#64748b;">Loading…</div>`;
+
+  if (window._managerCdrAbortController) {
+    try { window._managerCdrAbortController.abort(); } catch (_) {}
+  }
+  window._managerCdrAbortController = new AbortController();
+  const reqSignal = window._managerCdrAbortController.signal;
+
+  panelBody.innerHTML = `<div class="zy-loading" style="padding:40px;text-align:center;color:#64748b;">
+    <div style="display:inline-block;margin-bottom:8px;"><i class="fas fa-spinner fa-spin fa-2x" style="color:#0ea5e9;"></i></div>
+    <div>Loading reports…</div>
+  </div>`;
 
   const val = id => (document.getElementById(id) || {}).value || '';
   const from = val('rp-from'), to = val('rp-to');
@@ -1326,101 +1337,119 @@ async function pgSmsReportsLoad() {
   if (cli) params.append('cli', cli);
   if (status && status !== 'All') params.append('status', status);
   if (checkedBoxes.length) params.append('group_by', checkedBoxes.join(','));
-  params.append('limit', '5000');
 
-  const logs = await apiFetch(`/api/sms/logs?${params.toString()}`);
-  const data = (logs && logs.data) || [];
+  const limitVal = val('rp-limit') || '25';
+  const limitNum = limitVal === 'all' ? 10000 : (parseInt(limitVal, 10) || 25);
+  params.append('limit', limitVal);
+  params.append('page', String(targetPage));
 
-  if (logs && logs.grouped && checkedBoxes.length) {
-    const keyLabels = {
-      hour: 'Hour',
-      date: 'Date',
-      daily: 'Date',
-      month: 'Month',
-      range: 'Range',
-      agent: 'Agent',
-      number: 'Number',
-      cli: 'CLI'
-    };
-    const cols = [...checkedBoxes.map(k => keyLabels[k] || k), 'SMS Count', 'Currency', 'My Payout', 'Agent Payout', 'Profit'];
-    const rows = data.map(g => [
-      ...checkedBoxes.map(k => g[k] || '—'),
-      g.sms_count || 0,
-      g.currency || '$',
-      Number(g.payout || 0).toFixed(4),
-      Number(g.agent_payout != null ? g.agent_payout : (g.client_payout || 0)).toFixed(4),
-      Number(g.profit != null ? g.profit : ((g.payout || 0) - (g.client_payout || 0))).toFixed(4)
-    ]);
-    const totalSms = data.reduce((sum, g) => sum + (g.sms_count || 0), 0);
-    const totalPayout = data.reduce((sum, g) => sum + (parseFloat(g.payout) || 0), 0);
-    const totalAgentPayout = data.reduce((sum, g) => sum + (parseFloat(g.agent_payout != null ? g.agent_payout : g.client_payout) || 0), 0);
-    const totalProfit = data.reduce((sum, g) => sum + (parseFloat(g.profit != null ? g.profit : ((g.payout || 0) - (g.client_payout || 0))) || 0), 0);
+  try {
+    const logs = await apiFetch(`/api/sms/logs?${params.toString()}`, { signal: reqSignal });
+    if (!logs) return;
+    const data = (logs && logs.data) || [];
 
-    panelBody.innerHTML = zyDT2('dt-reports', {
-      cols,
-      rows,
-      sort: checkedBoxes.length,
-      dir: -1,
-      footRow: `<td><b>Total SMS: ${totalSms}</b></td>` +
-               '<td></td>'.repeat(Math.max(0, checkedBoxes.length - 1)) +
-               `<td><b>${totalSms}</b></td>` +
-               `<td><b>$</b></td>` +
-               `<td><b>${totalPayout.toFixed(4)}</b></td>` +
-               `<td><b>${totalAgentPayout.toFixed(4)}</b></td>` +
-               `<td><b>${totalProfit.toFixed(4)}</b></td>`
-    });
-    zy2Render('dt-reports');
-  } else {
-    // Columns matching video: Date, Range, Number, CLI, SMS, Curr., My Payout, Agent Payout, Profit
-    const cols = ['Date', 'Range', 'Number', 'CLI', 'SMS', 'Curr.', 'My Payout', 'Agent Payout', 'Profit'];
-    const rows = data.map(s => {
-      const myP = parseFloat(s.my_payout != null ? s.my_payout : (s.payout || 0)) || 0;
-      const agP = parseFloat(s.agent_payout != null ? s.agent_payout : (s.agent_rate || 0)) || 0;
-      const prof = Math.max(0, myP - agP);
-      const smsHtml = typeof zyHighlightOtp === 'function' ? zyHighlightOtp(s.message || '') : zyEsc(s.message || '');
+    if (logs && logs.grouped && checkedBoxes.length) {
+      const keyLabels = {
+        hour: 'Hour',
+        date: 'Date',
+        daily: 'Date',
+        month: 'Month',
+        range: 'Range',
+        agent: 'Agent',
+        number: 'Number',
+        cli: 'CLI'
+      };
+      const cols = [...checkedBoxes.map(k => keyLabels[k] || k), 'SMS Count', 'Currency', 'My Payout', 'Agent Payout', 'Profit'];
+      const rows = data.map(g => [
+        ...checkedBoxes.map(k => g[k] || '—'),
+        g.sms_count || 0,
+        g.currency || '$',
+        Number(g.payout || 0).toFixed(4),
+        Number(g.agent_payout != null ? g.agent_payout : (g.client_payout || 0)).toFixed(4),
+        Number(g.profit != null ? g.profit : ((g.payout || 0) - (g.client_payout || 0))).toFixed(4)
+      ]);
+      const sum = logs.summary || {};
+      const totalSms = sum.total_sms != null ? sum.total_sms : data.reduce((s, g) => s + (g.sms_count || 0), 0);
+      const totalPayout = sum.payout != null ? sum.payout : data.reduce((s, g) => s + (parseFloat(g.payout) || 0), 0);
+      const totalAgentPayout = sum.client_payout != null ? sum.client_payout : data.reduce((s, g) => s + (parseFloat(g.agent_payout != null ? g.agent_payout : g.client_payout) || 0), 0);
+      const totalProfit = sum.profit != null ? sum.profit : Math.max(0, totalPayout - totalAgentPayout);
 
-      return [
-        (s.timestamp || s.date || '').replace('T', ' ').slice(0, 19),
-        s.range_name || s.range_label || s.range || (s.country || '—'),
-        { v: s.number || '—', h: `<span class="monospace" style="font-weight:600;">${zyEsc(s.number || '—')}</span>` },
-        { v: s.cli || '—', h: `<span class="monospace">${zyEsc(s.cli || s.app || '—')}</span>` },
-        { v: s.message || '', h: `<div style="max-width:320px;white-space:normal;line-height:1.4;">${smsHtml}</div>` },
-        s.currency || '$',
-        Number(myP).toFixed(4),
-        Number(agP).toFixed(4),
-        Number(prof).toFixed(4)
-      ];
-    });
+      panelBody.innerHTML = zyDT2('dt-reports', {
+        cols,
+        rows,
+        sort: checkedBoxes.length,
+        dir: -1,
+        perPage: limitNum,
+        serverMode: false,
+        footRow: `<td><b>Total SMS: ${totalSms.toLocaleString()}</b></td>` +
+                 '<td></td>'.repeat(Math.max(0, checkedBoxes.length - 1)) +
+                 `<td><b>${totalSms.toLocaleString()}</b></td>` +
+                 `<td><b>$</b></td>` +
+                 `<td><b>${totalPayout.toFixed(4)}</b></td>` +
+                 `<td><b>${totalAgentPayout.toFixed(4)}</b></td>` +
+                 `<td><b>${totalProfit.toFixed(4)}</b></td>`
+      });
+      zy2Render('dt-reports');
+    } else {
+      const cols = ['Date', 'Range', 'Number', 'CLI', 'SMS', 'Curr.', 'My Payout', 'Agent Payout', 'Profit'];
+      const rows = data.map(s => {
+        const myP = parseFloat(s.my_payout != null ? s.my_payout : (s.payout || 0)) || 0;
+        const agP = parseFloat(s.agent_payout != null ? s.agent_payout : (s.agent_rate || 0)) || 0;
+        const prof = Math.max(0, myP - agP);
+        const smsHtml = typeof zyHighlightOtp === 'function' ? zyHighlightOtp(s.message || '') : zyEsc(s.message || '');
 
-    const totalSms = rows.length;
-    let sumMyPayout = 0;
-    let sumAgentPayout = 0;
+        return [
+          (s.timestamp || s.date || '').replace('T', ' ').slice(0, 19),
+          s.range_name || s.range_label || s.range || (s.country || '—'),
+          { v: s.number || '—', h: `<span class="monospace" style="font-weight:600;">${zyEsc(s.number || '—')}</span>` },
+          { v: s.cli || '—', h: `<span class="monospace">${zyEsc(s.cli || s.app || '—')}</span>` },
+          { v: s.message || '', h: `<div style="max-width:320px;white-space:normal;line-height:1.4;">${smsHtml}</div>` },
+          s.currency || '$',
+          Number(myP).toFixed(4),
+          Number(agP).toFixed(4),
+          Number(prof).toFixed(4)
+        ];
+      });
 
-    data.forEach(s => {
-      const myP = parseFloat(s.my_payout != null ? s.my_payout : (s.payout || 0)) || 0;
-      const agP = parseFloat(s.agent_payout != null ? s.agent_payout : (s.agent_rate || 0)) || 0;
-      sumMyPayout += myP;
-      sumAgentPayout += agP;
-    });
-    const sumProfit = Math.max(0, sumMyPayout - sumAgentPayout);
+      const sum = logs.summary || {};
+      const totalSms = (sum.total_sms != null) ? sum.total_sms : (logs.total != null ? logs.total : rows.length);
+      const totalPayout = (sum.payout != null) ? sum.payout : data.reduce((acc, s) => acc + (parseFloat(s.my_payout != null ? s.my_payout : (s.payout || 0)) || 0), 0);
+      const totalAgentPayout = (sum.client_payout != null) ? sum.client_payout : data.reduce((acc, s) => acc + (parseFloat(s.agent_payout != null ? s.agent_payout : (s.agent_rate || 0)) || 0), 0);
+      const totalProfit = (sum.profit != null) ? sum.profit : Math.max(0, totalPayout - totalAgentPayout);
 
-    const footRow = `<td><b>Total SMS<br>${totalSms}</b></td>` +
-      '<td></td><td></td><td></td><td></td><td></td>' +
-      `<td><b>My Payout<br>${sumMyPayout.toFixed(4)}</b></td>` +
-      `<td><b>Agent Payout<br>${sumAgentPayout.toFixed(4)}</b></td>` +
-      `<td><b>Profit<br>${sumProfit.toFixed(4)}</b></td>`;
+      const footRow = `<td><b>Total SMS<br>${totalSms.toLocaleString()}</b></td>` +
+        '<td></td><td></td><td></td><td></td><td></td>' +
+        `<td><b>My Payout<br>${Number(totalPayout).toFixed(4)}</b></td>` +
+        `<td><b>Agent Payout<br>${Number(totalAgentPayout).toFixed(4)}</b></td>` +
+        `<td><b>Profit<br>${Number(totalProfit).toFixed(4)}</b></td>`;
 
-    panelBody.innerHTML = zyDT2('dt-reports', {
-      cols,
-      rows,
-      sort: 0,
-      dir: -1,
-      perPage: 25,
-      searchPlaceholder: 'Number, CLI, message, range',
-      footRow
-    });
-    zy2Render('dt-reports');
+      panelBody.innerHTML = zyDT2('dt-reports', {
+        cols,
+        rows,
+        sort: 0,
+        dir: -1,
+        perPage: limitNum,
+        serverMode: true,
+        totalRecords: logs.total != null ? logs.total : data.length,
+        totalPages: logs.total_pages || 1,
+        page: logs.page || targetPage,
+        onPageChange: (p) => pgSmsReportsLoad(p),
+        onSizeChange: (s) => {
+          const sel = document.getElementById('rp-limit');
+          if (sel) sel.value = String(s);
+          pgSmsReportsLoad(1);
+        },
+        searchPlaceholder: 'Number, CLI, message, range',
+        footRow
+      });
+      zy2Render('dt-reports');
+    }
+  } catch (err) {
+    if (err && err.name === 'AbortError') return;
+    console.error('Manager CDR load error:', err);
+    panelBody.innerHTML = '<div class="zy-empty" style="padding:40px;text-align:center;color:#ef4444;">Failed to load reports. Please try again.</div>';
   }
+}
 }
 
 

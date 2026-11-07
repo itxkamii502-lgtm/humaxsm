@@ -4551,3 +4551,150 @@ body.dark .stat-block .stat-count span:last-child {
 
 /* /* Scoped APX Telecom-Switch Design System */
 @import "./apx-telecom.css";
+
+/* ═════════════════════════════════════════════════════════════════
+   ASTRASMS-GRADE CDR RESPONSIVE & SERVER-SIDE PAGINATION SYSTEM
+   ═════════════════════════════════════════════════════════════════ */
+.zy-dt-wrap,
+#dt-cdr .zy-dt-wrap,
+#dt-reports .zy-dt-wrap {
+  width: 100% !important;
+  max-width: 100% !important;
+  overflow-x: auto !important;
+  -webkit-overflow-scrolling: touch !important;
+  display: block !important;
+  position: relative !important;
+  scrollbar-width: thin;
+}
+
+#dt-cdr table.zy-dt,
+#dt-cdr table.zy-dt2-table,
+#dt-reports table.zy-dt,
+#dt-reports table.zy-dt2-table,
+table.zy-cdr-table {
+  min-width: 1080px !important;
+  width: 100% !important;
+  border-collapse: collapse !important;
+}
+
+@media (max-width: 768px) {
+  #dt-cdr table.zy-dt th:first-child,
+  #dt-cdr table.zy-dt td:first-child,
+  #dt-cdr table.zy-dt2-table th:first-child,
+  #dt-cdr table.zy-dt2-table td:first-child,
+  #dt-reports table th:first-child,
+  #dt-reports table td:first-child {
+    position: static !important;
+    box-shadow: none !important;
+  }
+}
+
+#dt-cdr table th, #dt-cdr table td,
+#dt-reports table th, #dt-reports table td {
+  padding: 9px 12px !important;
+  font-size: 12.5px !important;
+  vertical-align: middle !important;
+}
+
+#dt-cdr table td:first-child,
+#dt-reports table td:first-child {
+  white-space: nowrap !important;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace !important;
+  font-size: 11.5px !important;
+  color: #475569 !important;
+}
+
+#dt-cdr table td .monospace,
+#dt-reports table td .monospace {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace !important;
+  white-space: nowrap !important;
+  letter-spacing: 0.2px;
+}
+
+#dt-cdr table td div[style*="max-width"],
+#dt-reports table td div[style*="max-width"] {
+  max-width: 320px !important;
+  white-space: normal !important;
+  word-break: break-word !important;
+  line-height: 1.4 !important;
+}
+
+.zy-dt2-foot {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 12px !important;
+  padding: 12px 14px !important;
+  background: var(--sp-bg-surface, #ffffff) !important;
+  border-top: 1px solid var(--sp-border-subtle, #e2e8f0) !important;
+}
+
+.zy-dt2-foot .zy-info {
+  font-size: 12.5px !important;
+  color: #64748b !important;
+  font-weight: 500 !important;
+}
+
+.zy-dt2-foot .zy-pager {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 3px !important;
+}
+
+.zy-dt2-foot .zy-pager button {
+  min-width: 32px !important;
+  height: 32px !important;
+  padding: 0 8px !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  border: 1px solid #cbd5e1 !important;
+  background: #ffffff !important;
+  color: #334155 !important;
+  border-radius: 4px !important;
+  cursor: pointer !important;
+  transition: all 0.15s ease !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.zy-dt2-foot .zy-pager button:hover:not(:disabled) {
+  background: #f1f5f9 !important;
+  border-color: #94a3b8 !important;
+  color: #0f172a !important;
+}
+
+.zy-dt2-foot .zy-pager button.on,
+.zy-dt2-foot .zy-pager button.active {
+  background: #0ea5e9 !important;
+  border-color: #0ea5e9 !important;
+  color: #ffffff !important;
+}
+
+.zy-dt2-foot .zy-pager button:disabled {
+  opacity: 0.45 !important;
+  cursor: not-allowed !important;
+  background: #f8fafc !important;
+  border-color: #e2e8f0 !important;
+}
+
+@media (max-width: 640px) {
+  .zy-dt2-foot {
+    flex-direction: column !important;
+    align-items: center !important;
+    text-align: center !important;
+  }
+  .zy-dt2-foot .zy-pager {
+    flex-wrap: wrap !important;
+    justify-content: center !important;
+  }
+  .zy-table-toolbar {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+  .zy-toolbar-left, .zy-toolbar-right {
+    width: 100% !important;
+    justify-content: space-between !important;
+  }
+}

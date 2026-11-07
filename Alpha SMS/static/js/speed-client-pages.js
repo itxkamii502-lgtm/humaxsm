@@ -537,13 +537,26 @@ window.zyClientExportReport = function() {
   });
 };
 
-async function pgMySmsLoad(summary = false) {
+async function pgMySmsLoad(pageOrSummary = 1) {
+  const targetPage = typeof pageOrSummary === 'number' ? pageOrSummary : 1;
+  const isSummaryMode = typeof pageOrSummary === 'boolean' ? pageOrSummary : false;
+
   const body = document.getElementById('rp-body');
   if (!body) return;
+
+  if (window._clientCdrAbortController) {
+    try { window._clientCdrAbortController.abort(); } catch (_) {}
+  }
+  window._clientCdrAbortController = new AbortController();
+  const reqSignal = window._clientCdrAbortController.signal;
+
   if (typeof zySkeleton === 'function') {
     body.innerHTML = zySkeleton('report');
   } else {
-    body.innerHTML = `<div class="zy-loading">Loading report…</div>`;
+    body.innerHTML = `<div class="zy-loading" style="padding:40px;text-align:center;color:#64748b;">
+      <div style="display:inline-block;margin-bottom:8px;"><i class="fas fa-spinner fa-spin fa-2x" style="color:#0ea5e9;"></i></div>
+      <div>Loading report…</div>
+    </div>`;
   }
 
   const val = id => (document.getElementById(id) || {}).value || '';
@@ -561,57 +574,64 @@ async function pgMySmsLoad(summary = false) {
   if (num) params.append('search', num);
   if (cli) params.append('cli', cli);
   if (checkedBoxes.length) params.append('group_by', checkedBoxes.join(','));
+
   const limitVal = val('rp-limit') || '25';
+  const limitNum = limitVal === 'all' ? 10000 : (parseInt(limitVal, 10) || 25);
   params.append('limit', limitVal);
+  params.append('page', String(targetPage));
 
-  const logs = await apiFetch(`/api/sms/logs?${params.toString()}`);
-  const data = (logs && logs.data) || [];
+  try {
+    const logs = await apiFetch(`/api/sms/logs?${params.toString()}`, { signal: reqSignal });
+    if (!logs) return;
+    const data = (logs && logs.data) || [];
 
-  if (logs && logs.grouped && checkedBoxes.length) {
-    const keyLabels = {
-      hour: 'Hour',
-      day: 'Day',
-      date: 'Date',
-      month: 'Month',
-      range: 'Range',
-      number: 'Number',
-      cli: 'CLI',
-      status: 'Status'
-    };
-    const cols = [
-      ...checkedBoxes.map(k => keyLabels[k] || k),
-      'SMS Count',
-      'Currency',
-      'My Payout'
-    ];
-    const rows = data.map(g => [
-      ...checkedBoxes.map(k => g[k] || '—'),
-      g.sms_count || 0,
-      g.currency || 'USD',
-      `$${Number(g.client_payout || g.payout || 0).toFixed(4)}`
-    ]);
+    if (logs && logs.grouped && checkedBoxes.length) {
+      const keyLabels = {
+        hour: 'Hour',
+        day: 'Day',
+        date: 'Date',
+        month: 'Month',
+        range: 'Range',
+        number: 'Number',
+        cli: 'CLI',
+        status: 'Status'
+      };
+      const cols = [
+        ...checkedBoxes.map(k => keyLabels[k] || k),
+        'SMS Count',
+        'Currency',
+        'My Payout'
+      ];
+      const rows = data.map(g => [
+        ...checkedBoxes.map(k => g[k] || '—'),
+        g.sms_count || 0,
+        g.currency || 'USD',
+        `$${Number(g.client_payout || g.payout || 0).toFixed(4)}`
+      ]);
 
-    const sum = logs && logs.summary;
-    const totalSms = (sum && sum.total_sms != null) ? sum.total_sms : data.reduce((s, g) => s + (g.sms_count || 0), 0);
-    const totalPayout = (sum && sum.client_payout != null) ? sum.client_payout : data.reduce((s, g) => s + (parseFloat(g.client_payout || g.payout) || 0), 0);
-    const totalGroups = (sum && sum.total_groups != null) ? sum.total_groups : data.length;
+      const sum = logs && logs.summary;
+      const totalSms = (sum && sum.total_sms != null) ? sum.total_sms : data.reduce((s, g) => s + (g.sms_count || 0), 0);
+      const totalPayout = (sum && sum.client_payout != null) ? sum.client_payout : data.reduce((s, g) => s + (parseFloat(g.client_payout || g.payout) || 0), 0);
+      const totalGroups = (sum && sum.total_groups != null) ? sum.total_groups : data.length;
 
-    const footTds = [
-      `<td><b>Total Groups: ${totalGroups}</b></td>`,
-      ...Array(Math.max(0, checkedBoxes.length - 1)).fill('<td></td>'),
-      `<td><span class="zy-total-badge"><i class="fas fa-comment-sms"></i> Total SMS: <b>${totalSms.toLocaleString()}</b></span></td>`,
-      `<td><span class="badge" style="background:var(--sp-bg-subtle);">USD</span></td>`,
-      `<td><b>$${totalPayout.toFixed(4)}</b></td>`
-    ];
+      const footTds = [
+        `<td><b>Total Groups: ${totalGroups}</b></td>`,
+        ...Array(Math.max(0, checkedBoxes.length - 1)).fill('<td></td>'),
+        `<td><span class="zy-total-badge"><i class="fas fa-comment-sms"></i> Total SMS: <b>${totalSms.toLocaleString()}</b></span></td>`,
+        `<td><span class="badge" style="background:var(--sp-bg-subtle);">USD</span></td>`,
+        `<td><b>$${totalPayout.toFixed(4)}</b></td>`
+      ];
 
-    body.innerHTML = zyDT2('dt-cdr', {
-      cols,
-      rows,
-      sort: checkedBoxes.length,
-      dir: -1,
-      footRow: footTds.join('')
-    });
-    zy2Render('dt-cdr');
+      body.innerHTML = zyDT2('dt-cdr', {
+        cols,
+        rows,
+        sort: checkedBoxes.length,
+        dir: -1,
+        perPage: limitNum,
+        serverMode: false,
+        footRow: footTds.join('')
+      });
+      zy2Render('dt-cdr');
     } else {
       const cols = ['Date', 'Range', 'Type', 'Number', 'CLI', 'SMS', 'Currency', 'My Payout', 'Cause', 'IP'];
       const rows = data.map(s => {
@@ -633,16 +653,14 @@ async function pgMySmsLoad(summary = false) {
         ];
       });
 
-      const totalSms = rows.length;
-      let sumMyPayout = 0;
-      rows.forEach(r => {
-        sumMyPayout += parseFloat(r[7]) || 0;
-      });
+      const sum = logs.summary || {};
+      const totalSms = (sum.total_sms != null) ? sum.total_sms : (logs.total != null ? logs.total : rows.length);
+      const totalPayout = (sum.client_payout != null) ? sum.client_payout : data.reduce((acc, s) => acc + (parseFloat(s.client_payout != null ? s.client_payout : (s.client_rate || 0)) || 0), 0);
 
-      const footRow = `<td><b>Total SMS<br>${totalSms}</b></td>` +
+      const footRow = `<td><b>Total SMS<br>${totalSms.toLocaleString()}</b></td>` +
         '<td></td>'.repeat(5) +
         `<td></td>` +
-        `<td><b>My Payout<br>${zyFmtMoney(sumMyPayout, 4)}</b></td>` +
+        `<td><b>My Payout<br>${zyFmtMoney(totalPayout, 4)}</b></td>` +
         '<td></td><td></td>';
 
       body.innerHTML = zyDT2('dt-cdr', {
@@ -650,10 +668,27 @@ async function pgMySmsLoad(summary = false) {
         rows,
         sort: 0,
         dir: -1,
+        perPage: limitNum,
+        serverMode: true,
+        totalRecords: logs.total != null ? logs.total : data.length,
+        totalPages: logs.total_pages || 1,
+        page: logs.page || targetPage,
+        onPageChange: (p) => pgMySmsLoad(p),
+        onSizeChange: (s) => {
+          const sel = document.getElementById('rp-limit');
+          if (sel) sel.value = String(s);
+          pgMySmsLoad(1);
+        },
         footRow
       });
       zy2Render('dt-cdr');
     }
+  } catch (err) {
+    if (err && err.name === 'AbortError') return;
+    console.error('Client CDR load error:', err);
+    body.innerHTML = '<div class="zy-empty" style="padding:40px;text-align:center;color:#ef4444;">Failed to load CDR records. Please try again.</div>';
+  }
+}
 }
 
 /* ═══ SMS TEST PANEL ════════════════════════════════════════ */
