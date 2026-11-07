@@ -1,0 +1,317 @@
+/* ═══════════════════════════════════════════════════════════════
+   ADMIN SKIN — dark sidebar + dark top menu (reference screenshot)
+   Loaded only by index.html, on top of speed-panel.css, and scoped to
+   body.adminui so the manager / agent / client panels keep the blue
+   skin. Colours sampled from the screenshot:
+       sidebar / header  #4a4a4a → #0d0d0d      separators #3a3a3a
+       menu text #dbdbdb   page #fafafa   panel head #e9e9e9 → #c9c9c9
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── Sidebar: uses the top bar theme ────────────────────────────── */
+.adminui .zy-side {
+  background: #ffffff !important;
+  background-color: #ffffff !important;
+  border-right: 1px solid #e2e8f0;
+}
+.adminui .zy-sidenav {
+  background: #ffffff !important;
+  background-color: #ffffff !important;
+}
+.adminui .zy-side-head {
+  background: #ffffff;
+  border-bottom: 2px solid rgba(0, 0, 0, 0.1);
+  padding: 18px 12px 14px;
+  position: relative;
+}
+.adminui .zy-side-head::after {
+  content: "";
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--header-gradient);
+  z-index: 2;
+}
+aside#sidebar:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(2),
+.adminui .zy-side-head .zy-welcome {
+  color: #ffffff;
+  font-weight: bold;
+  text-align: center;
+  font-family: Arial;
+}
+
+aside#sidebar:nth-of-type(1) > div:nth-of-type(1) > div#brand-role:nth-of-type(3),
+.adminui .zy-side-head .zy-role,
+.adminui .zy-side-head #brand-role {
+  font-family: Georgia;
+  font-weight: bold;
+  text-align: center;
+  color: #ffffff;
+}
+
+aside#sidebar:nth-of-type(1) > div:nth-of-type(1) > div#zy-clock:nth-of-type(4),
+.adminui .zy-side-head .zy-clock,
+.adminui .zy-side-head #zy-clock {
+  font-family: system-ui;
+  font-weight: bold;
+  font-style: normal;
+  text-decoration-line: none;
+  color: #94abc5;
+}
+
+/* Sidebar Group Headers: matching soft neumorphic theme */
+.adminui .zy-sidenav .zy-snav {
+  display: flex !important;
+  align-items: center !important;
+  gap: 9px !important;
+  width: calc(100% - 16px) !important;
+  box-sizing: border-box !important;
+  padding: 10px 14px !important;
+  min-height: 40px !important;
+  margin: 4px 8px !important;
+  color: #334155 !important;
+  background: #f4f8f6 !important;
+  border: 1px solid #e0ebe5 !important;
+  border-radius: 12px !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  letter-spacing: .2px !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02) !important;
+  text-shadow: none !important;
+  transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+.adminui .zy-sidenav .zy-snav:hover {
+  background: #e8f3ee !important;
+  color: #00a86b !important;
+  border-color: #a7f3d0 !important;
+  padding-left: 16px !important;
+  transform: translateX(2px) !important;
+  box-shadow: 0 2px 8px rgba(0, 168, 107, 0.08) !important;
+}
+.adminui .zy-sidenav .zy-snav.open {
+  background: #ffffff !important;
+  color: #00a86b !important;
+  border-color: #a7f3d0 !important;
+  box-shadow: 0 2px 8px rgba(0, 168, 107, 0.06) !important;
+}
+.adminui .zy-sidenav .zy-snav.active {
+  background: #00a86b !important;
+  color: #ffffff !important;
+  border: 1px solid #00a86b !important;
+  box-shadow: 0 4px 14px rgba(0, 168, 107, 0.3) !important;
+  text-shadow: none !important;
+}
+.adminui .zy-sidenav .zy-snav.active span,
+.adminui .zy-sidenav .zy-snav.active .zy-ic i,
+.adminui .zy-sidenav .zy-snav.active .zy-caret {
+  color: #ffffff !important;
+}
+.adminui .zy-sidenav .zy-snav .zy-ic i,
+.adminui .zy-sidenav .zy-snav .zy-ic img {
+  filter: none !important;
+  color: #00a86b !important;
+}
+.adminui .zy-sidenav .zy-snav.active .zy-ic i {
+  color: #ffffff !important;
+}
+.adminui .zy-sidenav .zy-snav .zy-caret {
+  margin-left: auto;
+  font-size: 11px;
+  color: #64748b;
+  transition: transform 0.25s ease;
+}
+.adminui .zy-sidenav .zy-snav.open .zy-caret {
+  transform: rotate(180deg);
+  color: #00a86b;
+}
+
+/* Opened Group Sub-menu: Soft Rounded Sub-items with Bullets */
+.adminui .zy-sidenav .zy-ssub {
+  display: none;
+}
+.adminui .zy-sidenav .zy-ssub.open {
+  display: block !important;
+  background: transparent !important;
+  position: relative !important;
+  border: none !important;
+  border-radius: 0px !important;
+  box-shadow: none !important;
+  padding: 2px 4px 6px 8px !important;
+  animation: zySubDropOpen 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+.adminui .zy-sidenav .zy-ssub div {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  background: transparent !important;
+  color: #475569 !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.15px !important;
+  padding: 8px 12px 8px 16px !important;
+  margin: 3px 6px 3px 12px !important;
+  border: 1px solid transparent !important;
+  border-radius: 10px !important;
+  box-shadow: none !important;
+  cursor: pointer !important;
+  text-shadow: none !important;
+  transition: all 0.16s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  position: relative !important;
+}
+.adminui .zy-sidenav .zy-ssub div::before {
+  content: "•";
+  font-size: 16px;
+  color: #94a3b8;
+  line-height: 1;
+}
+.adminui .zy-sidenav .zy-ssub div:hover {
+  background: #f4f8f6 !important;
+  color: #00a86b !important;
+  border-color: #d1dfd8 !important;
+  padding-left: 20px !important;
+  box-shadow: 0 2px 6px rgba(0, 168, 107, 0.06) !important;
+  transform: translateX(2px) !important;
+  text-shadow: none !important;
+}
+.adminui .zy-sidenav .zy-ssub div:hover::before {
+  color: #00a86b !important;
+}
+.adminui .zy-sidenav .zy-ssub div.active {
+  background: #e6f7f0 !important;
+  color: #00a86b !important;
+  border-color: #a7f3d0 !important;
+  font-weight: 800 !important;
+  box-shadow: 0 2px 6px rgba(0, 168, 107, 0.08) !important;
+}
+.adminui .zy-sidenav .zy-ssub div.active::before {
+  color: #00a86b !important;
+}
+.adminui .zy-side-foot {
+  background: var(--header-gradient, linear-gradient(180deg, #1b4332 0%, #143627 50%, #081c15 100%)) !important;
+  opacity: 1 !important;
+  border-top: 1.5px solid rgba(255, 255, 255, 0.25) !important;
+  box-shadow: 0 -3px 12px rgba(0, 0, 0, 0.28) !important;
+  min-height: 58px !important;
+  height: auto !important;
+  margin-top: auto !important;
+  position: relative !important;
+  z-index: 10 !important;
+}
+
+/* ── Top bar + horizontal menu ────────────────────────────────── */
+.adminui .zy-header,
+.zy-header {
+  background: var(--header-gradient, linear-gradient(180deg, #1b4332 0%, #143627 50%, #081c15 100%)) !important;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.25);
+  color: var(--header-text-color, #ffffff) !important;
+  position: relative;
+  transition: background 0.3s ease;
+}
+.adminui .zy-header-row { border-bottom: 1px solid rgba(255, 255, 255, 0.15); }
+.adminui .zy-user { color: var(--header-text-color, #ffffff) !important; }
+.adminui .zy-user-menu {
+  background: #1c2430;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 12px;
+}
+.adminui .zy-user-menu .zy-um-head {
+  background: var(--header-gradient, linear-gradient(180deg, #1b4332 0%, #143627 50%, #081c15 100%));
+  color: var(--header-text-color, #ffffff);
+}
+.adminui .zy-hamb {
+  background: rgba(255, 255, 255, 0.15); border-color: rgba(255, 255, 255, 0.25);
+  transition: all 0.2s ease;
+}
+.adminui .zy-hamb:hover { background: rgba(255, 255, 255, 0.25); }
+.adminui .zy-hamb span { background: var(--header-text-color, #ffffff); }
+
+@keyframes zyMegaSlideDown {
+  0% {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.adminui .zy-mega,
+.zy-mega {
+  display: none !important;
+}
+.adminui .zy-mega .zy-mtop,
+.zy-mega .zy-mtop {
+  color: #ffffff; font-weight: 700; font-size: 13px; letter-spacing: .2px;
+}
+.adminui .zy-mega a, .adminui .zy-mega .zy-mlink,
+.zy-mega a, .zy-mega .zy-mlink {
+  color: rgba(255, 255, 255, 0.82);
+  transition: color 0.15s ease;
+}
+.adminui .zy-mega a:hover, .adminui .zy-mega .zy-mlink:hover,
+.zy-mega a:hover, .zy-mega .zy-mlink:hover {
+  color: #fff;
+}
+.adminui .zy-mega .zy-mblock,
+.zy-mega .zy-mblock {
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+@media (min-width: 992px) {
+  /* the menu drops out of the dark bar when the button is pressed */
+  .adminui .zy-mega.open { column-count: 3; column-gap: 26px; }
+  .adminui .zy-mega .zy-mblock { break-inside: avoid; margin-bottom: 10px; }
+}
+
+/* ── Dashboard grid (desktop) ─────────────────────────────────── */
+.adminui .zy-strips { display: grid; grid-template-columns: 1fr; gap: 12px; }
+.adminui .zy-dash-mid { display: block; }
+
+@media (min-width: 992px) {
+  .adminui .zy-tiles { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; }
+  .adminui .zy-strips { grid-template-columns: repeat(4, 1fr); }
+  /* chart on the left, the round stats stacked on the right */
+  .adminui .zy-dash-mid { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; align-items: start; }
+  .adminui .zy-dash-mid .zy-circles { display: block; }
+  .adminui .zy-dash-mid .zy-circle { margin-bottom: 10px; }
+  .adminui .zy-chart-box { height: 420px; }
+  /* the two bottom panels sit side by side */
+  .adminui .zy-dash-panels { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+}
+
+/* round stat rows on the right of the chart */
+.adminui .zy-circle {
+  display: flex; align-items: center; gap: 14px; background: #fff;
+  border: 1px solid #e0e0e0; border-radius: 3px; padding: 12px 14px;
+}
+.adminui .zy-circle-ic {
+  width: 52px; height: 52px; border-radius: 50%; background: #fff;
+  border: 1px solid #e2e2e2; display: flex; align-items: center; justify-content: center;
+}
+.adminui .zy-circle-ic img { width: 26px; height: 26px; object-fit: contain; }
+.adminui .zy-circle-txt b { display: block; font-size: 22px; color: #333; line-height: 1.1; }
+.adminui .zy-circle-txt i {
+  font-style: normal; font-size: 11px; color: #8a6d3b; font-weight: 700;
+  letter-spacing: .4px; text-transform: uppercase;
+}
+
+/* panel head gets the light metal look from the screenshot */
+.adminui .zy-panel-head {
+  background: linear-gradient(180deg, #efefef 0%, #d7d7d7 100%);
+  color: #333; border-bottom: 1px solid #c4c4c4;
+}
+.adminui .zy-chart-title { color: #333; font-size: 17px; }
+
+@media (max-width: 991px) {
+  .adminui .zy-dash-panels,
+  .adminui .zy-dash-mid,
+  .adminui .zy-strips,
+  .adminui .zy-tiles {
+    display: flex !important;
+    flex-direction: column !important;
+    width: 100% !important;
+    gap: 14px !important;
+  }
+}

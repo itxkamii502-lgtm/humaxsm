@@ -1,0 +1,30 @@
+[
+  {
+    "id": 1,
+    "username": "Kamran_Bhatti",
+    "password": "$2b$10$GswmKxVlMqc6JmiO48/S7e3mnD2IQ9hY/NBBriieOA5ctkA2GYgmq",
+    "role": "Owner",
+    "email": "kamran@alphasms.com",
+    "balance": 0,
+    "status": "active",
+    "numbers": 0,
+    "created": "2026-08-19T03:08:57.860Z",
+    "notes": "System Owner",
+    "updated_at": "2026-10-28T07:41:31.654Z"
+  },
+  {
+    "id": 2,
+    "username": "manager1",
+    "password": "$2b$10$lYFuPSb7uGT9irOXWnDlEue1nUqFu2ykf8oQ2/2AfIF0d.Pi6x2xe",
+    "role": "Manager",
+    "email": "manager1@alphasms.com",
+    "commission_percent": 10,
+    "commission_rate": 10,
+    "range_commissions": {},
+    "balance": 0,
+    "status": "active",
+    "created": "2026-10-01T10:00:00.000Z",
+    "notes": "Primary Manager",
+    "numbers": 0
+  }
+]

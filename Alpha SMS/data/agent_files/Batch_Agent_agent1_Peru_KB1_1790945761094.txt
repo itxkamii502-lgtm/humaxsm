@@ -1,0 +1,24 @@
+================================================================================
+ALPHA SMS GATEWAY — OFFICIAL AGENT NUMBER ALLOCATION FILE
+================================================================================
+AGENT NAME      : agent1
+AGENT ID        : 1
+REQUEST ID      : #3
+RANGE NAME      : Peru_KB1
+COUNTRY / PREFIX: Peru (519)
+TOTAL ALLOCATED : 5
+DISPATCHED DATE : 2026-10-02T12:56:01.094Z
+DISPATCHED BY   : Manager / Owner Panel
+STATUS          : ACTIVE & READY FOR CLIENT ALLOCATION
+================================================================================
+
+--- NUMBERS LIST ---
+51901820335
+51900221224
+51901833478
+51901924788
+51901271286
+
+================================================================================
+END OF BATCH ALLOCATION FILE
+================================================================================

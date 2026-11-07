@@ -1,0 +1,15 @@
+node_modules
+dist
+.env
+.env.*
+.DS_Store
+Alpha SMS/data/sessions/*
+
+_removed_backups/
+backups/
+Alpha SMS/data/archive/
+Alpha SMS/data/sms_log.journal.ndjson
+Alpha SMS/data/sessions.json
+Alpha SMS/data/*.key
+Alpha SMS/data/.smpp.key
+Alpha SMS/data/backups/

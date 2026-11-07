@@ -1,0 +1,1199 @@
+/**
+ * APX Telecom-Switch Design System
+ * Prefix: apx-
+ * Scoped, Dense, Boxed, Excel-style Telecom Architecture
+ * Supports Light & Dark Themes via CSS Custom Properties
+ */
+
+:root,
+[data-theme="light"],
+body.light {
+  --apx-font: 'Roboto', -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+  --apx-mono-font: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  --apx-font-size-base: 12px;
+  --apx-line-height-base: 18px;
+
+  /* App Canvas */
+  --apx-bg-canvas: #eceff1;
+  --apx-text-main: #1e293b;
+  --apx-text-muted: #64748b;
+  --apx-border-main: #cfd8dc;
+
+  /* Top Bar (40px Dark Gradient) */
+  --apx-topbar-height: 40px;
+  --apx-topbar-bg: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
+  --apx-topbar-border: #334155;
+  --apx-topbar-text: #f8fafc;
+  --apx-topbar-text-muted: #94a3b8;
+
+  /* Sidebar (210px Softswitch Panel) */
+  --apx-sidebar-width: 210px;
+  --apx-sidebar-bg: #1e2430;
+  --apx-sidebar-border: #2c3342;
+  --apx-sidebar-header-bg: #141821;
+  --apx-sidebar-group-bg: #141821;
+  --apx-sidebar-group-text: #94a3b8;
+  --apx-sidebar-item-text: #cbd5e1;
+  --apx-sidebar-item-hover-bg: rgba(255, 255, 255, 0.06);
+  --apx-sidebar-item-hover-text: #ffffff;
+  --apx-sidebar-item-active-bg: rgba(37, 99, 235, 0.22);
+  --apx-sidebar-item-active-border: #3b82f6;
+
+  /* Breadcrumb & Intro */
+  --apx-breadcrumb-bg: #f8fafc;
+  --apx-breadcrumb-border: #e2e8f0;
+  --apx-breadcrumb-text: #475569;
+
+  /* Widget Card (40px Header) */
+  --apx-card-bg: #ffffff;
+  --apx-card-border: #cbd5e1;
+  --apx-card-header-bg: linear-gradient(180deg, #f8fafc 0%, #e2e8f0 100%);
+  --apx-card-header-border: #cbd5e1;
+  --apx-card-header-text: #0f172a;
+  --apx-card-body-bg: #ffffff;
+
+  /* Buttons */
+  --apx-btn-default-bg: linear-gradient(180deg, #ffffff 0%, #e2e8f0 100%);
+  --apx-btn-default-border: #94a3b8;
+  --apx-btn-default-text: #1e293b;
+  --apx-btn-default-hover: #cbd5e1;
+
+  --apx-btn-primary-bg: linear-gradient(180deg, #2563eb 0%, #1d4ed8 100%);
+  --apx-btn-primary-border: #1e40af;
+  --apx-btn-primary-text: #ffffff;
+  --apx-btn-primary-hover: #1e40af;
+
+  --apx-btn-warning-bg: linear-gradient(180deg, #f59e0b 0%, #d97706 100%);
+  --apx-btn-warning-border: #b45309;
+  --apx-btn-warning-text: #ffffff;
+  --apx-btn-warning-hover: #b45309;
+
+  --apx-btn-danger-bg: linear-gradient(180deg, #ef4444 0%, #dc2626 100%);
+  --apx-btn-danger-border: #b91c1c;
+  --apx-btn-danger-text: #ffffff;
+  --apx-btn-danger-hover: #b91c1c;
+
+  --apx-btn-success-bg: linear-gradient(180deg, #10b981 0%, #059669 100%);
+  --apx-btn-success-border: #047857;
+  --apx-btn-success-text: #ffffff;
+  --apx-btn-success-hover: #047857;
+
+  /* Form Controls */
+  --apx-input-bg: #ffffff;
+  --apx-input-border: #94a3b8;
+  --apx-input-focus-border: #2563eb;
+  --apx-input-focus-glow: rgba(37, 99, 235, 0.25);
+  --apx-input-text: #0f172a;
+
+  /* Grid & Table */
+  --apx-grid-border: #cbd5e1;
+  --apx-grid-th-bg: linear-gradient(180deg, #f8fafc 0%, #e2e8f0 100%);
+  --apx-grid-th-text: #334155;
+  --apx-grid-zebra: #f8fafc;
+  --apx-grid-hover: #e0f2fe;
+
+  /* Tooltip */
+  --apx-tooltip-bg: #0f172a;
+  --apx-tooltip-text: #ffffff;
+}
+
+[data-theme="dark"],
+body.dark {
+  --apx-bg-canvas: #090e17;
+  --apx-text-main: #f1f5f9;
+  --apx-text-muted: #94a3b8;
+  --apx-border-main: #1e293b;
+
+  /* Top Bar */
+  --apx-topbar-bg: linear-gradient(180deg, #0f172a 0%, #020617 100%);
+  --apx-topbar-border: #1e293b;
+  --apx-topbar-text: #f1f5f9;
+  --apx-topbar-text-muted: #64748b;
+
+  /* Sidebar */
+  --apx-sidebar-bg: #0d1527;
+  --apx-sidebar-border: #1e293b;
+  --apx-sidebar-header-bg: #080d19;
+  --apx-sidebar-group-bg: #080d19;
+  --apx-sidebar-group-text: #64748b;
+  --apx-sidebar-item-text: #94a3b8;
+  --apx-sidebar-item-hover-bg: rgba(255, 255, 255, 0.05);
+  --apx-sidebar-item-hover-text: #f8fafc;
+  --apx-sidebar-item-active-bg: rgba(59, 130, 246, 0.25);
+  --apx-sidebar-item-active-border: #60a5fa;
+
+  /* Breadcrumb & Intro */
+  --apx-breadcrumb-bg: #0f172a;
+  --apx-breadcrumb-border: #1e293b;
+  --apx-breadcrumb-text: #94a3b8;
+
+  /* Widget Card */
+  --apx-card-bg: #111827;
+  --apx-card-border: #1f2937;
+  --apx-card-header-bg: linear-gradient(180deg, #1f2937 0%, #111827 100%);
+  --apx-card-header-border: #374151;
+  --apx-card-header-text: #f9fafb;
+  --apx-card-body-bg: #111827;
+
+  /* Buttons */
+  --apx-btn-default-bg: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
+  --apx-btn-default-border: #334155;
+  --apx-btn-default-text: #e2e8f0;
+  --apx-btn-default-hover: #334155;
+
+  --apx-btn-primary-bg: linear-gradient(180deg, #3b82f6 0%, #2563eb 100%);
+  --apx-btn-primary-border: #1d4ed8;
+  --apx-btn-primary-text: #ffffff;
+  --apx-btn-primary-hover: #1d4ed8;
+
+  --apx-btn-warning-bg: linear-gradient(180deg, #f59e0b 0%, #d97706 100%);
+  --apx-btn-warning-border: #b45309;
+  --apx-btn-warning-text: #ffffff;
+  --apx-btn-warning-hover: #b45309;
+
+  --apx-btn-danger-bg: linear-gradient(180deg, #ef4444 0%, #dc2626 100%);
+  --apx-btn-danger-border: #b91c1c;
+  --apx-btn-danger-text: #ffffff;
+  --apx-btn-danger-hover: #b91c1c;
+
+  --apx-btn-success-bg: linear-gradient(180deg, #10b981 0%, #059669 100%);
+  --apx-btn-success-border: #047857;
+  --apx-btn-success-text: #ffffff;
+  --apx-btn-success-hover: #047857;
+
+  /* Form Controls */
+  --apx-input-bg: #0f172a;
+  --apx-input-border: #334155;
+  --apx-input-focus-border: #60a5fa;
+  --apx-input-focus-glow: rgba(96, 165, 250, 0.25);
+  --apx-input-text: #f8fafc;
+
+  /* Grid & Table */
+  --apx-grid-border: #1f2937;
+  --apx-grid-th-bg: linear-gradient(180deg, #1f2937 0%, #111827 100%);
+  --apx-grid-th-text: #e2e8f0;
+  --apx-grid-zebra: #0c1322;
+  --apx-grid-hover: #1e293b;
+
+  /* Tooltip */
+  --apx-tooltip-bg: #334155;
+  --apx-tooltip-text: #ffffff;
+}
+
+/* ==========================================================================
+   1. APX CORE LAYOUT & TOPBAR (40px Dark Gradient)
+   ========================================================================== */
+.apx-shell {
+  font-family: var(--apx-font);
+  font-size: var(--apx-font-size-base);
+  line-height: var(--apx-line-height-base);
+  color: var(--apx-text-main);
+  background-color: var(--apx-bg-canvas);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.apx-topbar {
+  height: var(--apx-topbar-height);
+  min-height: var(--apx-topbar-height);
+  max-height: var(--apx-topbar-height);
+  background: var(--apx-topbar-bg);
+  border-bottom: 1px solid var(--apx-topbar-border);
+  color: var(--apx-topbar-text);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+  box-sizing: border-box;
+  user-select: none;
+  z-index: 100;
+}
+
+.apx-topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.apx-brand-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.5px;
+  color: #ffffff;
+}
+
+.apx-brand-badge .apx-brand-tag {
+  background: #2563eb;
+  color: #ffffff;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.apx-topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 11px;
+}
+
+.apx-system-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  color: #10b981;
+  border-radius: 3px;
+  font-weight: 600;
+}
+
+.apx-system-status .apx-pulse {
+  width: 6px;
+  height: 6px;
+  background-color: #10b981;
+  border-radius: 50%;
+  box-shadow: 0 0 6px #10b981;
+}
+
+/* ==========================================================================
+   2. APX SIDEBAR (~210px Softswitch Navigation)
+   ========================================================================== */
+.apx-body-wrap {
+  display: flex;
+  flex: 1;
+  min-height: calc(100vh - var(--apx-topbar-height));
+}
+
+.apx-sidebar {
+  width: var(--apx-sidebar-width);
+  min-width: var(--apx-sidebar-width);
+  max-width: var(--apx-sidebar-width);
+  background: var(--apx-sidebar-bg);
+  border-right: 1px solid var(--apx-sidebar-border);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  box-sizing: border-box;
+  user-select: none;
+}
+
+/* Sidebar Top Badge: Welcome / Role / Server Time */
+.apx-sidebar-userbox {
+  padding: 10px 12px;
+  background: var(--apx-sidebar-header-bg);
+  border-bottom: 1px solid var(--apx-sidebar-border);
+  box-sizing: border-box;
+}
+
+.apx-sidebar-userbox .apx-user-title {
+  font-size: 11px;
+  color: var(--apx-sidebar-item-text);
+  margin-bottom: 2px;
+}
+
+.apx-sidebar-userbox .apx-user-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.apx-sidebar-userbox .apx-role-pill {
+  font-size: 10px;
+  padding: 1px 6px;
+  background: rgba(37, 99, 235, 0.3);
+  border: 1px solid rgba(59, 130, 246, 0.4);
+  color: #60a5fa;
+  border-radius: 3px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.apx-sidebar-userbox .apx-server-clock {
+  font-size: 10px;
+  font-family: var(--apx-mono-font);
+  color: #94a3b8;
+  margin-top: 4px;
+}
+
+/* Sidebar Group Headers: Dark, Uppercase, 11px */
+.apx-nav-group-title {
+  padding: 7px 12px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  background: var(--apx-sidebar-group-bg);
+  color: var(--apx-sidebar-group-text);
+  border-top: 1px solid var(--apx-sidebar-border);
+  border-bottom: 1px solid var(--apx-sidebar-border);
+  box-sizing: border-box;
+}
+
+/* Submenu Items: Light grey text, compact hover/active states */
+.apx-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  color: var(--apx-sidebar-item-text);
+  text-decoration: none;
+  font-size: 12px;
+  border-left: 3px solid transparent;
+  cursor: pointer;
+  transition: all 0.12s ease-in-out;
+  box-sizing: border-box;
+}
+
+.apx-nav-item i {
+  width: 14px;
+  text-align: center;
+  font-size: 12px;
+  opacity: 0.85;
+}
+
+.apx-nav-item:hover {
+  color: var(--apx-sidebar-item-hover-text);
+  background: var(--apx-sidebar-item-hover-bg);
+  border-left-color: var(--apx-sidebar-item-hover-text);
+}
+
+.apx-nav-item.active {
+  color: #ffffff;
+  background: var(--apx-sidebar-item-active-bg);
+  border-left-color: var(--apx-sidebar-item-active-border);
+  font-weight: 600;
+}
+
+/* ==========================================================================
+   3. MAIN CONTENT CONTAINER, BREADCRUMB BAR & INTRO
+   ========================================================================== */
+.apx-main {
+  flex: 1;
+  padding: 12px 14px;
+  box-sizing: border-box;
+  overflow-y: auto;
+}
+
+/* Breadcrumb Bar */
+.apx-breadcrumb-bar {
+  background: var(--apx-breadcrumb-bg);
+  border: 1px solid var(--apx-breadcrumb-border);
+  border-radius: 4px;
+  padding: 5px 10px;
+  font-size: 11px;
+  color: var(--apx-breadcrumb-text);
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.apx-breadcrumb-bar .apx-bc-sep {
+  color: #94a3b8;
+  font-size: 10px;
+}
+
+.apx-breadcrumb-bar .apx-bc-active {
+  font-weight: 700;
+  color: var(--apx-text-main);
+}
+
+/* Page Header & 1-Line Intro */
+.apx-page-heading {
+  margin-bottom: 12px;
+}
+
+.apx-page-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--apx-text-main);
+  letter-spacing: -0.2px;
+  margin: 0 0 2px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.apx-page-intro {
+  font-size: 12px;
+  color: var(--apx-text-muted);
+  margin: 0;
+  line-height: 16px;
+}
+
+/* ==========================================================================
+   4. APX WIDGET CARD (40px Header, Left Title, Right Action Icons)
+   ========================================================================== */
+.apx-card {
+  background: var(--apx-card-bg);
+  border: 1px solid var(--apx-card-border);
+  border-radius: 4px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  margin-bottom: 14px;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.apx-card-header {
+  height: 40px;
+  min-height: 40px;
+  max-height: 40px;
+  background: var(--apx-card-header-bg);
+  border-bottom: 1px solid var(--apx-card-header-border);
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-sizing: border-box;
+}
+
+.apx-card-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--apx-card-header-text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+}
+
+.apx-card-title i {
+  font-size: 12px;
+  color: #2563eb;
+}
+
+.apx-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.apx-card-body {
+  background: var(--apx-card-body-bg);
+  padding: 10px;
+  box-sizing: border-box;
+}
+
+/* ==========================================================================
+   5. APX BUTTON ENGINE (Scoped, Mini/Small, Tooltip Ready)
+   ========================================================================== */
+.apx-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  font-family: var(--apx-font);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 16px;
+  padding: 4px 10px;
+  background: var(--apx-btn-default-bg);
+  border: 1px solid var(--apx-btn-default-border);
+  border-radius: 3px;
+  color: var(--apx-btn-default-text);
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 1px 2px rgba(0, 0, 0, 0.05);
+  transition: all 0.12s ease-in-out;
+  text-decoration: none;
+  white-space: nowrap;
+  box-sizing: border-box;
+  vertical-align: middle;
+}
+
+.apx-btn:hover {
+  background: var(--apx-btn-default-hover);
+  color: var(--apx-btn-default-text);
+}
+
+.apx-btn:active {
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.15);
+}
+
+.apx-btn:disabled,
+.apx-btn.disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+/* Variant: Primary Blue */
+.apx-btn-primary {
+  background: var(--apx-btn-primary-bg) !important;
+  border-color: var(--apx-btn-primary-border) !important;
+  color: var(--apx-btn-primary-text) !important;
+  text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.25);
+}
+.apx-btn-primary:hover {
+  background: var(--apx-btn-primary-hover) !important;
+  color: #ffffff !important;
+}
+
+/* Variant: Warning Orange */
+.apx-btn-warning {
+  background: var(--apx-btn-warning-bg) !important;
+  border-color: var(--apx-btn-warning-border) !important;
+  color: var(--apx-btn-warning-text) !important;
+  text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.25);
+}
+.apx-btn-warning:hover {
+  background: var(--apx-btn-warning-hover) !important;
+  color: #ffffff !important;
+}
+
+/* Variant: Danger Red */
+.apx-btn-danger {
+  background: var(--apx-btn-danger-bg) !important;
+  border-color: var(--apx-btn-danger-border) !important;
+  color: var(--apx-btn-danger-text) !important;
+  text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.25);
+}
+.apx-btn-danger:hover {
+  background: var(--apx-btn-danger-hover) !important;
+  color: #ffffff !important;
+}
+
+/* Variant: Success Green */
+.apx-btn-success {
+  background: var(--apx-btn-success-bg) !important;
+  border-color: var(--apx-btn-success-border) !important;
+  color: var(--apx-btn-success-text) !important;
+  text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.25);
+}
+.apx-btn-success:hover {
+  background: var(--apx-btn-success-hover) !important;
+  color: #ffffff !important;
+}
+
+/* Button Sizing: Small & Mini */
+.apx-btn-small {
+  padding: 3px 8px;
+  font-size: 11px;
+  line-height: 14px;
+  height: 24px;
+}
+
+.apx-btn-mini {
+  padding: 2px 6px;
+  font-size: 10px;
+  line-height: 12px;
+  height: 20px;
+}
+
+/* Icon-Only Buttons with 40px Header fit */
+.apx-btn-icon {
+  width: 26px;
+  height: 26px;
+  min-width: 26px;
+  max-width: 26px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
+  font-size: 11px;
+}
+
+/* Tooltip on Hover for Icon Buttons */
+[data-apx-tooltip] {
+  position: relative;
+}
+
+[data-apx-tooltip]:hover::after {
+  content: attr(data-apx-tooltip);
+  position: absolute;
+  bottom: calc(100% + 5px);
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: var(--apx-tooltip-bg);
+  color: var(--apx-tooltip-text);
+  font-size: 10px;
+  font-weight: 500;
+  padding: 3px 6px;
+  border-radius: 3px;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 1000;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+}
+
+[data-apx-tooltip]:hover::before {
+  content: "";
+  position: absolute;
+  bottom: calc(100% + 1px);
+  left: 50%;
+  transform: translateX(-50%);
+  border-width: 4px;
+  border-style: solid;
+  border-color: var(--apx-tooltip-bg) transparent transparent transparent;
+  z-index: 1000;
+}
+
+/* ==========================================================================
+   6. APX FORM CONTROLS (Strict 28px Height, Scoped, High-Density)
+   ========================================================================== */
+.apx-input,
+.apx-select {
+  display: inline-block;
+  height: 28px;
+  min-height: 28px;
+  max-height: 28px;
+  padding: 3px 6px;
+  font-family: var(--apx-font);
+  font-size: 12px;
+  line-height: 20px;
+  color: var(--apx-input-text);
+  background-color: var(--apx-input-bg);
+  border: 1px solid var(--apx-input-border);
+  border-radius: 3px;
+  box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.05);
+  box-sizing: border-box;
+  vertical-align: middle;
+  transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+}
+
+.apx-input:focus,
+.apx-select:focus {
+  border-color: var(--apx-input-focus-border);
+  box-shadow: 0 0 0 2px var(--apx-input-focus-glow);
+  outline: 0;
+}
+
+.apx-textarea {
+  display: block;
+  width: 100%;
+  padding: 6px;
+  font-family: var(--apx-font);
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--apx-input-text);
+  background-color: var(--apx-input-bg);
+  border: 1px solid var(--apx-input-border);
+  border-radius: 3px;
+  box-sizing: border-box;
+}
+
+.apx-textarea:focus {
+  border-color: var(--apx-input-focus-border);
+  box-shadow: 0 0 0 2px var(--apx-input-focus-glow);
+  outline: 0;
+}
+
+/* ==========================================================================
+   7. APX SHARED GRID: apxTable (Excel-Style Dense Grid)
+   ========================================================================== */
+.apx-table-wrap {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  background: var(--apx-card-bg);
+  border: 1px solid var(--apx-grid-border);
+  border-radius: 4px;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+/* Table Toolbar (Search, Limit, Export Pills, Columns Toggle) */
+.apx-table-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  background: var(--apx-card-header-bg);
+  border-bottom: 1px solid var(--apx-grid-border);
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 11.5px;
+  box-sizing: border-box;
+}
+
+.apx-toolbar-left,
+.apx-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.apx-search-box {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.apx-search-box i {
+  position: absolute;
+  left: 8px;
+  color: var(--apx-text-muted);
+  font-size: 11px;
+  pointer-events: none;
+}
+
+.apx-search-input {
+  height: 26px !important;
+  min-height: 26px !important;
+  padding: 2px 8px 2px 24px !important;
+  font-size: 11.5px !important;
+  width: 170px;
+  border-radius: 3px !important;
+  box-sizing: border-box;
+}
+
+.apx-limit-label {
+  color: var(--apx-text-muted);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.apx-limit-select {
+  height: 26px !important;
+  min-height: 26px !important;
+  padding: 2px 6px !important;
+  font-size: 11.5px !important;
+  width: auto;
+  border-radius: 3px !important;
+}
+
+/* Column Show/Hide Dropdown */
+.apx-col-dropdown-wrap {
+  position: relative;
+  display: inline-block;
+}
+
+.apx-col-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  background: var(--apx-card-bg);
+  border: 1px solid var(--apx-card-border);
+  border-radius: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  padding: 6px 8px;
+  min-width: 160px;
+  max-height: 260px;
+  overflow-y: auto;
+  z-index: 50;
+  display: none;
+}
+
+.apx-col-dropdown.open {
+  display: block;
+}
+
+.apx-col-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 4px;
+  font-size: 11px;
+  color: var(--apx-text-main);
+  cursor: pointer;
+  border-radius: 2px;
+}
+
+.apx-col-item:hover {
+  background: var(--apx-grid-hover);
+}
+
+.apx-col-item input {
+  margin: 0;
+  cursor: pointer;
+}
+
+/* Scroll Container for Horizontal Overflow */
+.apx-table-scroll {
+  width: 100%;
+  overflow-x: auto;
+  position: relative;
+  max-height: 720px;
+}
+
+/* Dense Boxed Excel Table */
+table.apx-table,
+table.zy-dt2-table,
+.table-wrap table {
+  width: 100%;
+  border-collapse: separate !important;
+  border-spacing: 0;
+  border-top: 1px solid var(--apx-grid-border);
+  border-left: 1px solid var(--apx-grid-border);
+  font-family: var(--apx-font);
+  font-size: 11.5px;
+  line-height: 16px;
+  color: var(--apx-text-main);
+  background-color: var(--apx-card-bg);
+}
+
+table.apx-table thead th,
+table.zy-dt2-table thead th,
+.table-wrap table thead th {
+  background: var(--apx-grid-th-bg);
+  color: var(--apx-grid-th-text);
+  font-weight: 700;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  padding: 5px 7px;
+  border-bottom: 1px solid var(--apx-grid-border);
+  border-right: 1px solid var(--apx-grid-border);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  white-space: nowrap;
+  user-select: none;
+  box-sizing: border-box;
+}
+
+table.apx-table thead th:last-child,
+table.zy-dt2-table thead th:last-child,
+.table-wrap table thead th:last-child {
+  border-right: none;
+}
+
+table.apx-table thead th.sortable,
+table.zy-dt2-table thead th.sortable {
+  cursor: pointer;
+}
+
+table.apx-table thead th.sortable:hover,
+table.zy-dt2-table thead th.sortable:hover {
+  background: var(--apx-grid-hover);
+}
+
+/* Grouped Header row */
+table.apx-table thead tr.apx-group-th th,
+table.zy-dt2-table thead tr.apx-group-th th {
+  text-align: center;
+  background: var(--apx-card-header-bg);
+  border-bottom: 1px solid var(--apx-grid-border);
+  font-size: 10.5px;
+  letter-spacing: 0.5px;
+  color: var(--apx-text-muted);
+}
+
+/* Table Body Cells */
+table.apx-table tbody td,
+table.zy-dt2-table tbody td,
+.table-wrap table tbody td {
+  padding: 4px 7px;
+  border-bottom: 1px solid var(--apx-border-main);
+  border-right: 1px solid var(--apx-border-main);
+  vertical-align: middle;
+  white-space: nowrap;
+  box-sizing: border-box;
+}
+
+table.apx-table tbody td:last-child,
+table.zy-dt2-table tbody td:last-child,
+.table-wrap table tbody td:last-child {
+  border-right: none;
+}
+
+/* Zebra & Hover */
+table.apx-table tbody tr:nth-child(even) td,
+table.zy-dt2-table tbody tr:nth-child(even) td,
+.table-wrap table tbody tr:nth-child(even) td {
+  background-color: var(--apx-grid-zebra);
+}
+
+table.apx-table tbody tr:hover td,
+table.zy-dt2-table tbody tr:hover td,
+.table-wrap table tbody tr:hover td {
+  background-color: var(--apx-grid-hover) !important;
+}
+
+/* Pehla Column Serial # (Sticky horizontally on mobile) */
+table.apx-table th.apx-col-sn,
+table.apx-table td.apx-col-sn,
+table.zy-dt2-table th.zy-cbcol,
+table.zy-dt2-table td.zy-cbcol {
+  width: 36px;
+  min-width: 36px;
+  max-width: 44px;
+  text-align: center;
+  font-family: var(--apx-mono-font);
+  font-size: 10.5px;
+  color: var(--apx-text-muted);
+  position: sticky;
+  left: 0;
+  background: inherit;
+  z-index: 6;
+  border-right: 2px solid var(--apx-grid-border);
+}
+
+table.apx-table thead th.apx-col-sn,
+table.zy-dt2-table thead th.zy-cbcol {
+  z-index: 15;
+  background: var(--apx-grid-th-bg);
+}
+
+/* Monospace Numbers (Currency / Quantities / Rates) */
+.apx-num {
+  text-align: right;
+  font-family: var(--apx-mono-font);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+/* Status Badges & Multi-Currency Badges */
+.apx-pill {
+  display: inline-block;
+  padding: 1px 6px;
+  font-size: 10px;
+  font-weight: 700;
+  border-radius: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+}
+
+.apx-pill-success {
+  background: #dcfce7;
+  color: #15803d;
+  border: 1px solid #bbf7d0;
+}
+
+.apx-pill-warning {
+  background: #fef3c7;
+  color: #b45309;
+  border: 1px solid #fde68a;
+}
+
+.apx-pill-danger {
+  background: #fee2e2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+}
+
+.apx-pill-info {
+  background: #e0f2fe;
+  color: #0369a1;
+  border: 1px solid #bae6fd;
+}
+
+.apx-badge-usd {
+  background: #e0f2fe;
+  color: #0369a1;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 10.5px;
+}
+
+.apx-badge-eur {
+  background: #fef3c7;
+  color: #b45309;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 10.5px;
+}
+
+.apx-badge-gbp {
+  background: #fce7f3;
+  color: #be185d;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 10.5px;
+}
+
+/* Multi-Currency Footer Totals Row */
+table.apx-table tfoot td,
+table.zy-dt2-table tfoot td {
+  padding: 6px 8px;
+  background: var(--apx-card-header-bg);
+  border-top: 2px solid var(--apx-grid-border);
+  border-bottom: 1px solid var(--apx-grid-border);
+  font-weight: 700;
+  font-size: 11.5px;
+  color: var(--apx-text-main);
+}
+
+.apx-footer-totals {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 11px;
+}
+
+.apx-totals-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Table Pagination Bar */
+.apx-table-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  background: var(--apx-card-header-bg);
+  border-top: 1px solid var(--apx-grid-border);
+  font-size: 11px;
+  color: var(--apx-text-muted);
+  flex-wrap: wrap;
+  gap: 6px;
+  box-sizing: border-box;
+}
+
+.apx-page-controls {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.apx-page-btn {
+  padding: 2px 7px;
+  font-size: 11px;
+  height: 24px;
+  min-width: 24px;
+  background: var(--apx-card-bg);
+  border: 1px solid var(--apx-input-border);
+  border-radius: 3px;
+  color: var(--apx-text-main);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.apx-page-btn:hover {
+  background: var(--apx-grid-hover);
+}
+
+.apx-page-btn.active {
+  background: #2563eb;
+  border-color: #1e40af;
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.apx-page-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* ==========================================================================
+   8. APX FILTER BAR: 2-Row Compact Grey Strip & Role Filters
+   ========================================================================== */
+.apx-filter-strip {
+  background: var(--apx-card-header-bg);
+  border: 1px solid var(--apx-card-border);
+  border-radius: 4px;
+  padding: 8px 10px;
+  margin-bottom: 12px;
+  box-sizing: border-box;
+}
+
+/* Row 1: Field Controls Grid (From, To, Provider, Range, Agent, Manager, Number, CLI, Cause) */
+.apx-filter-fields-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 6px;
+  align-items: flex-end;
+  margin-bottom: 8px;
+}
+
+.apx-filter-col {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.apx-filter-col label {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  color: var(--apx-text-muted);
+  margin: 0;
+}
+
+.apx-filter-col input,
+.apx-filter-col select {
+  width: 100% !important;
+}
+
+/* Row 2: Inline Group-By Chips + Action Buttons */
+.apx-filter-actions-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 6px;
+  border-top: 1px solid var(--apx-border-main);
+}
+
+.apx-groupby-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.apx-groupby-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--apx-text-muted);
+}
+
+.apx-groupby-chips {
+  display: inline-flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.apx-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  background: var(--apx-card-bg);
+  border: 1px solid var(--apx-card-border);
+  border-radius: 3px;
+  font-size: 11px;
+  color: var(--apx-text-main);
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.12s ease;
+}
+
+.apx-chip:hover {
+  border-color: #2563eb;
+  color: #2563eb;
+}
+
+.apx-chip.active {
+  background: rgba(37, 99, 235, 0.15);
+  border-color: #2563eb;
+  color: #1d4ed8;
+  font-weight: 700;
+}
+
+.apx-chip input {
+  margin: 0;
+  cursor: pointer;
+}
+
+.apx-filter-buttons {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
