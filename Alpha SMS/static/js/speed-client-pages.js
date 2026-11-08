@@ -45,11 +45,11 @@ async function pgSmsRanges() {
   try {
     const [rangesRes, myNumsRes] = await Promise.all([
       apiFetch('/api/numbers/sms-ranges').catch(() => []),
-      apiFetch(`/api/numbers?client_id=${CLIENT_ID}&limit=100000`).catch(() => [])
+      apiFetch(`/api/numbers?client_id=${CLIENT_ID}&limit=1`).catch(() => ({ total: 0, data: [] }))
     ]);
 
     const list = zyList(rangesRes);
-    const myNums = zyList(myNumsRes);
+    const heldNumbersCount = (myNumsRes && typeof myNumsRes.total === 'number') ? myNumsRes.total : (zyList(myNumsRes).length);
     ZY_CLIENT_RANGE_LIST = list;
 
     // Calculate metrics
@@ -77,30 +77,27 @@ async function pgSmsRanges() {
           </div>
           <div style="background:#ffffff;border:1.5px solid #cbd5e1;border-radius:8px;padding:10px 14px;box-shadow:0 1px 2px rgba(0,0,0,0.03);">
             <div style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">Held in Pool</div>
-            <div style="font-size:20px;font-weight:800;color:#2563eb;margin-top:2px;">${myNums.length}</div>
+            <div style="font-size:20px;font-weight:800;color:#2563eb;margin-top:2px;">${heldNumbersCount}</div>
             <div style="font-size:11px;color:#64748b;margin-top:2px;">Allocated Numbers in Pool</div>
           </div>
           <div style="background:#ffffff;border:1.5px solid #cbd5e1;border-radius:8px;padding:10px 14px;box-shadow:0 1px 2px rgba(0,0,0,0.03);">
-            <div style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">Avg Weekly Rate</div>
-            <div style="font-size:20px;font-weight:800;color:#059669;margin-top:2px;">$${avgWeekly}</div>
-            <div style="font-size:11px;color:#64748b;margin-top:2px;">7/1 Payterm Standard</div>
+            <div style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">Network Status</div>
+            <div style="font-size:20px;font-weight:800;color:#059669;margin-top:2px;">Online</div>
+            <div style="font-size:11px;color:#64748b;margin-top:2px;">All Termination Routes Active</div>
           </div>
           <div style="background:#ffffff;border:1.5px solid #cbd5e1;border-radius:8px;padding:10px 14px;box-shadow:0 1px 2px rgba(0,0,0,0.03);">
-            <div style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">Avg Monthly Rate</div>
-            <div style="font-size:20px;font-weight:800;color:#7c3aed;margin-top:2px;">$${avgMonthly}</div>
-            <div style="font-size:11px;color:#64748b;margin-top:2px;">30/30 Payterm Standard</div>
+            <div style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">Settlement Schedule</div>
+            <div style="font-size:20px;font-weight:800;color:#7c3aed;margin-top:2px;">Standard</div>
+            <div style="font-size:11px;color:#64748b;margin-top:2px;">Automated Account Credit</div>
           </div>
         </div>`;
     }
 
     const rows = list.map((r, i) => {
       const rName = r.range_name || r.name || r.country || '—';
-      const pts = r.payterms || {};
-      const weeklyRate = pts['Weekly'] !== undefined ? pts['Weekly'] : (pts['7/1'] !== undefined ? pts['7/1'] : (r.payout ?? 0.01));
-      const monthlyRate = pts['Monthly'] !== undefined ? pts['Monthly'] : (pts['30/30'] !== undefined ? pts['30/30'] : (pts['Monthly60'] ?? (pts['15/15'] ?? weeklyRate)));
       const curr = r.currency || 'USD';
       const currSym = curr === 'EUR' ? '€' : (curr === 'GBP' ? '£' : '$');
-      const clis = r.cli_list || (Array.isArray(r.clis) && r.clis.length ? r.clis.join(', ') : (r.cli || 'All CLIs'));
+      const clientRate = r.payout != null ? r.payout : (r.client_rate != null ? r.client_rate : 0.01);
       const roomCount = Math.max(0, (r.available != null ? r.available : (r.free_count ?? 1500)));
 
       return [
@@ -111,8 +108,7 @@ async function pgSmsRanges() {
         { v: r.active === false ? '' : 'yes', h: zyTick(r.active !== false) },
         `<span style="font-weight:700;">${zyEsc(curr)}</span>`,
         `<span class="badge badge-purple" style="font-size:10.5px;">${zyEsc(r.payterm || 'Weekly')}</span>`,
-        `<span style="font-family:monospace;font-weight:700;color:#16a34a;">${currSym} ${Number(weeklyRate).toFixed(4)}</span>`,
-        `<span style="font-family:monospace;font-weight:700;color:#9333ea;">${currSym} ${Number(monthlyRate).toFixed(4)}</span>`,
+        `<span style="font-family:monospace;font-weight:700;color:#16a34a;">${currSym} ${Number(clientRate).toFixed(4)}</span>`,
         { v: '', h: `<div style="display:inline-flex;align-items:center;gap:4px;">
           <button type="button" class="apx-btn apx-btn-icon apx-btn-small" style="color:#0284c7;border-color:#bae6fd;background:#f0f9ff;" onclick="zyViewClientRange(${i})" title="View Details"><i class="fas fa-eye"></i></button>
           <button type="button" class="apx-btn apx-btn-small" style="color:#2563eb;border-color:#bfdbfe;background:#eff6ff;" onclick="zyOpenClientRequestNumbersModal('${zyEsc(rName)}', ${r.id || 'null'}, ${roomCount})" title="Request Numbers"><i class="fas fa-phone-volume"></i> Request</button>
@@ -123,7 +119,7 @@ async function pgSmsRanges() {
     const host = document.getElementById('cl-ranges-table-host');
     if (host) {
       host.innerHTML = zyDT2('dt-cl-ranges', {
-        cols: ['#', 'Provider', 'Name', 'Prefix', 'Active', 'Currency', 'Payterm', 'Weekly (7/1)', 'Monthly (30/30)', 'Actions'],
+        cols: ['#', 'Provider', 'Name', 'Prefix', 'Active', 'Currency', 'Payterm', 'Payout Rate', 'Actions'],
         rows
       });
       zy2Render('dt-cl-ranges');
@@ -182,28 +178,20 @@ function zyViewClientRange(i) {
         </div>
       </div>
 
-      <!-- Col 3: Payterm Rates -->
+      <!-- Col 3: Client Rate & Terms -->
       <div style="background:#f8fafc;padding:12px;border:1px solid #cbd5e1;border-radius:6px;">
         <h5 style="margin:0 0 10px 0;font-size:12px;font-weight:700;text-transform:uppercase;color:#1e293b;border-bottom:1px solid #e2e8f0;padding-bottom:6px;">
-          <i class="fas fa-coins" style="color:#d97706;margin-right:4px;"></i> Payterms Rate Card
+          <i class="fas fa-coins" style="color:#d97706;margin-right:4px;"></i> Payout &amp; Terms
         </h5>
-        <table style="width:100%;font-size:11.5px;border-collapse:collapse;">
-          <thead>
-            <tr style="border-bottom:1px solid #cbd5e1;text-align:left;color:#64748b;">
-              <th style="padding:3px 0;">Schedule</th>
-              <th style="padding:3px 0;text-align:right;">Payout Rate</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr style="border-bottom:1px dashed #e2e8f0;"><td style="padding:4px 0;">Daily (1/1)</td><td style="text-align:right;font-weight:700;color:#0284c7;font-family:monospace;">${currSym} ${Number(dailyVal).toFixed(4)}</td></tr>
-            <tr style="border-bottom:1px dashed #e2e8f0;"><td style="padding:4px 0;">Weekly (7/1)</td><td style="text-align:right;font-weight:700;color:#16a34a;font-family:monospace;">${currSym} ${Number(weeklyVal).toFixed(4)}</td></tr>
-            <tr style="border-bottom:1px dashed #e2e8f0;"><td style="padding:4px 0;">7/7</td><td style="text-align:right;font-weight:700;color:#059669;font-family:monospace;">${currSym} ${Number(pts['7/7'] ?? weeklyVal).toFixed(4)}</td></tr>
-            <tr style="border-bottom:1px dashed #e2e8f0;"><td style="padding:4px 0;">15/15</td><td style="text-align:right;font-weight:700;color:#d97706;font-family:monospace;">${currSym} ${Number(biweekly15).toFixed(4)}</td></tr>
-            <tr style="border-bottom:1px dashed #e2e8f0;"><td style="padding:4px 0;">15/30</td><td style="text-align:right;font-weight:700;color:#b45309;font-family:monospace;">${currSym} ${Number(biweekly30).toFixed(4)}</td></tr>
-            <tr style="border-bottom:1px dashed #e2e8f0;"><td style="padding:4px 0;">Monthly (30/30)</td><td style="text-align:right;font-weight:700;color:#9333ea;font-family:monospace;">${currSym} ${Number(monthlyVal).toFixed(4)}</td></tr>
-            <tr><td style="padding:4px 0;">Monthly60</td><td style="text-align:right;font-weight:700;color:#7c3aed;font-family:monospace;">${currSym} ${Number(monthly60).toFixed(4)}</td></tr>
-          </tbody>
-        </table>
+        <div style="font-size:12px;line-height:22px;">
+          <div><span style="color:#64748b;">Payout Rate:</span> <b style="font-family:monospace;font-size:14px;color:#16a34a;">${currSym} ${Number(clientRate).toFixed(4)}</b> / SMS</div>
+          <div><span style="color:#64748b;">Currency:</span> <b style="color:#0f172a;">${zyEsc(curr)}</b></div>
+          <div><span style="color:#64748b;">Payout Schedule:</span> <span class="badge badge-purple">${zyEsc(r.payterm || 'Weekly')}</span></div>
+          <div><span style="color:#64748b;">Traffic Status:</span> <span class="badge badge-green">Live Acceptance</span></div>
+          <div style="margin-top:8px;font-size:11px;color:#64748b;line-height:1.4;">
+            <i class="fas fa-check-circle" style="color:#10b981;"></i> Standard rate approved for your client profile.
+          </div>
+        </div>
       </div>
     </div>`,
     `<button class="zy-btn-grey" onclick="closeModal()">Close</button>
@@ -639,13 +627,16 @@ async function pgMySmsLoad(pageOrSummary = 1) {
         const myP = parseFloat(s.client_payout != null ? s.client_payout : (s.client_rate != null ? s.client_rate : (s.payout || 0))) || 0;
         const causeVal = (s.cause || (s.status === 'delivered' || s.status === 'success' ? 'Success' : (s.status || '—')));
 
+        const maskedCli = typeof zyMaskCli === 'function' ? zyMaskCli(s.cli || s.app || '—') : (s.cli || s.app || '—');
+        const smsHtml = typeof zyHighlightOtp === 'function' ? zyHighlightOtp(s.message || '') : (typeof zyEsc === 'function' ? zyEsc(s.message || '') : (s.message || ''));
+
         return [
           dtStr,
           s.range_name || s.range_label || s.range || (s.country || '—'),
           s.type || 'General',
-          typeof zyEsc === 'function' ? zyEsc(s.number || '—') : (s.number || '—'),
-          typeof zyEsc === 'function' ? zyEsc(s.cli || s.app || '—') : (s.cli || s.app || '—'),
-          typeof zyHighlightOtp === 'function' ? zyHighlightOtp(s.message || '') : (typeof zyEsc === 'function' ? zyEsc(s.message || '') : (s.message || '')),
+          { v: s.number || '—', h: `<span class="monospace" style="font-weight:600;">${typeof zyEsc === 'function' ? zyEsc(s.number || '—') : (s.number || '—')}</span>` },
+          { v: s.cli || '—', h: `<span class="monospace">${typeof zyEsc === 'function' ? zyEsc(maskedCli) : maskedCli}</span>` },
+          { v: s.message || '', h: `<div style="max-width:300px;white-space:normal;line-height:1.4;word-break:break-word;">${smsHtml}</div>` },
           s.currency || '$',
           zyFmtMoney(myP, 4),
           causeVal,
@@ -688,7 +679,6 @@ async function pgMySmsLoad(pageOrSummary = 1) {
     console.error('Client CDR load error:', err);
     body.innerHTML = '<div class="zy-empty" style="padding:40px;text-align:center;color:#ef4444;">Failed to load CDR records. Please try again.</div>';
   }
-}
 }
 
 /* ═══ SMS TEST PANEL ════════════════════════════════════════ */
@@ -1104,15 +1094,18 @@ async function pgClientPaymentRequestsLoad() {
   if (!body) return;
   body.innerHTML = `<div class="zy-loading">Loading…</div>`;
   const list = zyList(await apiFetch(`/api/payout-requests?client_id=${CLIENT_ID}&limit=200`));
-  const rows = list.map(r => [
-    zyDateOnly(r.timestamp),
-    r.currency || 'USD',
-    r.amount != null ? Number(r.amount).toFixed(2) : '',
-    { v: r.status || '', h: `<span class="zy-badge-active ${r.status === 'paid' ? '' : 'zy-badge-off'}">${(r.status || 'pending').replace(/^./, ch => ch.toUpperCase())}</span>` },
-    r.method || r.mode || 'Direct',
-    r.notes || (r.wallet ? `Wallet: ${r.wallet}` : '—'),
-    r.status === 'paid' && r.paid_at ? zyDateOnly(r.paid_at) : (r.status === 'paid' ? 'Paid' : 'Pending')
-  ]);
+  const rows = list.map(r => {
+    const ts = r.timestamp || r.created || r.created_at || r.date;
+    return [
+      zyDateOnly(ts),
+      r.currency || 'USD',
+      r.amount != null ? Number(r.amount).toFixed(2) : '',
+      { v: r.status || '', h: `<span class="zy-badge-active ${r.status === 'paid' ? '' : 'zy-badge-off'}">${(r.status || 'pending').replace(/^./, ch => ch.toUpperCase())}</span>` },
+      r.method || r.mode || 'Direct',
+      r.notes || (r.wallet ? `Wallet: ${r.wallet}` : '—'),
+      r.status === 'paid' && r.paid_at ? zyDateOnly(r.paid_at) : (r.status === 'paid' ? 'Paid' : 'Pending')
+    ];
+  });
   body.innerHTML = zyDT2('dt-cpr', {
     cols: ['Date', 'Currency', 'Amount ($)', 'Status', 'Payment Mode', 'Details', 'Settled At'], rows, sort: 0, dir: -1 });
   zy2Render('dt-cpr');

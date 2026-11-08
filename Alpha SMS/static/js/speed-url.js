@@ -174,7 +174,8 @@
     const code = map[page] || page;
     const readable = code.replace(/([A-Z])/g, ' $1').trim();
     const roleTitle = role.charAt(0).toUpperCase() + role.slice(1);
-    return `Alpha SMS — ${roleTitle} | ${readable}`;
+    const siteName = (window.__BRAND_SETTINGS__ && window.__BRAND_SETTINGS__.site_name) || 'HUMAX SMS';
+    return `${siteName} — ${roleTitle} | ${readable}`;
   }
 
   function pageFromUrl() {

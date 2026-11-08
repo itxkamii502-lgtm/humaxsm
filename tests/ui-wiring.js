@@ -1,7 +1,8 @@
 import fs from 'fs';
 import path from 'path';
+import vm from 'vm';
 
-console.log('\n=== UI Wiring Tests ===');
+console.log('\n=== UI Wiring & Script Syntax Tests ===');
 
 let failed = false;
 function assertCheck(desc, cond) {
@@ -12,6 +13,30 @@ function assertCheck(desc, cond) {
     console.log(`PASS: ${desc}`);
   }
 }
+
+// ── F0: Static Script Compilation & Syntax Tests (new vm.Script) ─
+const staticJsDir = path.resolve('Alpha SMS/static/js');
+const jsFiles = fs.readdirSync(staticJsDir).filter(f => f.endsWith('.js'));
+for (const file of jsFiles) {
+  const code = fs.readFileSync(path.join(staticJsDir, file), 'utf8');
+  let valid = false;
+  try {
+    new vm.Script(code, { filename: file });
+    valid = true;
+  } catch (err) {
+    console.error(`Syntax error in ${file}:`, err.message);
+  }
+  assertCheck(`Static script syntax valid: ${file}`, valid);
+}
+
+// ── F0: CLIENT_ALLOW Firewall contains essential client routes ───
+const serverCode = fs.readFileSync(path.resolve('server.js'), 'utf8');
+assertCheck('server.js CLIENT_ALLOW permits /api/cli-search', serverCode.includes('cli-search'));
+assertCheck('server.js CLIENT_ALLOW permits /api/credit-notes', serverCode.includes('credit-notes'));
+assertCheck('server.js CLIENT_ALLOW permits /api/clients/:id', serverCode.includes('/clients(\\'));
+assertCheck('server.js CLIENT_ALLOW permits /api/numbers/rate-card', serverCode.includes('/numbers\\/rate-card'));
+assertCheck('server.js CLIENT_ALLOW permits /api/payout-requests', serverCode.includes('/payout-requests'));
+
 
 // (a) agent.html loads speed-agent-pages.js
 const agentHtml = fs.readFileSync(path.resolve('Alpha SMS/static/agent.html'), 'utf8');

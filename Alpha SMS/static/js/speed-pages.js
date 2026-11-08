@@ -1450,8 +1450,6 @@ async function pgSmsReportsLoad(pageOrSummary = 1) {
     panelBody.innerHTML = '<div class="zy-empty" style="padding:40px;text-align:center;color:#ef4444;">Failed to load reports. Please try again.</div>';
   }
 }
-}
-
 
 /* ── hook the pages into the router ─────────────────────────── */
 (function zyHookPages() {
@@ -1798,16 +1796,22 @@ async function pgPaymentRequestsLoad() {
   const pickName = pick ? zyAgentName(pick) : '';
   const rows = ((res && res.data) || [])
     .filter(r => !pick || r.user === pickName || String(r.user_id) === pick || String(r.agent_id) === pick)
-    .filter(r => zyInRange('pr', r.timestamp))
-    .map(r => [
-      zyDateOnly(r.timestamp),
-      r.user || zyAgentName(r.user_id) || 'Manager',
-      r.method || r.mode || 'Direct',
-      r.currency || 'USD',
-      r.amount != null ? Number(r.amount).toFixed(2) : '',
-      { v: r.status || '', h: `<span class="zy-badge-active ${r.status === 'paid' ? '' : 'zy-badge-off'}">${(r.status || 'pending').replace(/^./, ch => ch.toUpperCase())}</span>` },
-      r.notes || r.details || (r.wallet ? `Wallet: ${r.wallet}` : '—')
-    ]);
+    .filter(r => {
+      const ts = r.timestamp || r.created || r.created_at || r.date;
+      return zyInRange('pr', ts);
+    })
+    .map(r => {
+      const ts = r.timestamp || r.created || r.created_at || r.date;
+      return [
+        zyDateOnly(ts),
+        r.user || zyAgentName(r.user_id) || 'Manager',
+        r.method || r.mode || 'Direct',
+        r.currency || 'USD',
+        r.amount != null ? Number(r.amount).toFixed(2) : '',
+        { v: r.status || '', h: `<span class="zy-badge-active ${r.status === 'paid' ? '' : 'zy-badge-off'}">${(r.status || 'pending').replace(/^./, ch => ch.toUpperCase())}</span>` },
+        r.notes || r.details || (r.wallet ? `Wallet: ${r.wallet}` : '—')
+      ];
+    });
   body.innerHTML = zyDT2('dt-payreq', {
     cols: ['Date', 'Account', 'Mode', 'Currency', 'Amount ($)', 'Status', 'Details'], rows, sort: 0, dir: -1 });
   zy2Render('dt-payreq');

@@ -337,16 +337,14 @@ pgDashboard = async function () {
     zyUpdateBreadcrumb('dashboard', 'Dashboard');
   }
   try {
-    const [clients, numbers, daily, news, recentRes, periodStats] = await Promise.all([
+    const [clients, daily, news, recentRes, periodStats] = await Promise.all([
       apiFetch(`/api/clients?agent_id=${AGENT_ID}&limit=200`),
-      apiFetch(`/api/numbers?agent_id=${AGENT_ID}&limit=100000`),
       apiFetch(`/api/sms/daily-stats?agent_id=${AGENT_ID}`),
       apiFetch(`/api/announcements?role=Agent&user_id=${AGENT_ID}`),
       apiFetch(`/api/sms/logs?agent_id=${AGENT_ID}&limit=8`).catch(() => ({ data: [] })),
       apiFetch(`/api/sms/period-stats?agent_id=${AGENT_ID}`).catch(() => null)
     ]);
     const clientList = (clients && clients.data) || [];
-    const numberList = (numbers && numbers.data) || [];
     const traffic = (daily && daily.weekly_traffic) || [0, 0, 0, 0, 0, 0, 0];
     const newsList = (news && (news.data || news)) || [];
     const recentSms = (recentRes && recentRes.data) || [];

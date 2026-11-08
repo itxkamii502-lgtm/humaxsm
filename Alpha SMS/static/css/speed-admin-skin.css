@@ -188,10 +188,10 @@ aside#sidebar:nth-of-type(1) > div:nth-of-type(1) > div#zy-clock:nth-of-type(4),
   color: #00a86b !important;
 }
 .adminui .zy-side-foot {
-  background: var(--header-gradient, linear-gradient(180deg, #1b4332 0%, #143627 50%, #081c15 100%)) !important;
+  background: var(--header-gradient, linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)) !important;
   opacity: 1 !important;
-  border-top: 1.5px solid rgba(255, 255, 255, 0.25) !important;
-  box-shadow: 0 -3px 12px rgba(0, 0, 0, 0.28) !important;
+  border-top: 1.5px solid #e2e8f0 !important;
+  box-shadow: 0 -2px 6px rgba(0, 0, 0, 0.04) !important;
   min-height: 58px !important;
   height: auto !important;
   margin-top: auto !important;
@@ -202,22 +202,22 @@ aside#sidebar:nth-of-type(1) > div:nth-of-type(1) > div#zy-clock:nth-of-type(4),
 /* ── Top bar + horizontal menu ────────────────────────────────── */
 .adminui .zy-header,
 .zy-header {
-  background: var(--header-gradient, linear-gradient(180deg, #1b4332 0%, #143627 50%, #081c15 100%)) !important;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.25);
-  color: var(--header-text-color, #ffffff) !important;
+  background: var(--header-gradient, linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)) !important;
+  border-bottom: 1px solid #e2e8f0;
+  color: var(--header-text-color, #1e293b) !important;
   position: relative;
   transition: background 0.3s ease;
 }
-.adminui .zy-header-row { border-bottom: 1px solid rgba(255, 255, 255, 0.15); }
-.adminui .zy-user { color: var(--header-text-color, #ffffff) !important; }
+.adminui .zy-header-row { border-bottom: 1px solid #e2e8f0; }
+.adminui .zy-user { color: var(--header-text-color, #1e293b) !important; }
 .adminui .zy-user-menu {
-  background: #1c2430;
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
   border-radius: 12px;
 }
 .adminui .zy-user-menu .zy-um-head {
-  background: var(--header-gradient, linear-gradient(180deg, #1b4332 0%, #143627 50%, #081c15 100%));
-  color: var(--header-text-color, #ffffff);
+  background: var(--header-gradient, linear-gradient(180deg, #ffffff 0%, #f8fafc 100%));
+  color: var(--header-text-color, #1e293b);
 }
 .adminui .zy-hamb {
   background: rgba(255, 255, 255, 0.15); border-color: rgba(255, 255, 255, 0.25);

@@ -56,11 +56,11 @@ async function pgSmsRanges() {
   try {
     const [rangesRes, myNumsRes] = await Promise.all([
       apiFetch('/api/numbers/sms-ranges').catch(() => []),
-      apiFetch(`/api/numbers?agent_id=${AGENT_ID}&limit=100000`).catch(() => [])
+      apiFetch(`/api/numbers?agent_id=${AGENT_ID}&limit=1`).catch(() => ({ total: 0, data: [] }))
     ]);
 
     const list = zyList(rangesRes);
-    const myNums = zyList(myNumsRes);
+    const heldNumbersCount = (myNumsRes && typeof myNumsRes.total === 'number') ? myNumsRes.total : (zyList(myNumsRes).length);
     ZY_AGENT_RANGE_LIST = list;
 
     // Calculate metrics
@@ -88,7 +88,7 @@ async function pgSmsRanges() {
           </div>
           <div style="background:#ffffff;border:1.5px solid #cbd5e1;border-radius:8px;padding:10px 14px;box-shadow:0 1px 2px rgba(0,0,0,0.03);">
             <div style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">Held in Pool</div>
-            <div style="font-size:20px;font-weight:800;color:#2563eb;margin-top:2px;">${myNums.length}</div>
+            <div style="font-size:20px;font-weight:800;color:#2563eb;margin-top:2px;">${heldNumbersCount}</div>
             <div style="font-size:11px;color:#64748b;margin-top:2px;">Active Numbers in Account</div>
           </div>
           <div style="background:#ffffff;border:1.5px solid #cbd5e1;border-radius:8px;padding:10px 14px;box-shadow:0 1px 2px rgba(0,0,0,0.03);">
@@ -1851,16 +1851,22 @@ async function pgPaymentRequestsLoad() {
   if (!body) return;
   body.innerHTML = `<div class="zy-loading">Loading…</div>`;
   const list = zyList(await apiFetch(`/api/payout-requests?agent_id=${AGENT_ID}`))
-    .filter(r => zyInRange('pr', r.timestamp));
-  const rows = list.map(r => [
-    zyDateOnly(r.timestamp),
-    r.currency || 'USD',
-    r.amount != null ? Number(r.amount).toFixed(2) : '',
-    { v: r.status || '', h: `<span class="zy-badge-active ${r.status === 'paid' ? '' : 'zy-badge-off'}">${(r.status || 'pending').replace(/^./, ch => ch.toUpperCase())}</span>` },
-    r.method || r.mode || 'Direct',
-    r.notes || (r.wallet ? `Wallet: ${r.wallet}` : '—'),
-    r.status === 'paid' && r.paid_at ? zyDateOnly(r.paid_at) : (r.status === 'paid' ? 'Paid' : 'Pending')
-  ]);
+    .filter(r => {
+      const ts = r.timestamp || r.created || r.created_at || r.date;
+      return zyInRange('pr', ts);
+    });
+  const rows = list.map(r => {
+    const ts = r.timestamp || r.created || r.created_at || r.date;
+    return [
+      zyDateOnly(ts),
+      r.currency || 'USD',
+      r.amount != null ? Number(r.amount).toFixed(2) : '',
+      { v: r.status || '', h: `<span class="zy-badge-active ${r.status === 'paid' ? '' : 'zy-badge-off'}">${(r.status || 'pending').replace(/^./, ch => ch.toUpperCase())}</span>` },
+      r.method || r.mode || 'Direct',
+      r.notes || (r.wallet ? `Wallet: ${r.wallet}` : '—'),
+      r.status === 'paid' && r.paid_at ? zyDateOnly(r.paid_at) : (r.status === 'paid' ? 'Paid' : 'Pending')
+    ];
+  });
   body.innerHTML = zyDT2('dt-payreq', {
     cols: ['Date', 'Currency', 'Amount ($)', 'Status', 'Payment Mode', 'Details', 'Settled At'], rows, sort: 0, dir: -1 });
   zy2Render('dt-payreq');

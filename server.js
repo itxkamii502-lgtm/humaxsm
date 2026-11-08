@@ -1170,6 +1170,10 @@ function ingestSms({
       has_rate: Boolean(company_rate > 0 || agent_rate > 0),
       no_rate: !(company_rate > 0 || agent_rate > 0),
       payout: hasClient ? client_amount : (hasAgent ? agent_amount : (hasManager ? manager_amount : 0)),
+      client_payout: hasClient ? client_amount : 0,
+      agent_payout: hasAgent ? agent_rate : 0,
+      manager_payout: hasManager ? manager_amount : 0,
+      company_payout: company_rate,
       profit: owner_amount,
       carrier_revenue: company_rate,
       payout_cost: round6(agent_rate + manager_amount),
@@ -1192,33 +1196,26 @@ function ingestSms({
     appendSmsLog(entry, smsLog);
     noteSmsArrival();
 
-    // ── STAGE D: Live Money Flow Balances Update ──
+    // ── STAGE D: Live Money Flow Balances Update (Accrued Earnings Waterfall) ──
     try {
       const allClients = readDb('clients') || [];
       const allAgents = readDb('agents') || [];
       const allUsers = readDb('users') || [];
 
-      // 1. Client balance -= client_rate
-      if (hasClient && client_rate > 0) {
+      // 1. Client balance += client_amount (Client receives payout for inbound traffic per Section 3.1)
+      if (hasClient && client_amount > 0) {
         const cIdx = allClients.findIndex(c => c && (
           (client_username && String(c.username).trim().toLowerCase() === String(client_username).trim().toLowerCase()) ||
           (numberRec.client_id && Number(c.id) === Number(numberRec.client_id))
         ));
         if (cIdx !== -1) {
           const curBal = Number(allClients[cIdx].balance || 0);
-          const deduct = round6(client_rate);
-          if (curBal >= deduct) {
-            allClients[cIdx].balance = Math.round((curBal - deduct) * 10000) / 10000;
-          } else {
-            // Prepaid insufficient balance: do not let it go below 0
-            allClients[cIdx].balance = Math.max(0, Math.round((curBal - deduct) * 10000) / 10000);
-            allClients[cIdx].unpaid_sms = (allClients[cIdx].unpaid_sms || 0) + 1;
-          }
-          writeDb('clients', allClients);
+          allClients[cIdx].balance = Math.round((curBal + client_amount) * 1000000) / 1000000;
+          debouncedWriteDb('clients');
         }
       }
 
-      // 2. Agent balance += agent_amount
+      // 2. Agent balance += agent_amount (Agent retains agent profit margin per Section 3.2)
       if (hasAgent && agent_amount > 0) {
         const aIdx = allAgents.findIndex(a => a && (
           (agent_username && String(a.username).trim().toLowerCase() === String(agent_username).trim().toLowerCase()) ||
@@ -1227,7 +1224,7 @@ function ingestSms({
         if (aIdx !== -1) {
           const curBal = Number(allAgents[aIdx].balance || 0);
           allAgents[aIdx].balance = Math.round((curBal + agent_amount) * 1000000) / 1000000;
-          writeDb('agents', allAgents);
+          debouncedWriteDb('agents');
         }
       }
 
@@ -1240,7 +1237,7 @@ function ingestSms({
         if (mIdx !== -1) {
           const curBal = Number(allUsers[mIdx].balance || 0);
           allUsers[mIdx].balance = Math.round((curBal + manager_amount) * 1000000) / 1000000;
-          writeDb('users', allUsers);
+          debouncedWriteDb('users');
         }
       }
 
@@ -1253,7 +1250,7 @@ function ingestSms({
         if (oIdx !== -1) {
           const curBal = Number(allUsers[oIdx].balance || 0);
           allUsers[oIdx].balance = Math.round((curBal + owner_amount) * 1000000) / 1000000;
-          writeDb('users', allUsers);
+          debouncedWriteDb('users');
         }
       }
     } catch (balErr) {
@@ -2890,8 +2887,10 @@ const API_RULES = [
   { m: WRITE_METHODS, p: /^\/numbers\/(sms-ranges|rate-card)(\/.*)?$/, roles: ['owner'] },
   { m: WRITE_METHODS, p: /^\/number-transfers(\/|$)/, roles: ['owner'] },
   { m: new Set(['POST']), p: /^\/notifications$/, roles: ['owner'] },
-  { m: new Set(['PATCH']), p: /^\/payout-requests(\/|$)/, roles: ['owner', 'manager'] },
-  { m: WRITE_METHODS, p: /^\/(announcements|payout-requests)(\/|$)/, roles: ['owner', 'manager', 'agent'] }
+  { m: new Set(['PATCH', 'DELETE']), p: /^\/payout-requests(\/|$)/, roles: ['owner', 'manager'] },
+  { m: new Set(['POST']), p: /^\/payout-requests(\/|$)/, roles: ['owner', 'manager', 'agent', 'client'] },
+  { m: WRITE_METHODS, p: /^\/announcements(\/|$)/, roles: ['owner', 'manager', 'agent'] },
+  { m: WRITE_METHODS, p: /^\/payments(\/|$)/, roles: ['owner', 'manager', 'agent'] }
 ];
 // Client and TestPanel are default-deny: only these routes exist for them.
 const CLIENT_ALLOW = [
@@ -2899,10 +2898,14 @@ const CLIENT_ALLOW = [
   { m: new Set(['GET']), p: /^\/(settings|announcements|payterms)(\/|$)/ },
   { m: new Set(['GET']), p: /^\/numbers$/ },
   { m: new Set(['GET']), p: /^\/numbers\/sms-ranges$/ },
+  { m: new Set(['GET']), p: /^\/numbers\/rate-card$/ },
   { m: new Set(['POST']), p: /^\/numbers\/(\d+\/)?return$/ },
   { m: new Set(['GET']), p: /^\/sms\/(logs|export|client-logs|daily-stats|period-stats|client-stats|stats|test-logs|test-numbers|test-stats)$/ },
+  { m: new Set(['GET']), p: /^\/clients(\/\d+)?$/ },
   { m: new Set(['GET']), p: /^\/client\/\d+\// },
-  { p: /^\/payments(\/|$)/ }
+  { m: new Set(['GET']), p: /^\/(cli-search|credit-notes)(\/|$)/ },
+  { m: new Set(['GET', 'POST']), p: /^\/payout-requests(\/|$)/ },
+  { m: new Set(['GET']), p: /^\/payments(\/|$)/ }
 ];
 const TEST_ALLOW = [
   { p: /^\/(auth|user|account|notifications)(\/|$)/ },
@@ -2936,7 +2939,7 @@ app.use('/api', (req, res, next) => {
     return next();
   }
   // 2. Branding for the login page (the route itself filters what an anonymous caller may see)
-  if ((p === '/settings' || p === '/settings/min-payout' || p === '/payterms' || p === '/download-project-zip' || p === '/project/download-zip') && (method === 'GET' || method === 'HEAD')) return next();
+  if ((p === '/settings' || p === '/settings/min-payout' || p === '/payterms') && (method === 'GET' || method === 'HEAD')) return next();
 
   // 3. Inbound carrier webhook: a shared secret is REQUIRED
   if (p === '/sms/inbound' || p === '/inbound' || p === '/sms/receive') {
@@ -4626,6 +4629,10 @@ app.post('/api/payments', requireAuth, (req, res) => {
   const isManager = sRole === 'manager';
   const isAgent = sRole === 'agent';
 
+  if (!isOwner && !isManager && !isAgent) {
+    return res.status(403).json({ error: 'Access denied. Clients cannot record payments.' });
+  }
+
   const { recipient_id, recipient_username, recipient_role, amount, notes, method } = req.body || {};
   const numAmount = Number(amount);
   if (!numAmount || numAmount <= 0) {
@@ -4665,11 +4672,29 @@ app.post('/api/payments', requireAuth, (req, res) => {
   const finalUsername = targetUser ? targetUser.username : (recipient_username || `user_${recipient_id}`);
   const finalRole = targetRole || (recipient_role || 'Client');
 
-  if (isAgent && finalRole.toLowerCase() !== 'client') {
-    return res.status(403).json({ error: 'Agents can only record payouts for Clients.' });
+  if (isAgent) {
+    if (finalRole.toLowerCase() !== 'client') {
+      return res.status(403).json({ error: 'Agents can only record payouts for Clients.' });
+    }
+    if (targetUser && targetUser.agent_id && Number(targetUser.agent_id) !== Number(sessionUser.id)) {
+      return res.status(403).json({ error: 'Access denied. This client does not belong to your account.' });
+    }
   }
-  if (isManager && finalRole.toLowerCase() !== 'agent') {
-    return res.status(403).json({ error: 'Managers can only record payouts for Agents.' });
+  if (isManager) {
+    if (finalRole.toLowerCase() !== 'agent') {
+      return res.status(403).json({ error: 'Managers can only record payouts for Agents.' });
+    }
+    if (targetUser && targetUser.manager_id && Number(targetUser.manager_id) !== Number(sessionUser.id)) {
+      return res.status(403).json({ error: 'Access denied. This agent does not belong to your account.' });
+    }
+  }
+
+  // Check available balance of recipient
+  if (targetUser) {
+    const curBal = Number(targetUser.balance || 0);
+    if (curBal < numAmount) {
+      return res.status(400).json({ error: `Insufficient balance. Recipient only has $${curBal.toFixed(2)} available.` });
+    }
   }
 
   const payouts = readDb('payout_requests') || [];
@@ -6682,9 +6707,6 @@ function registerPaginatedCrud(routePath, tableName) {
       }
     }
 
-    if (tableName === 'numbers') {
-      syncTestNumbersWithNumbersPool();
-    }
     let data = readDb(tableName);
     if (!Array.isArray(data)) data = [];
 
@@ -6836,6 +6858,12 @@ function registerPaginatedCrud(routePath, tableName) {
         if (!copy.manager_username && copy.manager_id) copy.manager_username = usrMap.get(Number(copy.manager_id)) || `manager_${copy.manager_id}`;
         return safeUser(copy);
       });
+    } else if (tableName === 'payout_requests') {
+      slice = slice.map(item => {
+        if (!item) return item;
+        const ts = item.timestamp || item.created || item.created_at || item.date || new Date().toISOString();
+        return { ...item, timestamp: ts, created: ts };
+      });
     } else if (isAccountTable) {
       slice = slice.map(item => safeUser(item));
     }
@@ -6914,7 +6942,8 @@ function registerPaginatedCrud(routePath, tableName) {
       }
     }
 
-    const item = { id: nextId(data), ...req.body, created: new Date().toISOString() };
+    const nowIso = new Date().toISOString();
+    const item = { id: nextId(data), ...req.body, created: nowIso, timestamp: nowIso, created_at: nowIso };
 
     // Strictly enforce role and zero initial balance on creation
     if (tableName === 'agents') {
@@ -10315,7 +10344,20 @@ app.all(['/crapi/viewstats', '/crapi/:user/viewstats', '/api/sms/viewstats'], (r
   });
 });
 
+function serverMaskCli(v) {
+  const s = String(v ?? '').trim();
+  if (!s || s === '—') return '—';
+  return s.slice(0, 1) + 'XXXXX';
+}
+
 function handleSmsLogsQuery(req, res) {
+  const sessionUser = req.sessionUser;
+  const sRole = (sessionUser && sessionUser.role ? String(sessionUser.role).toLowerCase() : '');
+  const isOwner = sRole === 'owner' || sRole === 'admin';
+  const isClient = sRole === 'client';
+  const isAgent = sRole === 'agent';
+  const isManager = sRole === 'manager';
+
   // Fix 2 & F3: Scoped strictly from session user, seamlessly loading archives
   const dateFrom = req.query.date_from || '';
   let list = getScopedSmsList(req, dateFrom);
@@ -10492,10 +10534,11 @@ function handleSmsLogsQuery(req, res) {
         }
 
         const p = parseFloat(s.payout ?? s.profit ?? 0) || 0;
-        const cp = parseFloat(s.client_payout ?? 0) || 0;
+        const cp = parseFloat(s.client_payout ?? s.client_amount ?? 0) || 0;
+        const prof = parseFloat(s.profit ?? s.owner_amount ?? 0) || 0;
         grp.payout = Math.round((grp.payout + p) * 10000) / 10000;
         grp.client_payout = Math.round((grp.client_payout + cp) * 10000) / 10000;
-        grp.profit = Math.round((grp.profit + (p - cp)) * 10000) / 10000;
+        grp.profit = Math.round((grp.profit + prof) * 10000) / 10000;
       }
 
       const groupedResult = Array.from(groups.values());
@@ -10527,19 +10570,20 @@ function handleSmsLogsQuery(req, res) {
         res.setHeader('Content-Type', 'text/csv; charset=utf-8');
         res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
         res.setHeader('Cache-Control', 'no-cache');
-        const headers = [...validKeys.map(k => k.toUpperCase()), 'SMS COUNT', 'DELIVERED', 'FAILED', 'CURRENCY', 'PAYOUT', 'CLIENT PAYOUT', 'PROFIT'];
+        const headers = [...validKeys.map(k => k.toUpperCase()), 'SMS COUNT', 'DELIVERED', 'FAILED', 'CURRENCY', 'PAYOUT', 'CLIENT PAYOUT'];
+        if (isOwner) headers.push('PROFIT');
         res.write(headers.map(h => `"${h}"`).join(',') + '\r\n');
         for (const g of groupedResult) {
           const row = [
-            ...validKeys.map(k => g[k] || '—'),
+            ...validKeys.map(k => (k === 'cli' && !isOwner) ? serverMaskCli(g[k]) : (g[k] || '—')),
             g.sms_count || 0,
             g.delivered_count || 0,
             g.failed_count || 0,
             g.currency || 'USD',
             Number(g.payout || 0).toFixed(4),
-            Number(g.client_payout || 0).toFixed(4),
-            Number(g.profit || 0).toFixed(4)
+            Number(g.client_payout || 0).toFixed(4)
           ];
+          if (isOwner) row.push(Number(g.profit || 0).toFixed(4));
           res.write(row.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',') + '\r\n');
         }
         const footRow = [
@@ -10550,9 +10594,9 @@ function handleSmsLogsQuery(req, res) {
           summary.failed_count,
           summary.currency,
           summary.payout.toFixed(4),
-          summary.client_payout.toFixed(4),
-          summary.profit.toFixed(4)
+          summary.client_payout.toFixed(4)
         ];
+        if (isOwner) footRow.push(summary.profit.toFixed(4));
         res.write(footRow.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',') + '\r\n');
         return res.end();
       }
@@ -10563,10 +10607,17 @@ function handleSmsLogsQuery(req, res) {
       const limit = isAll ? groupedResult.length : Math.max(1, parseInt(req.query.limit, 10) || 500);
       const start = isAll ? 0 : (page - 1) * limit;
       const totalPages = isAll ? 1 : (limit > 0 ? Math.ceil(groupedResult.length / limit) : 1);
-      const sliced = isAll ? groupedResult : groupedResult.slice(start, start + limit);
+      if (!isOwner) delete summary.profit;
+
+      const safeGroupedResult = isOwner ? sliced : sliced.map(g => {
+        const copy = { ...g };
+        delete copy.profit;
+        if (copy.cli) copy.cli = serverMaskCli(copy.cli);
+        return copy;
+      });
 
       return res.json({
-        data: sliced,
+        data: safeGroupedResult,
         total: groupedResult.length,
         page,
         limit: isAll ? groupedResult.length : limit,
@@ -10592,8 +10643,8 @@ function handleSmsLogsQuery(req, res) {
     if (s.status === 'delivered' || s.status === 'success') totalDelivered++;
     else if (s.status === 'failed') totalFailed++;
     const p = parseFloat(s.payout ?? s.profit ?? 0) || 0;
-    const cp = parseFloat(s.client_payout ?? 0) || 0;
-    const pr = p - cp;
+    const cp = parseFloat(s.client_payout ?? s.client_amount ?? 0) || 0;
+    const pr = parseFloat(s.profit ?? s.owner_amount ?? 0) || 0;
     totalPayout += p;
     totalClientPayout += cp;
     totalProfit += pr;
@@ -10645,13 +10696,13 @@ function handleSmsLogsQuery(req, res) {
         (s.timestamp || '').replace('T', ' ').slice(0, 19),
         s.range_name || s.range_label || s.range || s.country || '—',
         s.number || '',
-        s.cli || s.app || s.sender || '—',
+        isOwner ? (s.cli || s.app || s.sender || '—') : serverMaskCli(s.cli || s.app || s.sender || ''),
         s.client || s.client_name || (s.client_id && clientMap[s.client_id]) || '—',
         sanitizedMsg,
         s.status || 'delivered',
         s.currency || 'USD',
         Number(s.payout != null ? s.payout : (s.profit || 0)).toFixed(4),
-        Number(s.client_payout != null ? s.client_payout : 0).toFixed(4)
+        Number(s.client_payout != null ? s.client_payout : (s.client_amount || 0)).toFixed(4)
       ];
       res.write(row.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',') + '\r\n');
     }
@@ -10680,16 +10731,10 @@ function handleSmsLogsQuery(req, res) {
   const totalPages = isAll ? 1 : (limit > 0 ? Math.ceil(list.length / limit) : 1);
   const sliced = isAll ? list : list.slice(start, start + limit);
 
-  // Role-based field projection to protect proprietary rates
-  const sessionUser = req.sessionUser;
-  const sRole = (sessionUser && sessionUser.role ? String(sessionUser.role).toLowerCase() : '');
-  const isOwner = sRole === 'owner' || sRole === 'admin';
-  const isClient = sRole === 'client';
-  const isAgent = sRole === 'agent';
-
   const sanitizedSliced = sliced.map(s => {
     const item = { ...s };
     if (!isOwner) {
+      item.cli = serverMaskCli(item.cli || item.app || item.sender);
       delete item.company_rate;
       delete item.company_cost;
       delete item.owner_amount;
@@ -11635,7 +11680,7 @@ app.get('/api/backup/export', (req, res) => {
 });
 
 // ── Direct Project Codebase Zip Download ───────────────────────
-app.get(['/api/download-project-zip', '/download-project', '/api/project/download-zip'], (req, res) => {
+app.get(['/api/download-project-zip', '/download-project', '/api/project/download-zip'], requireAuth, requireApiRole(['owner', 'admin']), (req, res) => {
   try {
     const settings = readDb('settings') || {};
     const siteName = (settings.site_name || 'HUMAX SMS').trim();
@@ -12130,12 +12175,13 @@ function cleanupOrphanedNumbers() {
   }
 }
 
-server.listen(PORT, '0.0.0.0', () => {
+const BIND_HOST = process.env.HOST || '0.0.0.0';
+server.listen(PORT, BIND_HOST, () => {
   initSmppEngine();
   runPaytermMigration();
   cleanupOrphanedNumbers();
   syncTestNumbersWithNumbersPool();
-  console.log(`[ALPHA SMS] Server running on http://0.0.0.0:${PORT}`);
+  console.log(`[ALPHA SMS] Server running on http://${BIND_HOST}:${PORT}`);
   console.log(`  ➜  Local:   http://localhost:${PORT}/`);
-  console.log(`  ➜  Network: http://0.0.0.0:${PORT}/`);
+  console.log(`  ➜  Network: http://${BIND_HOST}:${PORT}/`);
 });

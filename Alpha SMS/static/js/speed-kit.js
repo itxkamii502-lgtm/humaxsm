@@ -79,7 +79,16 @@ function zy2Render(id) {
     page = t.page = Math.max(1, Math.min(t.page || 1, pages));
     from = total > 0 ? (page - 1) * (t.perPage || 25) + 1 : 0;
     to = Math.min(total, from + t.rows.length - 1);
-    slice = t.rows;
+    if (t.sort != null && t.sort >= 0 && Array.isArray(t.rows)) {
+      slice = [...t.rows].sort((a, b) => {
+        const va = zyCell2(a[t.sort]).v;
+        const vb = zyCell2(b[t.sort]).v;
+        if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * (t.dir || 1);
+        return String(va ?? '').localeCompare(String(vb ?? ''), undefined, { numeric: true }) * (t.dir || 1);
+      });
+    } else {
+      slice = t.rows;
+    }
   } else {
     const rows = zy2Data(t);
     total = rows.length;
@@ -2328,6 +2337,26 @@ function zyToolbarFilter(val) {
   const q = String(val || '').toLowerCase().trim();
   const rows = table.querySelectorAll('tbody tr');
   rows.forEach(r => {
+    if (r.querySelector('.zy-empty')) return;
+    const txt = r.textContent.toLowerCase();
+    r.style.display = (!q || txt.includes(q)) ? '' : 'none';
+  });
+}
+
+function zyFilterTable(tableId, val) {
+  let table = null;
+  if (tableId) {
+    table = document.getElementById(tableId);
+    if (table && !table.matches('table')) {
+      table = table.querySelector('table') || table;
+    }
+  }
+  if (!table) table = document.querySelector('.zy-dt') || document.getElementById('dt-cdr');
+  if (!table) return;
+  const q = String(val || '').toLowerCase().trim();
+  const rows = table.querySelectorAll('tbody tr');
+  rows.forEach(r => {
+    if (r.querySelector('.zy-empty')) return;
     const txt = r.textContent.toLowerCase();
     r.style.display = (!q || txt.includes(q)) ? '' : 'none';
   });
@@ -2344,6 +2373,8 @@ window.zyExportTablePdf = zyExportTablePdf;
 window.zyPrintTable = zyPrintTable;
 window.zyToggleColumnsModal = zyToggleColumnsModal;
 window.zyToolbarFilter = zyToolbarFilter;
+window.zyFilterTable = zyFilterTable;
+window.zyToolbarFilterTable = zyFilterTable;
 window.zyExportHtmlTable = zyExportHtmlTable;
 window.zyPrintHtmlTable = zyPrintHtmlTable;
 window.zyRenderTableToolbar = zyRenderTableToolbar;

@@ -66,7 +66,7 @@ const ZY_MENU = {
   'smsmodule':   { t: 'SMS Module',       ic: 'envelope',
                    sub: [
                      ['My Numbers', 'my-numbers'],
-                     ['Ranges & Rate Card', 'sms-overview']
+                     ['SMS Ranges', 'sms-overview']
                    ] },
   'smstest':     { t: 'SMS Test Panel',   ic: 'rss',        page: 'sms-test-panel' },
   'users':       { t: 'Users',            ic: 'user',
@@ -95,10 +95,10 @@ const ZY_LABELS = {
   'dashboard': 'Dashboard',
   'access-search': 'CLI Search',
   'my-numbers': 'My Numbers',
-  'sms-overview': 'Ranges & Rate Card',
-  'sms-ranges': 'Ranges & Rate Card',
-  'sms-ratecard': 'Ranges & Rate Card',
-  'payout-rates-view': 'Ranges & Rate Card',
+  'sms-overview': 'SMS Ranges',
+  'sms-ranges': 'SMS Ranges',
+  'sms-ratecard': 'SMS Ranges',
+  'payout-rates-view': 'SMS Ranges',
   'sms-test-panel': 'SMS Test Panel',
   'news': 'Notifications',
   'notifications': 'Notifications',
@@ -306,14 +306,14 @@ pgDashboard = async function () {
   }
   try {
     const [numbers, daily, ranges, news, recentRes, periodStats] = await Promise.all([
-      apiFetch(`/api/numbers?client_id=${CLIENT_ID}&limit=100000`),
+      apiFetch(`/api/numbers?client_id=${CLIENT_ID}&limit=1`).catch(() => ({ total: 0, data: [] })),
       apiFetch(`/api/sms/daily-stats?client_id=${CLIENT_ID}`),
       apiFetch('/api/numbers/sms-ranges'),
       apiFetch(`/api/announcements?role=Client&user_id=${CLIENT_ID}`),
       apiFetch(`/api/sms/logs?client_id=${CLIENT_ID}&limit=8`).catch(() => ({ data: [] })),
       apiFetch(`/api/sms/period-stats?client_id=${CLIENT_ID}`).catch(() => null)
     ]);
-    const numberList = (numbers && numbers.data) || numbers || [];
+    const numberCount = (numbers && typeof numbers.total === 'number') ? numbers.total : ((numbers && numbers.data && numbers.data.length) || 0);
     const rangeList = Array.isArray(ranges) ? ranges : ((ranges && ranges.data) || []);
     const newsList = (news && (news.data || news)) || [];
     const traffic = (daily && daily.weekly_traffic) || [0, 0, 0, 0, 0, 0, 0];
@@ -381,7 +381,7 @@ pgDashboard = async function () {
 
     const circles = [
       ['NEW RANGES',     'circ_ranges',  rangeList.length],
-      ['NEW NUMBERS',    'circ_numbers', numberList.length],
+      ['NEW NUMBERS',    'circ_numbers', numberCount],
       ['SMS THIS MONTH', 'circ_sms',     (daily && daily.this_month) || 0]
     ];
 
