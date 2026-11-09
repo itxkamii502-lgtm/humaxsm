@@ -3,11 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Owner Panel — HUMAX SMS</title>
-<meta name="description" content="HUMAX SMS Owner Panel for OTP, virtual number management, and SMS live feeds">
-<meta property="og:title" content="Owner Panel — HUMAX SMS">
-<meta property="og:description" content="HUMAX SMS Owner Panel for OTP, virtual number management, and SMS live feeds">
-<link rel="icon" type="image/png" href="/static/img/humax-sms-logo.png">
+<title>Owner Panel — HUMEX SMS</title>
+<meta name="description" content="HUMEX SMS Owner Panel for OTP, virtual number management, and SMS live feeds">
+<meta property="og:title" content="Owner Panel — HUMEX SMS">
+<meta property="og:description" content="HUMEX SMS Owner Panel for OTP, virtual number management, and SMS live feeds">
+<link rel="icon" type="image/png" href="/static/img/humex-sms-logo.png">
 <script>
 (function(){
   try {
@@ -41,30 +41,30 @@
   } catch(e) {}
 })();
 </script>
-<script src="/static/js/brand-theme.js"></script>
-<script src="/static/js/speed-auth-guard.js"></script>
-<script src="/static/js/speed-profile-security.js"></script>
+<script src="/static/js/shared-brand-theme.js"></script>
+<script src="/static/js/shared-auth-guard.js"></script>
+<script src="/static/js/shared-profile-security.js"></script>
 <script>
   if (window.SpeedAuth) {
     window.SpeedAuth.enforce(['Owner', 'Admin']);
     window.SpeedAuth.initCrossTabWatcher(['Owner', 'Admin']);
   }
 </script>
-<link rel="stylesheet" href="/static/css/style.css">
+<link rel="stylesheet" href="/static/css/humex-global.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/static/css/cropper.min.css">
-<link rel="stylesheet" href="/static/css/speed-panel.css">
-<link rel="stylesheet" href="/static/css/speed-admin-skin.css">
+<link rel="stylesheet" href="/static/css/humex-panel.css">
+<link rel="stylesheet" href="/static/css/humex-admin-skin.css">
 </head>
 <body class="light alphaui rmsui adminui">
 
 <aside class="zy-side" id="sidebar">
   <div class="zy-side-head">
     <button class="zy-side-close" onclick="zyCloseSidebar()" aria-label="Close" type="button"><i class="fas fa-times"></i></button>
-    <div class="zy-avatar-lg" style="background-color: #ffffff;"><img src="/static/img/humax-sms-logo.png" alt="HUMAX SMS" class="zy-ava-dp-img" style="width:100%;height:100%;object-fit:cover;border-radius:50%;display:block;background-color:#ffffff;"></div>
+    <div class="zy-avatar-lg" style="background-color: #ffffff;"><img src="/static/img/humex-sms-logo.png" alt="HUMEX SMS" class="zy-ava-dp-img" style="width:100%;height:100%;object-fit:cover;border-radius:50%;display:block;background-color:#ffffff;"></div>
     <div class="zy-welcome">Welcome <span id="mgr-username-side">Kamran_Bhatti</span></div>
     <div class="zy-role" id="brand-role">Owner Panel</div>
     <div class="zy-clock" id="zy-clock">&mdash;</div>
@@ -79,12 +79,12 @@
     <div class="zy-header-row">
       <div class="zy-head-left">
         <button class="zy-side-toggle" onclick="zyToggleSidebar()" title="Toggle Sidebar" aria-label="Toggle Sidebar"><i class="fas fa-bars"></i></button>
-        <div class="zy-head-title" id="zy-logo"><span class="zy-panel-badge"><img class="zy-badge-logo" src="/static/img/humax-sms-logo.png" alt="HUMAX SMS" onerror="this.style.display='none';"> <span class="zy-badge-name">HUMAX SMS</span></span></div>
+        <div class="zy-head-title" id="zy-logo"><span class="zy-panel-badge"><img class="zy-badge-logo" src="/static/img/humex-sms-logo.png" alt="HUMEX SMS" onerror="this.style.display='none';"> <span class="zy-badge-name">HUMEX SMS</span></span></div>
       </div>
       <div class="zy-head-right">
         <div class="zy-user" onclick="zyToggleUser(event)" title="Profile & Account">
           <span id="mgr-username" style="display:none !important;">Kamran_Bhatti</span>
-          <span class="zy-ava" title="Profile"><img src="/static/img/humax-sms-logo.png" alt="HUMAX SMS" class="zy-ava-dp-img" style="width:100%;height:100%;object-fit:cover;border-radius:50%;display:block;"></span>
+          <span class="zy-ava" title="Profile"><img src="/static/img/humex-sms-logo.png" alt="HUMEX SMS" class="zy-ava-dp-img" style="width:100%;height:100%;object-fit:cover;border-radius:50%;display:block;"></span>
         </div>
         <div class="zy-user-menu" id="zy-user-menu">
           <a onclick="loadPage('announcements')"><i class="fas fa-bell"></i> <span>Notifications</span> <span class="um-badge">2</span></a>
@@ -119,12 +119,12 @@
 </div>
 
 <script src="/static/js/cropper.min.js"></script>
-<script src="/static/js/app.js"></script>
-<script src="/static/js/new_features.js"></script>
-<script src="/static/js/speed-kit.js"></script>
-<script src="/static/js/speed-admin.js"></script>
-<script src="/static/js/speed-loginpanel.js"></script>
-<script src="/static/js/speed-flash.js"></script>
-<script src="/static/js/brand-theme.js"></script>
+<script src="/static/js/owner-engine.js"></script>
+<script src="/static/js/owner-features.js"></script>
+<script src="/static/js/shared-ui-kit.js"></script>
+<script src="/static/js/owner-shell.js"></script>
+<script src="/static/js/shared-login-modal.js"></script>
+<script src="/static/js/shared-flash.js"></script>
+<script src="/static/js/shared-brand-theme.js"></script>
 </body>
 </html>

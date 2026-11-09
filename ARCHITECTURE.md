@@ -1,12 +1,12 @@
-# Alpha SMS — Architecture
+# HUMEX SMS — Architecture
 
-This document describes the software architecture, data flow, protocols, storage layer, and runtime patterns of Alpha SMS.
+This document describes the software architecture, data flow, protocols, storage layer, and runtime patterns of HUMEX SMS.
 
 ---
 
 ## 1. High-Level Architecture Overview
 
-Alpha SMS is a high-throughput, multi-tenant virtual number and SMS management platform for wholesale SMS routing, OTP verification services, and IPRN termination.
+HUMEX SMS is a high-throughput, multi-tenant virtual number and SMS management platform for wholesale SMS routing, OTP verification services, and IPRN termination.
 
 ```
                   +-----------------------------------+
@@ -43,13 +43,13 @@ Alpha SMS is a high-throughput, multi-tenant virtual number and SMS management p
          v                         v                         v
 +------------------+     +--------------------+     +------------------+
 |   Owner Portal   |     |   Manager Portal   |     |   Agent Portal   |
-|   (app.js)       |     |   (speed-pages.js) |     | (speed-agent.js) |
+|   (owner-engine.js)       |     |   (manager-pages.js) |     | (speed-agent-engine.js) |
 +------------------+     +--------------------+     +------------------+
                                                              |
                                                              v
                                                     +------------------+
                                                     |  Client Portal   |
-                                                    | (speed-client.js)|
+                                                    | (speed-client-engine.js)|
                                                     +------------------+
 ```
 
@@ -63,20 +63,20 @@ Alpha SMS is a high-throughput, multi-tenant virtual number and SMS management p
 - **WebSocket Gateway**: Built with `ws` on the HTTP server, broadcasting new SMS arrivals, live OTP feeds, and agent allocation alerts to active browser sessions.
 - **REST API Routing**: Over 60 REST endpoints handling Auth, Numbers, Ranges, CDR logs, Payouts, Audit logs, and Settings.
 
-### 2.2 Storage Layer (`Alpha SMS/data/`)
+### 2.2 Storage Layer (`HUMEX SMS/data/`)
 - **Memory Cache (`DB_CACHE`, `DB_MTIME`)**: Fast in-memory lookup. On read, file `mtime` is checked. If file has not changed on disk, cached object is returned immediately without parsing overhead.
 - **Atomic File Writes (`writeDb`)**: Writes to a temporary `.tmp` file first, then synchronously renames (`fs.renameSync`) to prevent partial/corrupted reads.
 - **Crash-Safe SMS Journaling (`SMS_JOURNAL`)**: Inbound messages are instantly appended to `sms_log.journal.ndjson`. If the server terminates unexpectedly, `recoverSmsJournal()` runs at boot to restore missing records.
 - **Monthly Log Partitioning (`rotateSmsLog`)**: Records older than retention limit (default 90 days) are rotated into `data/archive/sms_log_YYYY-MM.json`. Historic queries access archives seamlessly via `readSmsWithArchive()`.
 
-### 2.3 Frontend Presentation Layer (`Alpha SMS/static/`)
+### 2.3 Frontend Presentation Layer (`HUMEX SMS/static/`)
 - **Frameworkless Lightweight SPA**: Built with modular vanilla JavaScript, delivering high performance and instant page swaps without bundle bloat.
-- **Unified Component Engine (`speed-kit.js`)**:
+- **Unified Component Engine (`shared-ui-kit.js`)**:
   - `zyDT2`: High-speed virtualized DataTable with sorting, search filtering, column toggling, and pagination.
   - Export system: Native Copy, CSV stream, Excel, PDF, and Print.
   - `zyModal`: Non-blocking dialog manager with backdrop dismissal.
   - `zyRenderDatePresets` & `zyRenderGroupChips`: Standardized filtering toolbars.
-- **Universal Design System (`speed-panel.css`)**:
+- **Universal Design System (`humex-panel.css`)**:
   - CSS custom properties (`--sp-primary`, `--sp-bg-surface`, `--sp-border`).
   - Strict UI structure: `.zy-panel` -> `.zy-panel-head` -> `.zy-table-toolbar` -> `.zy-dt2`.
   - Contrast and typography guidelines for professional financial portals.

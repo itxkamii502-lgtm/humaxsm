@@ -1,6 +1,6 @@
-# Alpha SMS — Project Map
+# HUMEX SMS — Project Map
 
-This document maps all core files, directory structures, entry points, and responsibilities across the Alpha SMS application.
+This document maps all core files, directory structures, entry points, and responsibilities across the HUMEX SMS application.
 
 ---
 
@@ -10,10 +10,10 @@ This document maps all core files, directory structures, entry points, and respo
 ├── server.js                        # Main Express backend, SMPP server & WebSocket server
 ├── package.json                     # Node.js dependencies, npm scripts (dev, test, lint)
 ├── metadata.json                    # AI Studio applet metadata & capabilities
-├── index.html                       # Entry HTML redirecting to Alpha SMS portals
+├── index.html                       # Entry HTML redirecting to HUMEX SMS portals
 ├── reset-owner-password.js          # CLI emergency tool to reset owner credentials
 │
-├── Alpha SMS/                       # Core portal application
+├── HUMEX SMS/                       # Core portal application
 │   ├── AGENT_PANEL.md               # Agent portal specifications
 │   ├── HIERARCHY.md                 # Role hierarchy documentation
 │   │
@@ -50,22 +50,22 @@ This document maps all core files, directory structures, entry points, and respo
 │       ├── testpanel.html           # Public / client test panel container
 │       │
 │       ├── css/
-│       │   ├── speed-panel.css      # Core universal design system (.zy-panel, .zy-filter-grid)
-│       │   ├── speed-admin-skin.css # Admin header gradients and skin overrides
-│       │   ├── style.css            # Legacy modal transitions & global resets
+│       │   ├── humex-panel.css      # Core universal design system (.zy-panel, .zy-filter-grid)
+│       │   ├── humex-admin-skin.css # Admin header gradients and skin overrides
+│       │   ├── humex-global.css            # Legacy modal transitions & global resets
 │       │   └── cropper.min.css      # Profile image cropping library CSS
 │       │
 │       ├── js/
-│       │   ├── app.js               # Owner portal controller & page routers
-│       │   ├── manager.js           # Manager portal entry & session bootstrap
-│       │   ├── speed-pages.js       # Manager portal page views (Ranges, Numbers, Reports, Test)
-│       │   ├── agent.js             # Agent portal entry & session bootstrap
-│       │   ├── speed-agent-pages.js # Agent portal page views (Numbers, Bulk Add, CDR, Test)
-│       │   ├── client.js            # Client portal entry & session bootstrap
-│       │   ├── speed-client-pages.js# Client portal page views (Traffic, Reports, Numbers)
-│       │   ├── speed-kit.js         # Universal UI kit: zyDT2 table engine, export pills, modals
-│       │   ├── brand-theme.js       # Dynamic brand colors, dark/light theme, custom logos
-│       │   ├── speed-auth-guard.js  # Client-side session and role authentication validator
+│       │   ├── owner-engine.js               # Owner portal controller & page routers
+│       │   ├── manager-engine.js           # Manager portal entry & session bootstrap
+│       │   ├── manager-pages.js       # Manager portal page views (Ranges, Numbers, Reports, Test)
+│       │   ├── agent-engine.js             # Agent portal entry & session bootstrap
+│       │   ├── agent-pages.js # Agent portal page views (Numbers, Bulk Add, CDR, Test)
+│       │   ├── client-engine.js            # Client portal entry & session bootstrap
+│       │   ├── client-pages.js# Client portal page views (Traffic, Reports, Numbers)
+│       │   ├── shared-ui-kit.js         # Universal UI kit: zyDT2 table engine, export pills, modals
+│       │   ├── shared-brand-theme.js       # Dynamic brand colors, dark/light theme, custom logos
+│       │   ├── shared-auth-guard.js  # Client-side session and role authentication validator
 │       │   └── testpanel.js         # Standalone test panel logic
 │       │
 │       └── img/                     # SVGs, icons, and branding badges
@@ -84,10 +84,10 @@ This document maps all core files, directory structures, entry points, and respo
 | File Path | Primary Function | Directly Affected Roles |
 |---|---|---|
 | `/server.js` | Express API, auth sessions, SMPP server, WebSocket engine, JSON DB handlers | All roles (Owner, Manager, Agent, Client) |
-| `/Alpha SMS/static/js/speed-kit.js` | DataTable engine (`zyDT2`), export buttons, modals, date presets, group chips | All portals (Shared UI foundation) |
-| `/Alpha SMS/static/css/speed-panel.css` | Universal CSS styles (`.zy-panel`, `.zy-filter-grid`, `.zy-table-toolbar`) | All portals |
-| `/Alpha SMS/static/js/app.js` | Owner portal logic: `renderMyNumbers`, `renderSmsTestPanel`, `renderMySms` | Owner (`Kamran_Bhatti`) |
-| `/Alpha SMS/static/js/speed-pages.js` | Manager portal views: `pgSmsNumbers`, `pgSmsReports`, `pgTestPanel` | Manager |
-| `/Alpha SMS/static/js/speed-agent-pages.js`| Agent portal views: `pgMySmsNumbers`, `zyCdrPage`, `zyTestPanel`, `pgBulkAdd`| Agent |
-| `/Alpha SMS/static/js/speed-client-pages.js`| Client portal views: live logs, assigned numbers, rates | Client |
-| `/Alpha SMS/static/login.html` | Universal login interface routing users to respective portal | All unauthenticated users |
+| `/HUMEX SMS/static/js/shared-ui-kit.js` | DataTable engine (`zyDT2`), export buttons, modals, date presets, group chips | All portals (Shared UI foundation) |
+| `/HUMEX SMS/static/css/humex-panel.css` | Universal CSS styles (`.zy-panel`, `.zy-filter-grid`, `.zy-table-toolbar`) | All portals |
+| `/HUMEX SMS/static/js/owner-engine.js` | Owner portal logic: `renderMyNumbers`, `renderSmsTestPanel`, `renderMySms` | Owner (`Kamran_Bhatti`) |
+| `/HUMEX SMS/static/js/manager-pages.js` | Manager portal views: `pgSmsNumbers`, `pgSmsReports`, `pgTestPanel` | Manager |
+| `/HUMEX SMS/static/js/agent-pages.js`| Agent portal views: `pgMySmsNumbers`, `zyCdrPage`, `zyTestPanel`, `pgBulkAdd`| Agent |
+| `/HUMEX SMS/static/js/client-pages.js`| Client portal views: live logs, assigned numbers, rates | Client |
+| `/HUMEX SMS/static/login.html` | Universal login interface routing users to respective portal | All unauthenticated users |

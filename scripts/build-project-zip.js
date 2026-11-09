@@ -7,19 +7,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const ROOT_DIR = path.resolve(__dirname, '..');
-let safePrefix = 'humax_sms';
-try {
-  const settingsPath = path.join(ROOT_DIR, 'Alpha SMS', 'data', 'settings.json');
-  if (fs.existsSync(settingsPath)) {
-    const s = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
-    if (s && s.site_name) {
-      safePrefix = s.site_name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'humax_sms';
-    }
-  }
-} catch (e) {}
-
-const OUTPUT_ZIP = path.join(ROOT_DIR, 'Alpha SMS', 'static', `${safePrefix}-project.zip`);
-const FALLBACK_ZIP = path.join(ROOT_DIR, 'Alpha SMS', 'static', 'alpha-sms-project.zip');
+const OUTPUT_ZIP = path.join(ROOT_DIR, 'Humex-SMS-Production-VPS.zip');
 
 const IGNORE_PATTERNS = [
   'node_modules',
@@ -39,6 +27,12 @@ function shouldInclude(filePath) {
 
   // Never include attachments or AI Studio assets
   if (rel.startsWith(path.join('public', 'assets', 'aistudio')) || rel.includes('aistudio')) {
+    return false;
+  }
+
+  // Never ship data/ inside the deployable package (data belongs outside code tree on VPS)
+  if (rel === 'humex-sms/data' || rel.startsWith('humex-sms/data/') ||
+      rel === 'Alpha SMS/data' || rel.startsWith('Alpha SMS/data/')) {
     return false;
   }
 
@@ -87,13 +81,12 @@ function addDirectoryToZip(zip, dirPath, zipSubdir = '') {
 }
 
 try {
-  console.log(`Building ${safePrefix}-project.zip...`);
+  console.log(`Building Humex-SMS-Production-VPS.zip...`);
   const zip = new AdmZip();
   addDirectoryToZip(zip, ROOT_DIR, '');
   zip.writeZip(OUTPUT_ZIP);
-  zip.writeZip(FALLBACK_ZIP);
   const stat = fs.statSync(OUTPUT_ZIP);
-  console.log(`Successfully created ${OUTPUT_ZIP} and ${FALLBACK_ZIP} (${(stat.size / 1024 / 1024).toFixed(2)} MB)`);
+  console.log(`Successfully created ${OUTPUT_ZIP} (${(stat.size / 1024 / 1024).toFixed(2)} MB)`);
 } catch (err) {
   console.error('Error building zip:', err);
   process.exit(1);

@@ -1,5 +1,5 @@
 {
-  "name": "alpha-sms",
+  "name": "humex-sms",
   "private": true,
   "version": "1.0.0",
   "type": "module",
@@ -7,7 +7,7 @@
     "dev": "node server.js --port 3000",
     "build": "node -e \"console.log('Build completed')\"",
     "lint": "node --check server.js",
-    "test": "node tests/verify-rules.js && node tests/ui-wiring.js && node tests/payterm-rules.js && node tests/smpp-selftest.js",
+    "test": "node tests/verify-rules.js && node tests/ui-wiring.js && node tests/payterm-rules.js && node tests/smpp-selftest.js && node tests/dedup-providers-test.cjs",
     "start": "node server.js --port 3000"
   },
   "dependencies": {

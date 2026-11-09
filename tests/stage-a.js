@@ -64,7 +64,7 @@ export async function stageA() {
     // A2 download routes gone
     const dl = await api('GET', '/download/vps');
     check('A2 /download/vps no longer serves a file', !(typeof dl.data === 'string' && dl.data.startsWith('PK')) && !String(dl.headers.get('content-disposition') || '').includes('attachment'));
-    check('A2 no archive files shipped in static/', !fs.existsSync(path.join(ROOT, 'Alpha SMS/static/alphasms-vps.zip')));
+    check('A2 no archive files shipped in static/', !fs.existsSync(path.join(ROOT, 'humex-sms/static/alphasms-vps.zip')));
 
     // A4 inbound
     check('A4 inbound without token refused', (await api('POST', '/api/sms/inbound', { body: { to: '233500000005', message: 'Your code is 111111' } })).status === 403);
@@ -127,11 +127,11 @@ export async function stageA() {
     check('A6 anonymous WebSocket refused (close code 1008)', wsNoAuth === 1008, 'got ' + wsNoAuth);
 
     // A3 UI token masking + A9 escapeHtml
-    const btCode = fs.readFileSync(path.join(ROOT, 'Alpha SMS/static/js/brand-theme.js'), 'utf-8');
-    check('A9 escapeHtml defined globally in brand-theme.js', btCode.includes('window.escapeHtml'));
-    const mgrJs = fs.readFileSync(path.join(ROOT, 'Alpha SMS/static/js/manager.js'), 'utf-8');
+    const btCode = fs.readFileSync(path.join(ROOT, 'humex-sms/static/js/shared-brand-theme.js'), 'utf-8');
+    check('A9 escapeHtml defined globally in shared-brand-theme.js', btCode.includes('window.escapeHtml'));
+    const mgrJs = fs.readFileSync(path.join(ROOT, 'humex-sms/static/js/manager-engine.js'), 'utf-8');
     check('A3 token masked in manager table', mgrJs.includes('token_hint ?') && !mgrJs.includes("mgrCopyToken('${t.token"));
-    const appJs = fs.readFileSync(path.join(ROOT, 'Alpha SMS/static/js/app.js'), 'utf-8');
+    const appJs = fs.readFileSync(path.join(ROOT, 'humex-sms/static/js/owner-engine.js'), 'utf-8');
     check('A3 token masked in admin table', appJs.includes('token_hint ?') && !appJs.includes("copyToken('${t.token"));
   } finally { await srv.stop(); }
 

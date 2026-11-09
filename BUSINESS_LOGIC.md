@@ -1,6 +1,6 @@
-# Alpha SMS — Business Logic & Rules
+# HUMEX SMS — Business Logic & Rules
 
-This document details the exact business rules, hierarchical access control, number allocation lifecycle, financial calculations, and data scoping policies enforced in Alpha SMS.
+This document details the exact business rules, hierarchical access control, number allocation lifecycle, financial calculations, and data scoping policies enforced in HUMEX SMS.
 
 ---
 

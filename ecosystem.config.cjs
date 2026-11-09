@@ -13,7 +13,9 @@ module.exports = {
         PORT: 3000,
         SMPP_ENABLED: 'true',
         SMPP_PORT: 2775,
-        TRUST_PROXY: '1'
+        TRUST_PROXY: '1',
+        // Recommended on VPS: store live data outside code tree so code updates never overwrite database
+        // DATA_DIR: '/var/lib/humex-sms/data'
       }
     }
   ]

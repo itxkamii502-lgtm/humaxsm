@@ -172,11 +172,14 @@ const portArgIdx = process.argv.indexOf('--port');
 const portFromArg = portArgIdx !== -1 && process.argv[portArgIdx + 1] ? Number(process.argv[portArgIdx + 1]) : null;
 const envPort = Number(process.env.PORT);
 const PORT = portFromArg || (envPort && envPort !== 8080 ? envPort : 3000);
-const ALPHA_DIR = path.join(__dirname, 'Alpha SMS');
+const HUMEX_DIR = fs.existsSync(path.join(__dirname, 'humex-sms')) ? path.join(__dirname, 'humex-sms') : path.join(__dirname, 'Alpha SMS');
+const ALPHA_DIR = HUMEX_DIR;
 const RTX_DIR = ALPHA_DIR; // backward compatibility
 const STATIC_DIR = path.join(ALPHA_DIR, 'static');
 const DATA_DIR = process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR) : path.join(ALPHA_DIR, 'data');
 const AGENT_FILES_DIR = path.join(DATA_DIR, 'agent_files');
+console.log(`[BOOT] Resolved APP_DIR:  ${HUMEX_DIR}`);
+console.log(`[BOOT] Resolved DATA_DIR: ${DATA_DIR}`);
 
 if (!fs.existsSync(DATA_DIR)) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -327,7 +330,7 @@ function recoverSmsJournal() {
     }
     log.sort((a, b) => String(b.timestamp || '').localeCompare(String(a.timestamp || '')));
     writeDb('sms_log', log);
-    if (added) console.log(`[ALPHA SMS] Recovered ${added} SMS from journal`);
+    if (added) console.log(`[HUMEX SMS] Recovered ${added} SMS from journal`);
   } catch (e) { console.error('Journal recovery error:', e); }
 }
 // Retention: rows older than SMS_RETENTION_DAYS move to data/archive/sms_log_YYYY-MM.json (never deleted)
@@ -352,7 +355,7 @@ function rotateSmsLog() {
       fs.writeFileSync(f + '.tmp', JSON.stringify(ex)); fs.renameSync(f + '.tmp', f);
     }
     writeDb('sms_log', keep); // only after every archive file is safely written
-    console.log(`[ALPHA SMS] Archived ${log.length - keep.length} old SMS rows`);
+    console.log(`[HUMEX SMS] Archived ${log.length - keep.length} old SMS rows`);
   } catch (e) { console.error('SMS rotation error:', e); }
 }
 // Current log + archives (for payments / long reports)
@@ -1036,17 +1039,39 @@ function ingestSms({
     let resolvedManagerId = numberRec && numberRec.manager_id;
     let resolvedClientId = numberRec && numberRec.client_id;
 
+    // Check if numberRec.user is a client
+    if (!resolvedClientId && numberRec && numberRec.user && numberRec.user !== 'unallocated' && numberRec.user !== 'Test Panel') {
+      const c = (readDb('clients') || []).find(x => String(x.username).toLowerCase() === String(numberRec.user).toLowerCase());
+      if (c) resolvedClientId = c.id;
+    }
+
+    if (!resolvedClientId && numberRec && numberRec.client_username && numberRec.client_username !== 'Test Panel') {
+      const c = (readDb('clients') || []).find(x => String(x.username).toLowerCase() === String(numberRec.client_username).toLowerCase());
+      if (c) resolvedClientId = c.id;
+    }
+
+    // Resolve up the downline chain from client -> agent -> manager
+    if (resolvedClientId) {
+      const c = (readDb('clients') || []).find(x => Number(x.id) === Number(resolvedClientId));
+      if (c) {
+        if (!resolvedAgentId && c.agent_id) resolvedAgentId = c.agent_id;
+        if (!resolvedManagerId && c.manager_id) resolvedManagerId = c.manager_id;
+      }
+    }
+
     if (!resolvedAgentId && numberRec && numberRec.agent_username) {
       const a = (readDb('agents') || []).find(x => String(x.username).toLowerCase() === String(numberRec.agent_username).toLowerCase());
       if (a) resolvedAgentId = a.id;
     }
+
+    if (resolvedAgentId && !resolvedManagerId) {
+      const a = (readDb('agents') || []).find(x => Number(x.id) === Number(resolvedAgentId));
+      if (a && a.manager_id) resolvedManagerId = a.manager_id;
+    }
+
     if (!resolvedManagerId && numberRec && numberRec.manager_username) {
       const m = (readDb('users') || []).find(x => String(x.username).toLowerCase() === String(numberRec.manager_username).toLowerCase());
       if (m) resolvedManagerId = m.id;
-    }
-    if (!resolvedClientId && numberRec && numberRec.client_username && numberRec.client_username !== 'Test Panel') {
-      const c = (readDb('clients') || []).find(x => String(x.username).toLowerCase() === String(numberRec.client_username).toLowerCase());
-      if (c) resolvedClientId = c.id;
     }
 
     const hasClient = Boolean(resolvedClientId);
@@ -1625,6 +1650,72 @@ app.get(['/static/:file(*.html)', '/:file(*.html)'], (req, res, next) => {
   }
   next();
 });
+
+/* ══════════════════════════════════════════════════════════════════════════
+   HUMEX SMS REBRANDING COMPATIBILITY ALIAS MIDDLEWARE (START)
+   Maps legacy asset names to unified humex-sms conventions. Can be safely deleted once
+   browsers and proxies have fully cleared cache.
+   ══════════════════════════════════════════════════════════════════════════ */
+const ASSET_RENAME_MAP = {
+  // Brand Images
+  'humax-sms-logo.png': 'humex-sms-logo.png',
+  'alphasms-logo.svg': 'humex-sms-logo.svg',
+  'alphasms-circle-logo.svg': 'humex-sms-circle-logo.svg',
+  'alphasms-icon.svg': 'humex-sms-icon.svg',
+  // Stylesheets
+  'speed-panel.css': 'humex-panel.css',
+  'speed-admin-skin.css': 'humex-admin-skin.css',
+  'apx-telecom.css': 'humex-telecom.css',
+  'style.css': 'humex-global.css',
+  // JavaScript - Owner
+  'app.js': 'owner-engine.js',
+  'speed-admin.js': 'owner-shell.js',
+  'new_features.js': 'owner-features.js',
+  // JavaScript - Manager
+  'manager.js': 'manager-engine.js',
+  'speed-panel.js': 'manager-shell.js',
+  'speed-pages.js': 'manager-pages.js',
+  'manager_features.js': 'manager-features.js',
+  // JavaScript - Agent
+  'agent.js': 'agent-engine.js',
+  'speed-agent.js': 'agent-shell.js',
+  'speed-agent-pages.js': 'agent-pages.js',
+  'agent_features.js': 'agent-features.js',
+  // JavaScript - Client
+  'client.js': 'client-engine.js',
+  'speed-client.js': 'client-shell.js',
+  'speed-client-pages.js': 'client-pages.js',
+  // JavaScript - Test Panel
+  'speed-test.js': 'testpanel-shell.js',
+  'speed-test-pages.js': 'testpanel-pages.js',
+  // JavaScript - Shared
+  'speed-kit.js': 'shared-ui-kit.js',
+  'brand-theme.js': 'shared-brand-theme.js',
+  'speed-auth-guard.js': 'shared-auth-guard.js',
+  'speed-profile-security.js': 'shared-profile-security.js',
+  'speed-url.js': 'shared-url-router.js',
+  'speed-flash.js': 'shared-flash.js',
+  'speed-loginpanel.js': 'shared-login-modal.js',
+  'apx-grid.js': 'shared-grid.js'
+};
+
+app.use((req, res, next) => {
+  const urlPath = req.path;
+  const m = urlPath.match(/^(?:\/static)?\/(js|css|img)\/([^/?#]+)$/i);
+  if (m) {
+    const sub = m[1].toLowerCase();
+    const oldBase = m[2];
+    if (ASSET_RENAME_MAP[oldBase]) {
+      const newBase = ASSET_RENAME_MAP[oldBase];
+      const targetPath = path.join(STATIC_DIR, sub, newBase);
+      if (fs.existsSync(targetPath)) return res.sendFile(targetPath);
+    }
+  }
+  next();
+});
+/* ══════════════════════════════════════════════════════════════════════════
+   HUMEX SMS REBRANDING COMPATIBILITY ALIAS MIDDLEWARE (END)
+   ══════════════════════════════════════════════════════════════════════════ */
 
 app.use('/static', express.static(STATIC_DIR, staticOpts));
 app.use('/css', express.static(path.join(STATIC_DIR, 'css'), staticOpts));
@@ -2288,8 +2379,8 @@ function sendInjectedHtml(res, filePath) {
     const settings = readDb('settings') || {};
     const css = getThemeCss(settings);
     const safeSettings = {
-      site_name: settings.site_name || 'HUMAX SMS',
-      logo_url: settings.logo_url || '/static/img/humax-sms-logo.png',
+      site_name: settings.site_name || 'HUMEX SMS',
+      logo_url: settings.logo_url || '/static/img/humex-sms-logo.png',
       theme_color: settings.theme_color || 'green',
       theme_mode: settings.theme_mode || 'light',
       font_family: settings.font_family || 'system',
@@ -2297,7 +2388,7 @@ function sendInjectedHtml(res, filePath) {
       header_gradient: settings.header_gradient || 'linear-gradient(180deg, #ffffff 0%, #f8faf9 100%)',
       header_text_color: settings.header_text_color || '#1e293b',
       header_font_weight: settings.header_font_weight || '700',
-      footer_text: settings.footer_text || `© ${new Date().getFullYear()} ${settings.site_name || 'ALPHA SMS'}. All rights reserved.`
+      footer_text: settings.footer_text || `© ${new Date().getFullYear()} ${settings.site_name || 'HUMEX SMS'}. All rights reserved.`
     };
 
     // Determine clean page title dynamically on the server
@@ -3259,7 +3350,7 @@ app.post('/api/user/2fa/setup', async (req, res) => {
 
   const secret = generateBase32Secret(20);
   const settings = readDb('settings') || {};
-  const appName = settings.site_name || 'ALPHA SMS';
+  const appName = settings.site_name || 'HUMEX SMS';
   const otpauthUrl = `otpauth://totp/${encodeURIComponent(appName)}:${encodeURIComponent(found.user.username)}?secret=${secret}&issuer=${encodeURIComponent(appName)}`;
 
   try {
@@ -3794,16 +3885,38 @@ app.get('/api/providers', (req, res) => {
   try {
     const ranges = readDb('sms_ranges') || [];
     const numbers = readDb('numbers') || [];
+    const crConns = readDb('cr_api_connections') || [];
+    const smppAccs = readDb('smpp_accounts') || [];
     const provSet = new Set();
+
+    // Dynamically add providers from connected CR API panels (panel_name is the provider)
+    crConns.forEach(c => {
+      const name = (c.panel_name || '').trim();
+      if (name && name !== 'CR API Panel' && name !== 'Manual' && name !== '—') {
+        provSet.add(name);
+      } else if (name) {
+        provSet.add(name);
+      }
+    });
+
+    // Dynamically add providers from SMPP accounts (company or system_id is the provider)
+    smppAccs.forEach(s => {
+      const name = (s.company || s.system_id || '').trim();
+      if (name && name !== 'Manual' && name !== '—') provSet.add(name);
+    });
+
+    // Dynamically add providers from active SMS ranges
     ranges.forEach(r => {
       const p = (r.provider || '').trim();
       if (p && p !== 'Manual' && p !== '—') provSet.add(p);
     });
+
+    // Dynamically add providers from existing numbers
     numbers.forEach(n => {
       const p = (n.provider || '').trim();
       if (p && p !== 'Manual' && p !== '—') provSet.add(p);
     });
-    ['Airtel', 'Vodafone', 'Orange', 'MTN', 'O2', 'EE', 'T-Mobile', 'Movistar', 'Claro', 'Etisalat'].forEach(p => provSet.add(p));
+
     const list = Array.from(provSet).sort().map((name, idx) => ({ id: idx + 1, name, provider_name: name }));
     res.json({ data: list, total: list.length });
   } catch (err) {
@@ -4216,13 +4329,47 @@ app.post('/api/numbers/import-to-range', (req, res) => {
       return res.status(400).json({ error: 'No valid phone numbers found in input' });
     }
 
+    // Build digit lookup map of existing numbers in system
+    const existingMap = new Map();
+    for (const item of numbers) {
+      const d = String(item.number || '').replace(/\D/g, '');
+      if (d) existingMap.set(d, item);
+    }
+
+    const seenInBatch = new Set();
+    const duplicates = [];
+    const targetRangeId = Number(rng.id);
+    const targetRangeName = rng.range_name || rng.name || rng.country || 'Range';
+
     for (let i = 0; i < validLines.length; i++) {
       const num = validLines[i];
+      const digits = String(num).replace(/\D/g, '');
+      if (!digits) continue;
+
+      // Check duplicate within the submitted list
+      if (seenInBatch.has(digits)) {
+        duplicates.push({ number: num, reason: 'Duplicate in submitted list' });
+        continue;
+      }
+      seenInBatch.add(digits);
+
+      // Check duplicate in database
+      const existing = existingMap.get(digits);
+      if (existing) {
+        if (Number(existing.range_id) === targetRangeId) {
+          duplicates.push({ number: num, reason: 'Already exists in this range' });
+        } else {
+          const otherRange = existing.range_name || existing.country || `Range #${existing.range_id}`;
+          duplicates.push({ number: num, reason: `Already in range "${otherRange}"` });
+        }
+        continue;
+      }
+
       added.push({
-        id: baseId + i,
+        id: baseId + added.length,
         number: num,
         range_id: rng.id,
-        range_name: rng.range_name || rng.name || rng.country || 'Range',
+        range_name: targetRangeName,
         prefix: rng.prefix || '',
         app: 'Unassigned',
         status: 'active',
@@ -4235,16 +4382,25 @@ app.post('/api/numbers/import-to-range', (req, res) => {
         sms_count: 0,
         notes: ''
       });
+      existingMap.set(digits, { range_id: rng.id, range_name: targetRangeName });
     }
 
-    numbers.push(...added);
-    writeDb('numbers', numbers);
-    logAudit('Admin', 'Import Numbers', `Imported ${added.length} numbers to range "${rng.range_name || rng.country}"`, 'Numbers');
+    if (added.length > 0) {
+      numbers.push(...added);
+      writeDb('numbers', numbers);
+      logAudit('Admin', 'Import Numbers', `Imported ${added.length} numbers to range "${targetRangeName}" (skipped ${duplicates.length} duplicate(s))`, 'Numbers');
+    }
+
     res.json({
       success: true,
       imported: added.length,
+      skipped_duplicates: duplicates.length,
+      duplicates_detail: duplicates,
       range_id: rangeId,
-      range_name: rng.range_name || rng.country
+      range_name: targetRangeName,
+      message: added.length > 0
+        ? `Imported ${added.length} number(s).${duplicates.length ? ` Skipped ${duplicates.length} duplicate(s).` : ''}`
+        : `No numbers imported. All ${duplicates.length} number(s) were duplicates.`
     });
   } catch (err) {
     console.error('import-to-range error:', err);
@@ -4340,9 +4496,22 @@ app.post('/api/numbers/bulk-range-import', upload.single('file'), (req, res) => 
         created: new Date().toISOString()
       });
 
-      const baseNumId = nextId(numbersDb) + totalAdded;
+      const targetDb = mode === 'test' ? testNumbersDb : numbersDb;
+      const existingDigits = new Set(targetDb.map(n => String(n.number || '').replace(/\D/g, '')).filter(Boolean));
+      const seenBatch = new Set();
+      let skippedInGroup = 0;
+
       for (let i = 0; i < grp.numbers.length; i++) {
         const num = grp.numbers[i];
+        const digits = String(num).replace(/\D/g, '');
+        if (!digits) continue;
+        if (existingDigits.has(digits) || seenBatch.has(digits)) {
+          skippedInGroup++;
+          continue;
+        }
+        seenBatch.add(digits);
+        existingDigits.add(digits);
+
         if (mode === 'test') {
           testNumbersDb.unshift({
             id: nextId(testNumbersDb) + i,
@@ -4357,7 +4526,7 @@ app.post('/api/numbers/bulk-range-import', upload.single('file'), (req, res) => 
           });
         } else {
           numbersDb.push({
-            id: baseNumId + i,
+            id: nextId(numbersDb) + totalAdded,
             number: num,
             range_id: rngEntry.id,
             range_name: rngEntry.range_name,
@@ -4374,8 +4543,8 @@ app.post('/api/numbers/bulk-range-import', upload.single('file'), (req, res) => 
             notes: ''
           });
         }
+        totalAdded++;
       }
-      totalAdded += grp.numbers.length;
     }
 
     writeDb('sms_ranges', ranges);
@@ -4418,11 +4587,24 @@ app.post('/api/numbers/upload', upload.single('file'), (req, res) => {
     const numbers = readDb('numbers') || [];
     const added = [];
     const baseId = nextId(numbers);
+    const existingDigits = new Set(numbers.map(n => String(n.number || '').replace(/\D/g, '')).filter(Boolean));
+    const seenBatch = new Set();
+    let skippedDuplicates = 0;
 
     for (let i = 0; i < lines.length; i++) {
+      const num = lines[i];
+      const digits = String(num).replace(/\D/g, '');
+      if (!digits) continue;
+      if (existingDigits.has(digits) || seenBatch.has(digits)) {
+        skippedDuplicates++;
+        continue;
+      }
+      seenBatch.add(digits);
+      existingDigits.add(digits);
+
       added.push({
-        id: baseId + i,
-        number: lines[i],
+        id: baseId + added.length,
+        number: num,
         app: 'Unassigned',
         status: 'active',
         user: 'unallocated',
@@ -4435,10 +4617,17 @@ app.post('/api/numbers/upload', upload.single('file'), (req, res) => {
       });
     }
 
-    numbers.push(...added);
-    writeDb('numbers', numbers);
-    logAudit('Admin', 'Upload Numbers', `Uploaded ${added.length} numbers`, 'Numbers');
-    res.json({ imported: added.length, total: numbers.length });
+    if (added.length > 0) {
+      numbers.push(...added);
+      writeDb('numbers', numbers);
+      logAudit('Admin', 'Upload Numbers', `Uploaded ${added.length} numbers (skipped ${skippedDuplicates} duplicates)`, 'Numbers');
+    }
+    res.json({
+      imported: added.length,
+      skipped_duplicates: skippedDuplicates,
+      total: numbers.length,
+      success: true
+    });
   } catch (err) {
     console.error('upload numbers error:', err);
     res.status(500).json({ error: err.message });
@@ -4850,7 +5039,7 @@ app.get('/api/credit-notes/:id/pdf', requireAuth, (req, res) => {
   </div>
   <div class="header">
     <div>
-      <div class="logo">ALPHA <span>SMS</span></div>
+      <div class="logo">HUMEX <span>SMS</span></div>
       <div style="font-size: 12px; color: #64748b; margin-top: 4px;">Wholesale SMS Platform & Carrier Settlement</div>
       <span class="badge">Official Settlement Credit Note</span>
     </div>
@@ -5800,7 +5989,7 @@ function startSmppServerListener(host, port) {
       smppServerState.listening = true;
       smppServerState.started_at = new Date().toISOString();
       smppServerState.last_error = null;
-      console.log(`[ALPHA SMS] SMPP server listening on ${bindHost}:${bindPort}`);
+      console.log(`[HUMEX SMS] SMPP server listening on ${bindHost}:${bindPort}`);
       logSmppEvent('server_start', bindHost, `SMPP Server listening on ${bindHost}:${bindPort}`);
     });
 
@@ -6072,12 +6261,12 @@ function syncSmppServerFromSettings(updatedSettings) {
 
     if (!isEnabled) {
       if (smppServerState.listening || smppServerInstance) {
-        console.log('[ALPHA SMS] Stopping SMPP server listener per settings toggle');
+        console.log('[HUMEX SMS] Stopping SMPP server listener per settings toggle');
         stopSmppServerListener();
       }
     } else {
       if (!smppServerState.listening || smppServerState.host !== host || smppServerState.port !== port) {
-        console.log('[ALPHA SMS] (Re)starting SMPP server listener per settings update');
+        console.log('[HUMEX SMS] (Re)starting SMPP server listener per settings update');
         startSmppServerListener(host, port);
       }
     }
@@ -6921,9 +7110,14 @@ function registerPaginatedCrud(routePath, tableName) {
         return res.status(400).json({ error: 'Number is required' });
       }
       const digits = String(rawNumber).replace(/\D/g, '');
-      const exists = data.some(n => n && String(n.number || '').replace(/\D/g, '') === digits);
-      if (exists) {
-        return res.status(409).json({ error: 'Number already exists' });
+      const existing = data.find(n => n && String(n.number || '').replace(/\D/g, '') === digits);
+      if (existing) {
+        const rName = existing.range_name || existing.country || `Range #${existing.range_id || ''}`;
+        return res.status(409).json({
+          error: 'Number already exists',
+          detail: `Number already exists in system${existing.range_name ? ` (assigned to range "${existing.range_name}")` : ''}`,
+          existing_range: rName
+        });
       }
     }
 
@@ -9515,7 +9709,7 @@ app.post('/api/agent-requests/:id/fulfill', requireAuth, (req, res) => {
 
     const fileContent = [
       '================================================================================',
-      'ALPHA SMS GATEWAY — OFFICIAL AGENT NUMBER ALLOCATION FILE',
+      'HUMEX SMS GATEWAY — OFFICIAL AGENT NUMBER ALLOCATION FILE',
       '================================================================================',
       `AGENT NAME      : ${reqItem.agent_username}`,
       `AGENT ID        : ${reqItem.agent_id || 'N/A'}`,
@@ -9764,11 +9958,33 @@ app.post('/api/cr-api-connections', (req, res) => {
   if (!panel_url || !token) {
     return res.status(400).json({ error: 'panel_url and token are required' });
   }
+
+  const cleanUrl = String(panel_url).trim().replace(/\/+$/, '');
+  const cleanToken = String(token).trim();
+  const cleanName = String(panel_name || 'CR API Panel').trim();
+
+  // Strict duplicate check: token or same panel URL + name
+  const dupToken = data.find(c => String(c.token || '').trim() === cleanToken);
+  if (dupToken) {
+    return res.status(409).json({
+      error: `Connection with this API token already exists ("${dupToken.panel_name}")`,
+      detail: `This API token is already attached to connection #${dupToken.id} (${dupToken.panel_name}).`
+    });
+  }
+
+  const dupUrl = data.find(c => String(c.panel_url || '').trim().replace(/\/+$/, '') === cleanUrl && String(c.panel_name || '').trim().toLowerCase() === cleanName.toLowerCase());
+  if (dupUrl) {
+    return res.status(409).json({
+      error: `Connection with URL "${cleanUrl}" and name "${cleanName}" already exists`,
+      detail: `A connection matching this panel URL and name is already registered (#${dupUrl.id}).`
+    });
+  }
+
   const item = {
     id: nextId(data),
-    panel_name: panel_name || 'CR API Panel',
-    panel_url: String(panel_url).trim(),
-    token: String(token).trim(),
+    panel_name: cleanName,
+    panel_url: cleanUrl,
+    token: cleanToken,
     interval: req.body.interval ? Math.max(3, parseInt(req.body.interval)) : 5,
     active: req.body.active !== undefined ? Boolean(req.body.active) : true,
     last_pulled_at: null,
@@ -9778,7 +9994,7 @@ app.post('/api/cr-api-connections', (req, res) => {
   };
   data.push(item);
   writeDb('cr_api_connections', data);
-  logAudit('Admin', 'Add CR API Connection', `Connected '${item.panel_name}'`, 'CR API');
+  logAudit('Admin', 'Add CR API Connection', `Connected '${item.panel_name}' (Provider registered)`, 'CR API');
   pollSingleCrApiConnection(item.id, true).catch(e => console.error('CR API poll error:', e));
   res.json(item);
 });
@@ -10095,6 +10311,35 @@ app.get('/api/agent/:agent_id/earnings', requireAuth, (req, res) => {
     return ts >= lastMonthStartStr && ts <= lastMonthEndStr;
   });
 
+  // UTC Mon-Sun Weekly Settlement Cycle (Sunday 23:59:59 UTC cutoff -> shifts to Main Balance)
+  const diffToMonday = (now.getUTCDay() + 6) % 7;
+  const currentWeekStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - diffToMonday, 0, 0, 0, 0));
+  const currentWeekEnd = new Date(currentWeekStart.getTime() + 7 * 86400000 - 1);
+  const currentWeekStartIso = currentWeekStart.toISOString();
+  const currentWeekEndIso = currentWeekEnd.toISOString();
+  const monStr = currentWeekStartIso.slice(0, 10);
+  const sunStr = currentWeekEndIso.slice(0, 10);
+  const weekRangeStr = `${monStr} – ${sunStr} UTC`;
+
+  const thisWeekSms = mySms.filter(s => {
+    const ts = s.timestamp || s.created_at || s.date || '';
+    return ts >= currentWeekStartIso && ts <= currentWeekEndIso;
+  });
+  const thisWeekEarnings = sumProfit(thisWeekSms);
+
+  const previousSettledSms = mySms.filter(s => {
+    const ts = s.timestamp || s.created_at || s.date || '';
+    return ts < currentWeekStartIso;
+  });
+  const previousSettledEarnings = sumProfit(previousSettledSms);
+
+  const allPayouts = readDb('payout_requests') || [];
+  const agentPayouts = allPayouts.filter(p => String(p.agent_id) === aid && p.status !== 'rejected');
+  const totalPayoutsDeducted = agentPayouts.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+
+  const agentBaseBal = Number(agent?.balance || 0);
+  const mainBalance = Math.max(0, Math.round((agentBaseBal + previousSettledEarnings - totalPayoutsDeducted) * 100) / 100);
+
   const chartData = [];
   const history = [];
   for (let i = 29; i >= 0; i--) {
@@ -10115,6 +10360,12 @@ app.get('/api/agent/:agent_id/earnings', requireAuth, (req, res) => {
   }
 
   res.json({
+    main_balance: mainBalance,
+    balance: mainBalance,
+    this_week: thisWeekEarnings,
+    week_range: weekRangeStr,
+    week_start: monStr,
+    week_end: sunStr,
     today: sumProfit(todaySms),
     this_month: sumProfit(monthSms),
     last_month: sumProfit(lastMonthSms),
@@ -10162,7 +10413,74 @@ app.get('/api/client/:client_id/stats', requireAuth, (req, res) => {
 });
 
 app.get('/api/client/:client_id/earnings', requireAuth, (req, res) => {
-  res.json({ today: 0, this_month: 0, last_month: 0, all_time: 0, chart_data: [], history: [] });
+  const cid = String(req.params.client_id);
+  const sessionUser = req.sessionUser;
+  const sRole = (sessionUser.role || '').toLowerCase();
+  const isOwner = sRole === 'owner' || sRole === 'admin';
+  const clients = readDb('clients') || [];
+  const client = clients.find(c => String(c.id) === cid);
+  if (!client) return res.status(404).json({ error: 'Client not found' });
+
+  const isClientSelf = sRole === 'client' && String(sessionUser.id) === cid;
+  const isClientAgent = sRole === 'agent' && Number(client.agent_id) === Number(sessionUser.id);
+  const isClientManager = sRole === 'manager' && Number(client.manager_id) === Number(sessionUser.id);
+
+  if (!isOwner && !isClientSelf && !isClientAgent && !isClientManager) {
+    return res.status(403).json({ error: 'Forbidden. You can only access your own client earnings.' });
+  }
+
+  const sms = readDb('sms_log') || [];
+  const clientSms = sms.filter(s => {
+    return String(s.client_id) === cid || String(s.client) === cid || (client && (s.client === client.username || s.user === client.username));
+  });
+
+  const sumClientPayout = (records) => Math.round(records.reduce((acc, r) => acc + (Number(r.client_payout != null ? r.client_payout : (r.client_rate || r.payout || 0)) || 0), 0) * 100) / 100;
+
+  const now = new Date();
+  const diffToMonday = (now.getUTCDay() + 6) % 7;
+  const currentWeekStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - diffToMonday, 0, 0, 0, 0));
+  const currentWeekEnd = new Date(currentWeekStart.getTime() + 7 * 86400000 - 1);
+  const currentWeekStartIso = currentWeekStart.toISOString();
+  const currentWeekEndIso = currentWeekEnd.toISOString();
+  const monStr = currentWeekStartIso.slice(0, 10);
+  const sunStr = currentWeekEndIso.slice(0, 10);
+  const weekRangeStr = `${monStr} – ${sunStr} UTC`;
+
+  const thisWeekSms = clientSms.filter(s => {
+    const ts = s.timestamp || s.created_at || s.date || '';
+    return ts >= currentWeekStartIso && ts <= currentWeekEndIso;
+  });
+  const thisWeekEarnings = sumClientPayout(thisWeekSms);
+
+  const previousSettledSms = clientSms.filter(s => {
+    const ts = s.timestamp || s.created_at || s.date || '';
+    return ts < currentWeekStartIso;
+  });
+  const previousSettledEarnings = sumClientPayout(previousSettledSms);
+
+  const allPayouts = readDb('payout_requests') || [];
+  const clientPayouts = allPayouts.filter(p => String(p.client_id) === cid && p.status !== 'rejected');
+  const totalPayoutsDeducted = clientPayouts.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+
+  const clientBaseBal = Number(client?.balance || 0);
+  const mainBalance = Math.max(0, Math.round((clientBaseBal + previousSettledEarnings - totalPayoutsDeducted) * 100) / 100);
+
+  const todayStr = now.toISOString().slice(0, 10);
+  const monthStartStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+  const todaySms = clientSms.filter(s => (s.timestamp || '').slice(0, 10) === todayStr);
+  const monthSms = clientSms.filter(s => (s.timestamp || '').slice(0, 10) >= monthStartStr);
+
+  res.json({
+    main_balance: mainBalance,
+    balance: mainBalance,
+    this_week: thisWeekEarnings,
+    week_range: weekRangeStr,
+    week_start: monStr,
+    week_end: sunStr,
+    today: sumClientPayout(todaySms),
+    this_month: sumClientPayout(monthSms),
+    all_time: sumClientPayout(clientSms)
+  });
 });
 
 app.get('/api/client/:client_id/numbers', requireAuth, (req, res) => {
@@ -10496,12 +10814,24 @@ function handleSmsLogsQuery(req, res) {
             keyParts.provider = s.provider || (s.country ? s.provider : '—') || 'Direct';
           } else if (k === 'range') {
             keyParts.range = s.range_name || s.range_label || s.range || (s.country ? `${s.country}${s.provider && s.provider !== 'Manual' && s.provider !== '—' ? ` ${s.provider}` : ''}` : 'General Range');
-          } else if (k === 'manager') {
-            keyParts.manager = s.manager || (s.manager_id && managerMap[s.manager_id]) || (s.manager_id ? `Manager #${s.manager_id}` : 'General');
-          } else if (k === 'agent') {
-            keyParts.agent = s.agent || s.agent_name || s.user || (s.agent_id && agentMap[s.agent_id]) || (s.agent_id ? `Agent #${s.agent_id}` : 'Direct');
           } else if (k === 'client') {
-            keyParts.client = s.client || s.client_name || (s.client_id && clientMap[s.client_id]) || (s.client_id ? `Client #${s.client_id}` : 'General');
+            let clName = s.client || s.client_username || s.client_name || (s.client_id && clientMap[s.client_id]) || '';
+            if (!clName && s.user && s.user !== 'unallocated' && s.user !== 'Test Panel') clName = s.user;
+            keyParts.client = clName || (s.client_id ? `Client #${s.client_id}` : 'General');
+          } else if (k === 'agent') {
+            let agName = s.agent || s.agent_username || s.agent_name || (s.agent_id && agentMap[s.agent_id]) || '';
+            if (!agName && (s.client_id || keyParts.client)) {
+              const cl = clients.find(c => (s.client_id && Number(c.id) === Number(s.client_id)) || (keyParts.client && c.username === keyParts.client));
+              if (cl && cl.agent_id && agentMap[cl.agent_id]) agName = agentMap[cl.agent_id];
+            }
+            keyParts.agent = agName || (s.agent_id ? `Agent #${s.agent_id}` : 'Direct');
+          } else if (k === 'manager') {
+            let mgName = s.manager || s.manager_username || (s.manager_id && managerMap[s.manager_id]) || '';
+            if (!mgName && (s.agent_id || keyParts.agent)) {
+              const ag = agents.find(a => (s.agent_id && Number(a.id) === Number(s.agent_id)) || (keyParts.agent && a.username === keyParts.agent));
+              if (ag && ag.manager_id && managerMap[ag.manager_id]) mgName = managerMap[ag.manager_id];
+            }
+            keyParts.manager = mgName || (s.manager_id ? `Manager #${s.manager_id}` : 'General');
           } else if (k === 'number') {
             keyParts.number = s.number || '—';
           } else if (k === 'cli') {
@@ -10733,6 +11063,31 @@ function handleSmsLogsQuery(req, res) {
 
   const sanitizedSliced = sliced.map(s => {
     const item = { ...s };
+
+    // Resolve client
+    let clientName = item.client_username || item.client || item.client_name || (item.client_id && clientMap[item.client_id]) || '';
+    if (!clientName && item.user && item.user !== 'unallocated' && item.user !== 'Test Panel') {
+      const c = clients.find(x => String(x.username).toLowerCase() === String(item.user).toLowerCase());
+      if (c) clientName = c.username;
+    }
+    item.client = clientName || '—';
+
+    // Resolve agent
+    let agentName = item.agent_username || item.agent || item.agent_name || (item.agent_id && agentMap[item.agent_id]) || '';
+    if (!agentName && (item.client_id || (clientName && clientName !== '—'))) {
+      const c = clients.find(x => (item.client_id && Number(x.id) === Number(item.client_id)) || (clientName && String(x.username).toLowerCase() === clientName.toLowerCase()));
+      if (c && c.agent_id && agentMap[c.agent_id]) agentName = agentMap[c.agent_id];
+    }
+    item.agent = agentName || (item.agent_id ? `Agent #${item.agent_id}` : 'Direct');
+
+    // Resolve manager
+    let managerName = item.manager_username || item.manager || (item.manager_id && managerMap[item.manager_id]) || '';
+    if (!managerName && agentName && agentName !== 'Direct') {
+      const a = agents.find(x => (item.agent_id && Number(x.id) === Number(item.agent_id)) || (agentName && String(x.username).toLowerCase() === agentName.toLowerCase()));
+      if (a && a.manager_id && managerMap[a.manager_id]) managerName = managerMap[a.manager_id];
+    }
+    item.manager = managerName || (item.manager_id ? `Manager #${item.manager_id}` : '—');
+
     if (!isOwner) {
       item.cli = serverMaskCli(item.cli || item.app || item.sender);
       delete item.company_rate;
@@ -11340,8 +11695,8 @@ app.get('/api/settings', (req, res) => {
       return res.json(settings);
     }
     const safeSettings = {
-      site_name: settings.site_name || 'ALPHA SMS',
-      site_title: settings.site_title || 'ALPHA SMS',
+      site_name: settings.site_name || 'HUMEX SMS',
+      site_title: settings.site_title || 'HUMEX SMS',
       logo_url: settings.logo_url || '',
       logo_data: settings.logo_data || '',
       favicon_url: settings.favicon_url || '',
@@ -11564,13 +11919,14 @@ app.post('/api/settings/upload-logo', (req, res) => {
     // Also maintain custom-logo.png and sync all fallbacks so old logos never persist
     try {
       fs.writeFileSync(path.join(imgDir, 'custom-logo.png'), buffer);
+      fs.writeFileSync(path.join(imgDir, 'humex-sms-logo.png'), buffer);
       fs.writeFileSync(path.join(imgDir, 'humax-sms-logo.png'), buffer);
       fs.writeFileSync(path.join(imgDir, 'humex-sms-dp.jpg'), buffer);
       const b64 = buffer.toString('base64');
       const dataUri = `data:image/${ext === 'svg' ? 'svg+xml' : ext};base64,${b64}`;
       const svgFallback = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="100%" height="100%"><image href="${dataUri}" width="1024" height="1024" /></svg>\n`;
-      fs.writeFileSync(path.join(imgDir, 'alphasms-circle-logo.svg'), svgFallback);
-      fs.writeFileSync(path.join(imgDir, 'alphasms-logo.svg'), svgFallback);
+      fs.writeFileSync(path.join(imgDir, 'humex-sms-circle-logo.svg'), svgFallback);
+      fs.writeFileSync(path.join(imgDir, 'humex-sms-logo.svg'), svgFallback);
       fs.writeFileSync(path.join(imgDir, 'custom-logo.svg'), svgFallback);
     } catch(e) {}
 
@@ -11624,7 +11980,7 @@ app.post('/api/webhook/test', (req, res) => {
 app.get('/api/backup/export', (req, res) => {
   try {
     const settings = readDb('settings') || {};
-    const siteName = (settings.site_name || 'ALPHA SMS').trim();
+    const siteName = (settings.site_name || 'HUMEX SMS').trim();
     const safePrefix = siteName.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'alpha_sms';
     const dateStr = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
     const filename = `${safePrefix}_backup_${dateStr}.zip`;
@@ -11683,13 +12039,13 @@ app.get('/api/backup/export', (req, res) => {
 app.get(['/api/download-project-zip', '/download-project', '/api/project/download-zip'], requireAuth, requireApiRole(['owner', 'admin']), (req, res) => {
   try {
     const settings = readDb('settings') || {};
-    const siteName = (settings.site_name || 'HUMAX SMS').trim();
-    const safePrefix = siteName.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'humax_sms';
-    const downloadFilename = `${safePrefix}-complete-project.zip`;
+    const siteName = (settings.site_name || 'HUMEX SMS').trim();
+    const safePrefix = siteName.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'humex_sms';
+    const downloadFilename = `humex-sms-complete-project.zip`;
 
-    let zipPath = path.join(__dirname, 'Alpha SMS', 'static', `${safePrefix}-project.zip`);
+    let zipPath = path.join(__dirname, 'Humex-SMS-Production-VPS.zip');
     if (!fs.existsSync(zipPath)) {
-      zipPath = path.join(__dirname, 'Alpha SMS', 'static', 'alpha-sms-project.zip');
+      zipPath = path.join(__dirname, 'Alpha-SMS-Production-VPS.zip');
     }
     if (!fs.existsSync(zipPath)) {
       return res.status(404).json({ error: 'Project zip file not found' });
@@ -12181,7 +12537,7 @@ server.listen(PORT, BIND_HOST, () => {
   runPaytermMigration();
   cleanupOrphanedNumbers();
   syncTestNumbersWithNumbersPool();
-  console.log(`[ALPHA SMS] Server running on http://${BIND_HOST}:${PORT}`);
+  console.log(`[HUMEX SMS] Server running on http://${BIND_HOST}:${PORT}`);
   console.log(`  ➜  Local:   http://localhost:${PORT}/`);
   console.log(`  ➜  Network: http://${BIND_HOST}:${PORT}/`);
 });

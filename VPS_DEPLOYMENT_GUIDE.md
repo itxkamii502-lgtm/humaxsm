@@ -1,6 +1,6 @@
 # ALPHA SMS — Complete VPS Production Deployment Guide
 
-Yeh guide Alpha SMS softswitch platform ko Kisi bhi Linux VPS (Ubuntu 20.04 / 22.04 / 24.04 ya Debian) par deploy karne ke liye step-by-step instructions provide karti hai.
+Yeh guide HUMEX SMS softswitch platform ko Kisi bhi Linux VPS (Ubuntu 20.04 / 22.04 / 24.04 ya Debian) par deploy karne ke liye step-by-step instructions provide karti hai.
 
 ---
 
@@ -44,9 +44,9 @@ sudo npm install -g pm2
 
 ```bash
 # Application directory banayein
-sudo mkdir -p /var/www/alphasms
-sudo chown -R $USER:$USER /var/www/alphasms
-cd /var/www/alphasms
+sudo mkdir -p /var/www/humexsms
+sudo chown -R $USER:$USER /var/www/humexsms
+cd /var/www/humexsms
 
 # Files yahan upload karein (via SCP, Git, ya SFTP)
 # Then dependencies install karein:
@@ -86,7 +86,7 @@ pm2 start ecosystem.config.cjs
 
 # Check status
 pm2 status
-pm2 logs alpha-sms
+pm2 logs humex-sms
 
 # Server restart par auto-start enable karein:
 pm2 startup
@@ -100,7 +100,7 @@ pm2 save
 Create Nginx site configuration:
 
 ```bash
-sudo nano /etc/nginx/sites-available/alphasms
+sudo nano /etc/nginx/sites-available/humexsms
 ```
 
 Paste this configuration (apna domain name replace karein, e.g. `sms.yourdomain.com`):
@@ -134,7 +134,7 @@ server {
 Enable site aur Nginx reload karein:
 
 ```bash
-sudo ln -s /etc/nginx/sites-available/alphasms /etc/nginx/sites-enabled/
+sudo ln -s /etc/nginx/sites-available/humexsms /etc/nginx/sites-enabled/
 sudo nginx -t
 sudo systemctl reload nginx
 ```
@@ -164,15 +164,15 @@ sudo ufw enable
 
 ```bash
 # View live logs
-pm2 logs alpha-sms
+pm2 logs humex-sms
 
 # Restart application
-pm2 restart alpha-sms
+pm2 restart humex-sms
 
 # Reset Owner Password if ever locked out:
 node reset-owner-password.js
 
 # Manual Database Backup:
 # Backups auto-generate in backups/ directory, ya manually:
-tar -czvf backup-$(date +%F).tar.gz "Alpha SMS/data"
+tar -czvf backup-$(date +%F).tar.gz "HUMEX SMS/data"
 ```

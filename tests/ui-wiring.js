@@ -15,7 +15,7 @@ function assertCheck(desc, cond) {
 }
 
 // ── F0: Static Script Compilation & Syntax Tests (new vm.Script) ─
-const staticJsDir = path.resolve('Alpha SMS/static/js');
+const staticJsDir = path.resolve('humex-sms/static/js');
 const jsFiles = fs.readdirSync(staticJsDir).filter(f => f.endsWith('.js'));
 for (const file of jsFiles) {
   const code = fs.readFileSync(path.join(staticJsDir, file), 'utf8');
@@ -38,12 +38,12 @@ assertCheck('server.js CLIENT_ALLOW permits /api/numbers/rate-card', serverCode.
 assertCheck('server.js CLIENT_ALLOW permits /api/payout-requests', serverCode.includes('/payout-requests'));
 
 
-// (a) agent.html loads speed-agent-pages.js
-const agentHtml = fs.readFileSync(path.resolve('Alpha SMS/static/agent.html'), 'utf8');
-assertCheck('agent.html loads speed-agent-pages.js', agentHtml.includes('src="/static/js/speed-agent-pages.js"') || agentHtml.includes("src='/static/js/speed-agent-pages.js'"));
+// (a) agent.html loads agent-pages.js
+const agentHtml = fs.readFileSync(path.resolve('humex-sms/static/agent.html'), 'utf8');
+assertCheck('agent.html loads agent-pages.js', agentHtml.includes('src="/static/js/agent-pages.js"') || agentHtml.includes("src='/static/js/agent-pages.js'"));
 
-// (b) speed-agent-pages.js contains required action strings & API paths
-const speedAgentPages = fs.readFileSync(path.resolve('Alpha SMS/static/js/speed-agent-pages.js'), 'utf8');
+// (b) agent-pages.js contains required action strings & API paths
+const speedAgentPages = fs.readFileSync(path.resolve('humex-sms/static/js/agent-pages.js'), 'utf8');
 
 const requiredStrings = [
   'Allocate',
@@ -57,11 +57,11 @@ const requiredStrings = [
 ];
 
 for (const s of requiredStrings) {
-  assertCheck(`speed-agent-pages.js contains '${s}'`, speedAgentPages.includes(s));
+  assertCheck(`agent-pages.js contains '${s}'`, speedAgentPages.includes(s));
 }
 
 // (c) R2 Payterm controls in files that render pages
-const appJs = fs.readFileSync(path.resolve('Alpha SMS/static/js/app.js'), 'utf8');
+const appJs = fs.readFileSync(path.resolve('humex-sms/static/js/owner-engine.js'), 'utf8');
 const r2AppStrings = [
   'pt-15-15',
   'pt-15-30',
@@ -82,19 +82,19 @@ const r2AgentStrings = [
   '7/7'
 ];
 for (const s of r2AgentStrings) {
-  assertCheck(`speed-agent-pages.js contains '${s}' in Agent Allocate dropdown`, speedAgentPages.includes(s));
+  assertCheck(`agent-pages.js contains '${s}' in Agent Allocate dropdown`, speedAgentPages.includes(s));
 }
 
-const agentFeaturesJs = fs.readFileSync(path.resolve('Alpha SMS/static/js/agent_features.js'), 'utf8');
-assertCheck("agent_features.js contains 'Monthly60' in client payterm dropdown", agentFeaturesJs.includes('Monthly60'));
-assertCheck("agent_features.js contains '15/15' in client payterm dropdown", agentFeaturesJs.includes('15/15'));
+const agentFeaturesJs = fs.readFileSync(path.resolve('humex-sms/static/js/agent-features.js'), 'utf8');
+assertCheck("agent-features.js contains 'Monthly60' in client payterm dropdown", agentFeaturesJs.includes('Monthly60'));
+assertCheck("agent-features.js contains '15/15' in client payterm dropdown", agentFeaturesJs.includes('15/15'));
 
 // (d) U3: Manager Panel UI wiring
-const managerHtml = fs.readFileSync(path.resolve('Alpha SMS/static/manager.html'), 'utf8');
-assertCheck('manager.html loads speed-panel.js', managerHtml.includes('src="/static/js/speed-panel.js"') || managerHtml.includes("src='/static/js/speed-panel.js'"));
-assertCheck('manager.html loads speed-pages.js', managerHtml.includes('src="/static/js/speed-pages.js"') || managerHtml.includes("src='/static/js/speed-pages.js'"));
+const managerHtml = fs.readFileSync(path.resolve('humex-sms/static/manager.html'), 'utf8');
+assertCheck('manager.html loads manager-shell.js', managerHtml.includes('src="/static/js/manager-shell.js"') || managerHtml.includes("src='/static/js/manager-shell.js'"));
+assertCheck('manager.html loads manager-pages.js', managerHtml.includes('src="/static/js/manager-pages.js"') || managerHtml.includes("src='/static/js/manager-pages.js'"));
 
-const speedPagesJs = fs.readFileSync(path.resolve('Alpha SMS/static/js/speed-pages.js'), 'utf8');
+const speedPagesJs = fs.readFileSync(path.resolve('humex-sms/static/js/manager-pages.js'), 'utf8');
 const u3SpeedPagesStrings = [
   'Allocate',
   'Unallocate',
@@ -106,17 +106,17 @@ const u3SpeedPagesStrings = [
   '7/7'
 ];
 for (const s of u3SpeedPagesStrings) {
-  assertCheck(`speed-pages.js contains '${s}' for Manager panel`, speedPagesJs.includes(s));
+  assertCheck(`manager-pages.js contains '${s}' for Manager panel`, speedPagesJs.includes(s));
 }
 
-const speedPanelJs = fs.readFileSync(path.resolve('Alpha SMS/static/js/speed-panel.js'), 'utf8');
-assertCheck("speed-panel.js contains 'Commission Earned'", speedPanelJs.includes('Commission Earned'));
+const speedPanelJs = fs.readFileSync(path.resolve('humex-sms/static/js/manager-shell.js'), 'utf8');
+assertCheck("manager-shell.js contains 'Commission Earned'", speedPanelJs.includes('Commission Earned'));
 
-const managerJs = fs.readFileSync(path.resolve('Alpha SMS/static/js/manager.js'), 'utf8');
+const managerJs = fs.readFileSync(path.resolve('humex-sms/static/js/manager-engine.js'), 'utf8');
 assertCheck("manager.js contains 'Commission Earned'", managerJs.includes('Commission Earned'));
 
 // (e) V1: Universal Design System assertions
-const speedPanelCss = fs.readFileSync(path.resolve('Alpha SMS/static/css/speed-panel.css'), 'utf8');
+const speedPanelCss = fs.readFileSync(path.resolve('humex-sms/static/css/humex-panel.css'), 'utf8');
 
 const v1CssVariables = [
   '--sp-bg-canvas',
@@ -132,114 +132,114 @@ const v1CssVariables = [
   '--sp-focus-ring'
 ];
 for (const v of v1CssVariables) {
-  assertCheck(`speed-panel.css defines CSS variable '${v}'`, speedPanelCss.includes(v));
+  assertCheck(`humex-panel.css defines CSS variable '${v}'`, speedPanelCss.includes(v));
 }
 
-assertCheck('speed-panel.css defines dark theme variables', speedPanelCss.includes('[data-theme="dark"]') && speedPanelCss.includes('body.dark'));
-assertCheck('speed-panel.css defines light theme variables', speedPanelCss.includes('[data-theme="light"]') && speedPanelCss.includes('body.light'));
-assertCheck('speed-panel.css defines unified buttons (.sp-btn-primary, .sp-btn-secondary, .sp-btn-danger, .sp-btn-ghost)',
+assertCheck('humex-panel.css defines dark theme variables', speedPanelCss.includes('[data-theme="dark"]') && speedPanelCss.includes('body.dark'));
+assertCheck('humex-panel.css defines light theme variables', speedPanelCss.includes('[data-theme="light"]') && speedPanelCss.includes('body.light'));
+assertCheck('humex-panel.css defines unified buttons (.sp-btn-primary, .sp-btn-secondary, .sp-btn-danger, .sp-btn-ghost)',
   speedPanelCss.includes('.sp-btn-primary') &&
   speedPanelCss.includes('.sp-btn-secondary') &&
   speedPanelCss.includes('.sp-btn-danger') &&
   speedPanelCss.includes('.sp-btn-ghost')
 );
-assertCheck('speed-panel.css defines clean 12px radius cards for panels and filterboxes',
+assertCheck('humex-panel.css defines clean 12px radius cards for panels and filterboxes',
   speedPanelCss.includes('.sp-card') &&
   speedPanelCss.includes('.zy-filterbox') &&
   speedPanelCss.includes('var(--sp-radius-card)')
 );
-assertCheck('speed-panel.css defines 44px mobile touch targets', speedPanelCss.includes('min-height: 44px'));
-assertCheck('speed-panel.css defines input focus rings with --sp-focus-ring', speedPanelCss.includes('--sp-focus-ring'));
+assertCheck('humex-panel.css defines 44px mobile touch targets', speedPanelCss.includes('min-height: 44px'));
+assertCheck('humex-panel.css defines input focus rings with --sp-focus-ring', speedPanelCss.includes('--sp-focus-ring'));
 
 // Check that panel scripts respect Dark/Light/System profile setting
-const speedAgentJs = fs.readFileSync(path.resolve('Alpha SMS/static/js/speed-agent.js'), 'utf8');
-const speedClientJs = fs.readFileSync(path.resolve('Alpha SMS/static/js/speed-client.js'), 'utf8');
-const speedAdminJs = fs.readFileSync(path.resolve('Alpha SMS/static/js/speed-admin.js'), 'utf8');
-const speedTestJs = fs.readFileSync(path.resolve('Alpha SMS/static/js/speed-test.js'), 'utf8');
+const speedAgentJs = fs.readFileSync(path.resolve('humex-sms/static/js/agent-shell.js'), 'utf8');
+const speedClientJs = fs.readFileSync(path.resolve('humex-sms/static/js/client-shell.js'), 'utf8');
+const speedAdminJs = fs.readFileSync(path.resolve('humex-sms/static/js/owner-shell.js'), 'utf8');
+const speedTestJs = fs.readFileSync(path.resolve('humex-sms/static/js/testpanel-shell.js'), 'utf8');
 
-assertCheck('speed-panel.js respects Dark/Light/System theme preference', speedPanelJs.includes('prefers-color-scheme') && speedPanelJs.includes('applyThemePreference'));
-assertCheck('speed-agent.js respects Dark/Light/System theme preference', speedAgentJs.includes('prefers-color-scheme') && speedAgentJs.includes('applyThemePreference'));
-assertCheck('speed-client.js respects Dark/Light/System theme preference', speedClientJs.includes('prefers-color-scheme') && speedClientJs.includes('applyThemePreference'));
-assertCheck('speed-admin.js respects Dark/Light/System theme preference', speedAdminJs.includes('prefers-color-scheme') && speedAdminJs.includes('applyThemePreference'));
-assertCheck('speed-test.js respects Dark/Light/System theme preference', speedTestJs.includes('prefers-color-scheme') && speedTestJs.includes('applyThemePreference'));
+assertCheck('manager-shell.js respects Dark/Light/System theme preference', speedPanelJs.includes('prefers-color-scheme') && speedPanelJs.includes('applyThemePreference'));
+assertCheck('agent-shell.js respects Dark/Light/System theme preference', speedAgentJs.includes('prefers-color-scheme') && speedAgentJs.includes('applyThemePreference'));
+assertCheck('client-shell.js respects Dark/Light/System theme preference', speedClientJs.includes('prefers-color-scheme') && speedClientJs.includes('applyThemePreference'));
+assertCheck('owner-shell.js respects Dark/Light/System theme preference', speedAdminJs.includes('prefers-color-scheme') && speedAdminJs.includes('applyThemePreference'));
+assertCheck('testpanel-shell.js respects Dark/Light/System theme preference', speedTestJs.includes('prefers-color-scheme') && speedTestJs.includes('applyThemePreference'));
 
 // ═══ V2: SIDEBAR + TOPBAR + ACCORDION TESTS ═════════════════════
-const speedKitJs = fs.readFileSync(path.resolve('Alpha SMS/static/js/speed-kit.js'), 'utf8');
-const clientHtml = fs.readFileSync(path.resolve('Alpha SMS/static/client.html'), 'utf8');
-const indexHtml = fs.readFileSync(path.resolve('Alpha SMS/static/index.html'), 'utf8');
-const testpanelHtml = fs.readFileSync(path.resolve('Alpha SMS/static/testpanel.html'), 'utf8');
-const agentHtmlLatest = fs.readFileSync(path.resolve('Alpha SMS/static/agent.html'), 'utf8');
-const managerHtmlLatest = fs.readFileSync(path.resolve('Alpha SMS/static/manager.html'), 'utf8');
+const speedKitJs = fs.readFileSync(path.resolve('humex-sms/static/js/shared-ui-kit.js'), 'utf8');
+const clientHtml = fs.readFileSync(path.resolve('humex-sms/static/client.html'), 'utf8');
+const indexHtml = fs.readFileSync(path.resolve('humex-sms/static/index.html'), 'utf8');
+const testpanelHtml = fs.readFileSync(path.resolve('humex-sms/static/testpanel.html'), 'utf8');
+const agentHtmlLatest = fs.readFileSync(path.resolve('humex-sms/static/agent.html'), 'utf8');
+const managerHtmlLatest = fs.readFileSync(path.resolve('humex-sms/static/manager.html'), 'utf8');
 
 // Sidebar width 260px on PC
-assertCheck('speed-panel.css defines fixed 260px left sidebar on PC',
+assertCheck('humex-panel.css defines fixed 260px left sidebar on PC',
   speedPanelCss.includes('width: 260px !important') && speedPanelCss.includes('margin-left: 260px !important')
 );
 // Slide-in drawer with overlay on mobile
-assertCheck('speed-panel.css defines mobile drawer with backdrop overlay',
+assertCheck('humex-panel.css defines mobile drawer with backdrop overlay',
   speedPanelCss.includes('.zy-side-backdrop') && speedPanelCss.includes('body.sidebar-open')
 );
 // Chevron animation
-assertCheck('speed-panel.css defines chevron rotation animation',
+assertCheck('humex-panel.css defines chevron rotation animation',
   speedPanelCss.includes('.zy-caret') &&
   speedPanelCss.includes('transition: transform') &&
   speedPanelCss.includes('transform: rotate(180deg)')
 );
 // Keyboard accessibility styles
-assertCheck('speed-panel.css defines keyboard focus-visible outlines on nav items',
+assertCheck('humex-panel.css defines keyboard focus-visible outlines on nav items',
   speedPanelCss.includes(':focus-visible')
 );
 
 // Accordion functions present and used
-assertCheck('speed-kit.js defines zyToggleAccordion with single-open logic',
+assertCheck('shared-ui-kit.js defines zyToggleAccordion with single-open logic',
   speedKitJs.includes('function zyToggleAccordion') && speedKitJs.includes('nav.querySelectorAll')
 );
-assertCheck('speed-kit.js defines zySyncAccordionActive',
+assertCheck('shared-ui-kit.js defines zySyncAccordionActive',
   speedKitJs.includes('function zySyncAccordionActive')
 );
-assertCheck('speed-agent.js uses zySideSub and aria-expanded for accordion groups',
+assertCheck('agent-shell.js uses zySideSub and aria-expanded for accordion groups',
   speedAgentJs.includes('zySideSub') && speedAgentJs.includes('aria-expanded') && speedAgentJs.includes('aria-controls')
 );
-assertCheck('speed-panel.js uses zySideSub and aria-expanded for accordion groups',
+assertCheck('manager-shell.js uses zySideSub and aria-expanded for accordion groups',
   speedPanelJs.includes('zySideSub') && speedPanelJs.includes('aria-expanded') && speedPanelJs.includes('aria-controls')
 );
-assertCheck('speed-client.js uses zySideSub and aria-expanded for accordion groups',
+assertCheck('client-shell.js uses zySideSub and aria-expanded for accordion groups',
   speedClientJs.includes('zySideSub') && speedClientJs.includes('aria-expanded') && speedClientJs.includes('aria-controls')
 );
-assertCheck('speed-admin.js uses zySideSub and aria-expanded for accordion groups',
+assertCheck('owner-shell.js uses zySideSub and aria-expanded for accordion groups',
   speedAdminJs.includes('zySideSub') && speedAdminJs.includes('aria-expanded') && speedAdminJs.includes('aria-controls')
 );
 
 // Agent menu items specification
-assertCheck('speed-agent.js contains Dashboard in Agent menu', speedAgentJs.includes("'dashboard'"));
-assertCheck('speed-agent.js contains CLI Search in Agent menu', speedAgentJs.includes("'clisearch'") && speedAgentJs.includes("'access-search'"));
-assertCheck('speed-agent.js contains SMS Module group in Agent menu', speedAgentJs.includes("'smsmodule'"));
-assertCheck('speed-agent.js contains SMS Ranges, My Numbers, Bulk Add under SMS Module',
+assertCheck('agent-shell.js contains Dashboard in Agent menu', speedAgentJs.includes("'dashboard'"));
+assertCheck('agent-shell.js contains CLI Search in Agent menu', speedAgentJs.includes("'clisearch'") && speedAgentJs.includes("'access-search'"));
+assertCheck('agent-shell.js contains SMS Module group in Agent menu', speedAgentJs.includes("'smsmodule'"));
+assertCheck('agent-shell.js contains SMS Ranges, My Numbers, Bulk Add under SMS Module',
   speedAgentJs.includes("'sms-ranges'") &&
   speedAgentJs.includes("'my-sms-numbers'") &&
   speedAgentJs.includes("'bulk-add'")
 );
-assertCheck('speed-agent.js contains SMS Test Panel in Agent menu', speedAgentJs.includes("'smstest'") && speedAgentJs.includes("'sms-test-panel'"));
-assertCheck('speed-agent.js contains Users group with My Clients and Notifications',
+assertCheck('agent-shell.js contains SMS Test Panel in Agent menu', speedAgentJs.includes("'smstest'") && speedAgentJs.includes("'sms-test-panel'"));
+assertCheck('agent-shell.js contains Users group with My Clients and Notifications',
   speedAgentJs.includes("'users'") &&
   speedAgentJs.includes("'my-clients'") &&
   speedAgentJs.includes("'notifications'")
 );
-assertCheck('speed-agent.js contains CDR & Statistics in Agent menu', speedAgentJs.includes("'cdr'") && speedAgentJs.includes("'detailed-sms'"));
-assertCheck('speed-agent.js contains Payments in Agent menu', speedAgentJs.includes("'payments'") && speedAgentJs.includes("'payment-requests'"));
-assertCheck('speed-agent.js contains Account group with My Profile, REST API, Audit Log',
+assertCheck('agent-shell.js contains CDR & Statistics in Agent menu', speedAgentJs.includes("'cdr'") && speedAgentJs.includes("'detailed-sms'"));
+assertCheck('agent-shell.js contains Payments in Agent menu', speedAgentJs.includes("'payments'") && speedAgentJs.includes("'payment-requests'"));
+assertCheck('agent-shell.js contains Account group with My Profile, REST API, Audit Log',
   speedAgentJs.includes("'account'") &&
   speedAgentJs.includes("'profile'") &&
   speedAgentJs.includes("'api-tokens'") &&
   speedAgentJs.includes("'audit-logs'")
 );
 
-// speed-agent-pages.js router handles all required pages
-const speedAgentPagesJs = fs.readFileSync(path.resolve('Alpha SMS/static/js/speed-agent-pages.js'), 'utf8');
-assertCheck('speed-agent-pages.js handles bulk-add', speedAgentPagesJs.includes("'bulk-add'"));
-assertCheck('speed-agent-pages.js handles notifications', speedAgentPagesJs.includes("'notifications'"));
-assertCheck('speed-agent-pages.js handles api-tokens', speedAgentPagesJs.includes("'api-tokens'"));
-assertCheck('speed-agent-pages.js handles audit-logs', speedAgentPagesJs.includes("'audit-logs'"));
+// agent-pages.js router handles all required pages
+const speedAgentPagesJs = fs.readFileSync(path.resolve('humex-sms/static/js/agent-pages.js'), 'utf8');
+assertCheck('agent-pages.js handles bulk-add', speedAgentPagesJs.includes("'bulk-add'"));
+assertCheck('agent-pages.js handles notifications', speedAgentPagesJs.includes("'notifications'"));
+assertCheck('agent-pages.js handles api-tokens', speedAgentPagesJs.includes("'api-tokens'"));
+assertCheck('agent-pages.js handles audit-logs', speedAgentPagesJs.includes("'audit-logs'"));
 
 // Topbar components in HTML
 assertCheck('agent.html topbar has menu toggle, panel badge, bell, and user menu',
@@ -433,11 +433,11 @@ assertCheck('testpanel.html topbar has menu toggle, panel badge, bell, and user 
 })();
 
 // ═══ F1: SIDEBAR ACCORDION SPEC & RUNTIME REAL CLICK TESTS ═══════════
-assertCheck('speed-kit.js defines zyToggleGroup', speedKitJs.includes('function zyToggleGroup'));
-assertCheck('speed-agent.js integrates zyToggleGroup', speedAgentJs.includes('zyToggleGroup'));
-assertCheck('speed-panel.js integrates zyToggleGroup', speedPanelJs.includes('zyToggleGroup'));
-assertCheck('speed-client.js integrates zyToggleGroup', speedClientJs.includes('zyToggleGroup'));
-assertCheck('speed-admin.js integrates zyToggleGroup', speedAdminJs.includes('zyToggleGroup'));
+assertCheck('shared-ui-kit.js defines zyToggleGroup', speedKitJs.includes('function zyToggleGroup'));
+assertCheck('agent-shell.js integrates zyToggleGroup', speedAgentJs.includes('zyToggleGroup'));
+assertCheck('manager-shell.js integrates zyToggleGroup', speedPanelJs.includes('zyToggleGroup'));
+assertCheck('client-shell.js integrates zyToggleGroup', speedClientJs.includes('zyToggleGroup'));
+assertCheck('owner-shell.js integrates zyToggleGroup', speedAdminJs.includes('zyToggleGroup'));
 
 (function testF1ThreeGroupRealClicks() {
   const classListProto = (classes = []) => {
@@ -597,45 +597,45 @@ assertCheck('speed-admin.js integrates zyToggleGroup', speedAdminJs.includes('zy
 })();
 
 // ═══ V3: NO FULL-PAGE RELOADS & ROUTER & SKELETON TESTS ═══════════
-const speedUrlJs = fs.readFileSync(path.resolve('Alpha SMS/static/js/speed-url.js'), 'utf8');
+const speedUrlJs = fs.readFileSync(path.resolve('humex-sms/static/js/shared-url-router.js'), 'utf8');
 
-// (a) speed-panel.css defines skeleton tokens and animation
-assertCheck('speed-panel.css defines --sp-skeleton-bg', speedPanelCss.includes('--sp-skeleton-bg'));
-assertCheck('speed-panel.css defines --sp-skeleton-shimmer', speedPanelCss.includes('--sp-skeleton-shimmer'));
-assertCheck('speed-panel.css defines .zy-skeleton and @keyframes zy-shimmer',
+// (a) humex-panel.css defines skeleton tokens and animation
+assertCheck('humex-panel.css defines --sp-skeleton-bg', speedPanelCss.includes('--sp-skeleton-bg'));
+assertCheck('humex-panel.css defines --sp-skeleton-shimmer', speedPanelCss.includes('--sp-skeleton-shimmer'));
+assertCheck('humex-panel.css defines .zy-skeleton and @keyframes zy-shimmer',
   speedPanelCss.includes('.zy-skeleton') && speedPanelCss.includes('@keyframes zy-shimmer')
 );
-assertCheck('speed-panel.css defines .zy-skeleton-screen and .zy-skeleton-kpis',
+assertCheck('humex-panel.css defines .zy-skeleton-screen and .zy-skeleton-kpis',
   speedPanelCss.includes('.zy-skeleton-screen') && speedPanelCss.includes('.zy-skeleton-kpis')
 );
 
-// (b) speed-kit.js defines zySkeleton and zyShowSkeleton
-assertCheck('speed-kit.js defines zySkeleton', speedKitJs.includes('function zySkeleton'));
-assertCheck('speed-kit.js defines zyShowSkeleton', speedKitJs.includes('function zyShowSkeleton'));
+// (b) shared-ui-kit.js defines zySkeleton and zyShowSkeleton
+assertCheck('shared-ui-kit.js defines zySkeleton', speedKitJs.includes('function zySkeleton'));
+assertCheck('shared-ui-kit.js defines zyShowSkeleton', speedKitJs.includes('function zyShowSkeleton'));
 
-// (c) speed-url.js defines mappings for all roles
-assertCheck('speed-url.js defines owner role mapping', speedUrlJs.includes('owner: {'));
-assertCheck('speed-url.js defines manager role mapping', speedUrlJs.includes('manager: {'));
-assertCheck('speed-url.js defines client role mapping', speedUrlJs.includes('client: {'));
-assertCheck('speed-url.js defines agent role mapping', speedUrlJs.includes('agent: {'));
-assertCheck('speed-url.js defines test role mapping', speedUrlJs.includes('test: {'));
+// (c) shared-url-router.js defines mappings for all roles
+assertCheck('shared-url-router.js defines owner role mapping', speedUrlJs.includes('owner: {'));
+assertCheck('shared-url-router.js defines manager role mapping', speedUrlJs.includes('manager: {'));
+assertCheck('shared-url-router.js defines client role mapping', speedUrlJs.includes('client: {'));
+assertCheck('shared-url-router.js defines agent role mapping', speedUrlJs.includes('agent: {'));
+assertCheck('shared-url-router.js defines test role mapping', speedUrlJs.includes('test: {'));
 
-// (d) speed-url.js loaded in all 5 panel entry points
-const indexHtmlLatest = fs.readFileSync(path.resolve('Alpha SMS/static/index.html'), 'utf8');
-assertCheck('agent.html loads speed-url.js', agentHtmlLatest.includes('speed-url.js'));
-assertCheck('manager.html loads speed-url.js', managerHtmlLatest.includes('speed-url.js'));
-assertCheck('client.html loads speed-url.js', clientHtml.includes('speed-url.js'));
-assertCheck('index.html loads speed-url.js', indexHtmlLatest.includes('speed-url.js'));
-assertCheck('testpanel.html loads speed-url.js', testpanelHtml.includes('speed-url.js'));
+// (d) shared-url-router.js loaded in all 5 panel entry points
+const indexHtmlLatest = fs.readFileSync(path.resolve('humex-sms/static/index.html'), 'utf8');
+assertCheck('agent.html loads shared-url-router.js', agentHtmlLatest.includes('shared-url-router.js'));
+assertCheck('manager.html loads shared-url-router.js', managerHtmlLatest.includes('shared-url-router.js'));
+assertCheck('client.html loads shared-url-router.js', clientHtml.includes('shared-url-router.js'));
+assertCheck('index.html loads shared-url-router.js', indexHtmlLatest.includes('shared-url-router.js'));
+assertCheck('testpanel.html loads shared-url-router.js', testpanelHtml.includes('shared-url-router.js'));
 
 // (e) Zero rogue full-page reloads across panel scripts (only login/logout or backup allowed)
 const panelJsFiles = [
-  'Alpha SMS/static/js/speed-agent.js',
-  'Alpha SMS/static/js/speed-panel.js',
-  'Alpha SMS/static/js/speed-client.js',
-  'Alpha SMS/static/js/speed-admin.js',
-  'Alpha SMS/static/js/speed-test.js',
-  'Alpha SMS/static/js/speed-url.js'
+  'humex-sms/static/js/agent-shell.js',
+  'humex-sms/static/js/manager-shell.js',
+  'humex-sms/static/js/client-shell.js',
+  'humex-sms/static/js/owner-shell.js',
+  'humex-sms/static/js/testpanel-shell.js',
+  'humex-sms/static/js/shared-url-router.js'
 ];
 for (const f of panelJsFiles) {
   const content = fs.readFileSync(path.resolve(f), 'utf8');
@@ -730,36 +730,36 @@ for (const f of panelJsFiles) {
 })();
 
 // ═══ V4: DASHBOARD TESTS (Breadcrumb, UTC Clock, KPI Cards, SVG Sparklines, Recent SMS) ═══
-// (a) speed-panel.css defines breadcrumb clock, KPI cards, and Recent SMS styles
-const speedPanelCssLatest = fs.readFileSync(path.resolve('Alpha SMS/static/css/speed-panel.css'), 'utf8');
-assertCheck('speed-panel.css defines .zy-crumb-clock', speedPanelCssLatest.includes('.zy-crumb-clock'));
-assertCheck('speed-panel.css defines .zy-kpi-grid and .zy-kpi-card',
+// (a) humex-panel.css defines breadcrumb clock, KPI cards, and Recent SMS styles
+const speedPanelCssLatest = fs.readFileSync(path.resolve('humex-sms/static/css/humex-panel.css'), 'utf8');
+assertCheck('humex-panel.css defines .zy-crumb-clock', speedPanelCssLatest.includes('.zy-crumb-clock'));
+assertCheck('humex-panel.css defines .zy-kpi-grid and .zy-kpi-card',
   speedPanelCssLatest.includes('.zy-kpi-grid') && speedPanelCssLatest.includes('.zy-kpi-card')
 );
-assertCheck('speed-panel.css defines .zy-kpi-sparkline-wrap', speedPanelCssLatest.includes('.zy-kpi-sparkline-wrap'));
-assertCheck('speed-panel.css defines .zy-recent-sms-table', speedPanelCssLatest.includes('.zy-recent-sms-table'));
-assertCheck('speed-panel.css defines .zy-status-delivrd, .zy-status-pending, .zy-status-failed',
+assertCheck('humex-panel.css defines .zy-kpi-sparkline-wrap', speedPanelCssLatest.includes('.zy-kpi-sparkline-wrap'));
+assertCheck('humex-panel.css defines .zy-recent-sms-table', speedPanelCssLatest.includes('.zy-recent-sms-table'));
+assertCheck('humex-panel.css defines .zy-status-delivrd, .zy-status-pending, .zy-status-failed',
   speedPanelCssLatest.includes('.zy-status-delivrd') &&
   speedPanelCssLatest.includes('.zy-status-pending') &&
   speedPanelCssLatest.includes('.zy-status-failed')
 );
 
-// (b) speed-kit.js defines V4 helper functions
-const speedKitJsLatest = fs.readFileSync(path.resolve('Alpha SMS/static/js/speed-kit.js'), 'utf8');
-assertCheck('speed-kit.js defines zyStartUtcClock and zyFormatUtc',
+// (b) shared-ui-kit.js defines V4 helper functions
+const speedKitJsLatest = fs.readFileSync(path.resolve('humex-sms/static/js/shared-ui-kit.js'), 'utf8');
+assertCheck('shared-ui-kit.js defines zyStartUtcClock and zyFormatUtc',
   speedKitJsLatest.includes('function zyStartUtcClock') && speedKitJsLatest.includes('function zyFormatUtc')
 );
-assertCheck('speed-kit.js defines zyUpdateBreadcrumb', speedKitJsLatest.includes('function zyUpdateBreadcrumb'));
-assertCheck('speed-kit.js defines zySparklineSvg', speedKitJsLatest.includes('function zySparklineSvg'));
-assertCheck('speed-kit.js defines zyKpiCard', speedKitJsLatest.includes('function zyKpiCard'));
-assertCheck('speed-kit.js defines zyRecentSmsCard', speedKitJsLatest.includes('function zyRecentSmsCard'));
+assertCheck('shared-ui-kit.js defines zyUpdateBreadcrumb', speedKitJsLatest.includes('function zyUpdateBreadcrumb'));
+assertCheck('shared-ui-kit.js defines zySparklineSvg', speedKitJsLatest.includes('function zySparklineSvg'));
+assertCheck('shared-ui-kit.js defines zyKpiCard', speedKitJsLatest.includes('function zyKpiCard'));
+assertCheck('shared-ui-kit.js defines zyRecentSmsCard', speedKitJsLatest.includes('function zyRecentSmsCard'));
 
 // (c) HTML files define breadcrumb UTC clock elements
-const agentHtmlV4 = fs.readFileSync(path.resolve('Alpha SMS/static/agent.html'), 'utf8');
-const managerHtmlV4 = fs.readFileSync(path.resolve('Alpha SMS/static/manager.html'), 'utf8');
-const clientHtmlV4 = fs.readFileSync(path.resolve('Alpha SMS/static/client.html'), 'utf8');
-const indexHtmlV4 = fs.readFileSync(path.resolve('Alpha SMS/static/index.html'), 'utf8');
-const testpanelHtmlV4 = fs.readFileSync(path.resolve('Alpha SMS/static/testpanel.html'), 'utf8');
+const agentHtmlV4 = fs.readFileSync(path.resolve('humex-sms/static/agent.html'), 'utf8');
+const managerHtmlV4 = fs.readFileSync(path.resolve('humex-sms/static/manager.html'), 'utf8');
+const clientHtmlV4 = fs.readFileSync(path.resolve('humex-sms/static/client.html'), 'utf8');
+const indexHtmlV4 = fs.readFileSync(path.resolve('humex-sms/static/index.html'), 'utf8');
+const testpanelHtmlV4 = fs.readFileSync(path.resolve('humex-sms/static/testpanel.html'), 'utf8');
 
 assertCheck('agent.html has zy-crumb-clock and zy-utc-time', agentHtmlV4.includes('zy-crumb-clock') && agentHtmlV4.includes('id="zy-utc-time"'));
 assertCheck('manager.html has zy-crumb-clock and zy-utc-time', managerHtmlV4.includes('zy-crumb-clock') && managerHtmlV4.includes('id="zy-utc-time"'));
@@ -768,21 +768,21 @@ assertCheck('index.html has zy-crumb-clock and zy-utc-time', indexHtmlV4.include
 assertCheck('testpanel.html has zy-crumb-clock and zy-utc-time', testpanelHtmlV4.includes('zy-crumb-clock') && testpanelHtmlV4.includes('id="zy-utc-time"'));
 
 // (d) Role dashboards integrate V4 KPI cards and Recent SMS stream
-const speedAgentJsV4 = fs.readFileSync(path.resolve('Alpha SMS/static/js/speed-agent.js'), 'utf8');
-const speedPanelJsV4 = fs.readFileSync(path.resolve('Alpha SMS/static/js/speed-panel.js'), 'utf8');
-const speedAdminJsV4 = fs.readFileSync(path.resolve('Alpha SMS/static/js/speed-admin.js'), 'utf8');
-const speedClientJsV4 = fs.readFileSync(path.resolve('Alpha SMS/static/js/speed-client.js'), 'utf8');
+const speedAgentJsV4 = fs.readFileSync(path.resolve('humex-sms/static/js/agent-shell.js'), 'utf8');
+const speedPanelJsV4 = fs.readFileSync(path.resolve('humex-sms/static/js/manager-shell.js'), 'utf8');
+const speedAdminJsV4 = fs.readFileSync(path.resolve('humex-sms/static/js/owner-shell.js'), 'utf8');
+const speedClientJsV4 = fs.readFileSync(path.resolve('humex-sms/static/js/client-shell.js'), 'utf8');
 
-assertCheck('speed-agent.js integrates zyKpiCard and zyRecentSmsCard',
+assertCheck('agent-shell.js integrates zyKpiCard and zyRecentSmsCard',
   speedAgentJsV4.includes('zyKpiCard') && speedAgentJsV4.includes('zyRecentSmsCard')
 );
-assertCheck('speed-panel.js integrates zyKpiCard and zyRecentSmsCard',
+assertCheck('manager-shell.js integrates zyKpiCard and zyRecentSmsCard',
   speedPanelJsV4.includes('zyKpiCard') && speedPanelJsV4.includes('zyRecentSmsCard')
 );
-assertCheck('speed-admin.js integrates zyKpiCard and zyRecentSmsCard',
+assertCheck('owner-shell.js integrates zyKpiCard and zyRecentSmsCard',
   speedAdminJsV4.includes('zyKpiCard') && speedAdminJsV4.includes('zyRecentSmsCard')
 );
-assertCheck('speed-client.js integrates zyKpiCard and zyRecentSmsCard',
+assertCheck('client-shell.js integrates zyKpiCard and zyRecentSmsCard',
   speedClientJsV4.includes('zyKpiCard') && speedClientJsV4.includes('zyRecentSmsCard')
 );
 
@@ -830,58 +830,58 @@ assertCheck('speed-client.js integrates zyKpiCard and zyRecentSmsCard',
 })();
 
 // ═══ V5: CDR & SHOW REPORT TESTS (Date-Time Range, Presets, Group-By Chips, Tabs, Total Row) ═══
-// (a) speed-panel.css defines V5 CDR components
-const speedPanelCssV5 = fs.readFileSync(path.resolve('Alpha SMS/static/css/speed-panel.css'), 'utf8');
-assertCheck('speed-panel.css defines .zy-cdr-tabs and .zy-cdr-tab',
+// (a) humex-panel.css defines V5 CDR components
+const speedPanelCssV5 = fs.readFileSync(path.resolve('humex-sms/static/css/humex-panel.css'), 'utf8');
+assertCheck('humex-panel.css defines .zy-cdr-tabs and .zy-cdr-tab',
   speedPanelCssV5.includes('.zy-cdr-tabs') && speedPanelCssV5.includes('.zy-cdr-tab')
 );
-assertCheck('speed-panel.css defines .zy-date-presets and .zy-preset-chip',
+assertCheck('humex-panel.css defines .zy-date-presets and .zy-preset-chip',
   speedPanelCssV5.includes('.zy-date-presets') && speedPanelCssV5.includes('.zy-preset-chip')
 );
-assertCheck('speed-panel.css defines .zy-datetime-range and .zy-datetime-wrap',
+assertCheck('humex-panel.css defines .zy-datetime-range and .zy-datetime-wrap',
   speedPanelCssV5.includes('.zy-datetime-range') && speedPanelCssV5.includes('.zy-datetime-wrap')
 );
-assertCheck('speed-panel.css defines .zy-groupby-row and .zy-group-chip',
+assertCheck('humex-panel.css defines .zy-groupby-row and .zy-group-chip',
   speedPanelCssV5.includes('.zy-groupby-row') && speedPanelCssV5.includes('.zy-group-chip')
 );
-assertCheck('speed-panel.css defines .zy-total-foot and .zy-total-row',
+assertCheck('humex-panel.css defines .zy-total-foot and .zy-total-row',
   speedPanelCssV5.includes('.zy-total-foot') && speedPanelCssV5.includes('.zy-total-row')
 );
-assertCheck('speed-panel.css defines .zy-total-badge', speedPanelCssV5.includes('.zy-total-badge'));
+assertCheck('humex-panel.css defines .zy-total-badge', speedPanelCssV5.includes('.zy-total-badge'));
 
-// (b) speed-kit.js defines V5 helpers
-const speedKitJsV5 = fs.readFileSync(path.resolve('Alpha SMS/static/js/speed-kit.js'), 'utf8');
-assertCheck('speed-kit.js defines zyDatePresetsList', speedKitJsV5.includes('zyDatePresetsList = ['));
-assertCheck('speed-kit.js defines zyGetDatePresetRange', speedKitJsV5.includes('function zyGetDatePresetRange'));
-assertCheck('speed-kit.js defines zyApplyDatePreset', speedKitJsV5.includes('function zyApplyDatePreset'));
-assertCheck('speed-kit.js defines zyRenderDatePresets', speedKitJsV5.includes('function zyRenderDatePresets'));
-assertCheck('speed-kit.js defines zyCdrTabs', speedKitJsV5.includes('function zyCdrTabs'));
-assertCheck('speed-kit.js defines zyToggleGroupChip and zyRenderGroupChips',
+// (b) shared-ui-kit.js defines V5 helpers
+const speedKitJsV5 = fs.readFileSync(path.resolve('humex-sms/static/js/shared-ui-kit.js'), 'utf8');
+assertCheck('shared-ui-kit.js defines zyDatePresetsList', speedKitJsV5.includes('zyDatePresetsList = ['));
+assertCheck('shared-ui-kit.js defines zyGetDatePresetRange', speedKitJsV5.includes('function zyGetDatePresetRange'));
+assertCheck('shared-ui-kit.js defines zyApplyDatePreset', speedKitJsV5.includes('function zyApplyDatePreset'));
+assertCheck('shared-ui-kit.js defines zyRenderDatePresets', speedKitJsV5.includes('function zyRenderDatePresets'));
+assertCheck('shared-ui-kit.js defines zyCdrTabs', speedKitJsV5.includes('function zyCdrTabs'));
+assertCheck('shared-ui-kit.js defines zyToggleGroupChip and zyRenderGroupChips',
   speedKitJsV5.includes('function zyToggleGroupChip') && speedKitJsV5.includes('function zyRenderGroupChips')
 );
-assertCheck('speed-kit.js defines zyBuildCdrTotalRow', speedKitJsV5.includes('function zyBuildCdrTotalRow'));
+assertCheck('shared-ui-kit.js defines zyBuildCdrTotalRow', speedKitJsV5.includes('function zyBuildCdrTotalRow'));
 
 // (c) Agent panel integrates V5 CDR features
-const speedAgentPagesV5 = fs.readFileSync(path.resolve('Alpha SMS/static/js/speed-agent-pages.js'), 'utf8');
-assertCheck('speed-agent-pages.js uses zyCdrTabs for view switching', speedAgentPagesV5.includes('zyCdrTabs(') || speedAgentPagesV5.includes('zy-filter-grid'));
-assertCheck('speed-agent-pages.js uses zyRenderDatePresets', speedAgentPagesV5.includes('zyRenderDatePresets(') || speedAgentPagesV5.includes('zy-filter-grid'));
-assertCheck('speed-agent-pages.js uses zyRenderGroupChips', speedAgentPagesV5.includes('zyRenderGroupChips(') || speedAgentPagesV5.includes('zy-groupby-card'));
-assertCheck('speed-agent-pages.js uses zyBuildCdrTotalRow for total row', speedAgentPagesV5.includes('zyBuildCdrTotalRow('));
-assertCheck('speed-agent-pages.js includes Total Groups in grouped footer', speedAgentPagesV5.includes('Total Groups:'));
+const speedAgentPagesV5 = fs.readFileSync(path.resolve('humex-sms/static/js/agent-pages.js'), 'utf8');
+assertCheck('agent-pages.js uses zyCdrTabs for view switching', speedAgentPagesV5.includes('zyCdrTabs(') || speedAgentPagesV5.includes('zy-filter-grid'));
+assertCheck('agent-pages.js uses zyRenderDatePresets', speedAgentPagesV5.includes('zyRenderDatePresets(') || speedAgentPagesV5.includes('zy-filter-grid'));
+assertCheck('agent-pages.js uses zyRenderGroupChips', speedAgentPagesV5.includes('zyRenderGroupChips(') || speedAgentPagesV5.includes('zy-groupby-card'));
+assertCheck('agent-pages.js uses zyBuildCdrTotalRow for total row', speedAgentPagesV5.includes('zyBuildCdrTotalRow('));
+assertCheck('agent-pages.js includes Total Groups in grouped footer', speedAgentPagesV5.includes('Total Groups:'));
 
 // (d) Client panel integrates V5 CDR features
-const speedClientPagesV5 = fs.readFileSync(path.resolve('Alpha SMS/static/js/speed-client-pages.js'), 'utf8');
-assertCheck('speed-client-pages.js uses zyCdrTabs for view switching', speedClientPagesV5.includes('zyCdrTabs(') || speedClientPagesV5.includes('zy-filter-grid'));
-assertCheck('speed-client-pages.js uses zyRenderDatePresets', speedClientPagesV5.includes('zyRenderDatePresets(') || speedClientPagesV5.includes('zy-filter-grid'));
-assertCheck('speed-client-pages.js uses zyRenderGroupChips', speedClientPagesV5.includes('zyRenderGroupChips(') || speedClientPagesV5.includes('zy-groupby-card'));
-assertCheck('speed-client-pages.js includes zy-total-badge in footer', speedClientPagesV5.includes('zy-total-badge'));
+const speedClientPagesV5 = fs.readFileSync(path.resolve('humex-sms/static/js/client-pages.js'), 'utf8');
+assertCheck('client-pages.js uses zyCdrTabs for view switching', speedClientPagesV5.includes('zyCdrTabs(') || speedClientPagesV5.includes('zy-filter-grid'));
+assertCheck('client-pages.js uses zyRenderDatePresets', speedClientPagesV5.includes('zyRenderDatePresets(') || speedClientPagesV5.includes('zy-filter-grid'));
+assertCheck('client-pages.js uses zyRenderGroupChips', speedClientPagesV5.includes('zyRenderGroupChips(') || speedClientPagesV5.includes('zy-groupby-card'));
+assertCheck('client-pages.js includes zy-total-badge in footer', speedClientPagesV5.includes('zy-total-badge'));
 
 // (e) Owner / Admin panel integrates V5 CDR features
-const speedAdminJsV5 = fs.readFileSync(path.resolve('Alpha SMS/static/js/speed-admin.js'), 'utf8');
-assertCheck('speed-admin.js uses zyCdrTabs for view switching', speedAdminJsV5.includes('zyCdrTabs(') || speedAdminJsV5.includes('zy-filter-grid'));
-assertCheck('speed-admin.js uses zyRenderDatePresets', speedAdminJsV5.includes('zyRenderDatePresets(') || speedAdminJsV5.includes('zy-filter-grid'));
-assertCheck('speed-admin.js uses zyRenderGroupChips', speedAdminJsV5.includes('zyRenderGroupChips(') || speedAdminJsV5.includes('zy-groupby-card'));
-assertCheck('speed-admin.js includes Total Groups in grouped footer', speedAdminJsV5.includes('Total Groups:'));
+const speedAdminJsV5 = fs.readFileSync(path.resolve('humex-sms/static/js/owner-shell.js'), 'utf8');
+assertCheck('owner-shell.js uses zyCdrTabs for view switching', speedAdminJsV5.includes('zyCdrTabs(') || speedAdminJsV5.includes('zy-filter-grid'));
+assertCheck('owner-shell.js uses zyRenderDatePresets', speedAdminJsV5.includes('zyRenderDatePresets(') || speedAdminJsV5.includes('zy-filter-grid'));
+assertCheck('owner-shell.js uses zyRenderGroupChips', speedAdminJsV5.includes('zyRenderGroupChips(') || speedAdminJsV5.includes('zy-groupby-card'));
+assertCheck('owner-shell.js includes Total Groups in grouped footer', speedAdminJsV5.includes('Total Groups:'));
 
 // (f) Runtime simulation of V5 CDR functions
 (function testV5Runtime() {
@@ -945,47 +945,47 @@ assertCheck('speed-admin.js includes Total Groups in grouped footer', speedAdmin
 })();
 
 // ═══ V6: NUMBERS PAGES TESTS (Filters, Checkboxes, Actions, Bulk Add Queue) ═══
-// (a) speed-panel.css defines V6 components
-const speedPanelCssV6 = fs.readFileSync(path.resolve('Alpha SMS/static/css/speed-panel.css'), 'utf8');
-assertCheck('speed-panel.css defines .zy-selection-bar and .zy-selected-counter',
+// (a) humex-panel.css defines V6 components
+const speedPanelCssV6 = fs.readFileSync(path.resolve('humex-sms/static/css/humex-panel.css'), 'utf8');
+assertCheck('humex-panel.css defines .zy-selection-bar and .zy-selected-counter',
   speedPanelCssV6.includes('.zy-selection-bar') && speedPanelCssV6.includes('.zy-selected-counter')
 );
-assertCheck('speed-panel.css defines .zy-bulk-card and .zy-pool-avail-badge',
+assertCheck('humex-panel.css defines .zy-bulk-card and .zy-pool-avail-badge',
   speedPanelCssV6.includes('.zy-bulk-card') && speedPanelCssV6.includes('.zy-pool-avail-badge')
 );
-assertCheck('speed-panel.css defines .zy-bulk-queue-table and .zy-queue-status',
+assertCheck('humex-panel.css defines .zy-bulk-queue-table and .zy-queue-status',
   speedPanelCssV6.includes('.zy-bulk-queue-table') && speedPanelCssV6.includes('.zy-queue-status')
 );
-assertCheck('speed-panel.css defines .zy-queue-progress and .zy-queue-progress-bar',
+assertCheck('humex-panel.css defines .zy-queue-progress and .zy-queue-progress-bar',
   speedPanelCssV6.includes('.zy-queue-progress') && speedPanelCssV6.includes('.zy-queue-progress-bar')
 );
 
-// (b) speed-kit.js defines V6 helper functions
-const speedKitJsV6 = fs.readFileSync(path.resolve('Alpha SMS/static/js/speed-kit.js'), 'utf8');
-assertCheck('speed-kit.js defines zySyncSelectionBar', speedKitJsV6.includes('function zySyncSelectionBar'));
-assertCheck('speed-kit.js defines zyRenderBulkQueueCard', speedKitJsV6.includes('function zyRenderBulkQueueCard'));
+// (b) shared-ui-kit.js defines V6 helper functions
+const speedKitJsV6 = fs.readFileSync(path.resolve('humex-sms/static/js/shared-ui-kit.js'), 'utf8');
+assertCheck('shared-ui-kit.js defines zySyncSelectionBar', speedKitJsV6.includes('function zySyncSelectionBar'));
+assertCheck('shared-ui-kit.js defines zyRenderBulkQueueCard', speedKitJsV6.includes('function zyRenderBulkQueueCard'));
 
 // (c) Agent panel integrates V6 features
-const speedAgentPagesV6 = fs.readFileSync(path.resolve('Alpha SMS/static/js/speed-agent-pages.js'), 'utf8');
-assertCheck('speed-agent-pages.js defines pgBulkAdd with queue management',
+const speedAgentPagesV6 = fs.readFileSync(path.resolve('humex-sms/static/js/agent-pages.js'), 'utf8');
+assertCheck('agent-pages.js defines pgBulkAdd with queue management',
   speedAgentPagesV6.includes('pgBulkAdd') && speedAgentPagesV6.includes('zyRenderBulkQueueCard')
 );
-assertCheck('speed-agent-pages.js integrates pool availability check',
+assertCheck('agent-pages.js integrates pool availability check',
   speedAgentPagesV6.includes('zyUpdateBulkPoolStat') && speedAgentPagesV6.includes('ba-pool-stat-wrap')
 );
-assertCheck('speed-agent-pages.js bulk-add includes master payterms',
+assertCheck('agent-pages.js bulk-add includes master payterms',
   speedAgentPagesV6.includes('ba-payterm') && speedAgentPagesV6.includes('Monthly60')
 );
 
 // (d) Client panel integrates V6 numbers features
-const speedClientPagesV6 = fs.readFileSync(path.resolve('Alpha SMS/static/js/speed-client-pages.js'), 'utf8');
-assertCheck('speed-client-pages.js enables checkboxes on numbers table',
+const speedClientPagesV6 = fs.readFileSync(path.resolve('humex-sms/static/js/client-pages.js'), 'utf8');
+assertCheck('client-pages.js enables checkboxes on numbers table',
   speedClientPagesV6.includes('check: true')
 );
-assertCheck('speed-client-pages.js defines return to agent action',
+assertCheck('client-pages.js defines return to agent action',
   speedClientPagesV6.includes('zyClientReturnSelected')
 );
-assertCheck('speed-client-pages.js includes range and search filters',
+assertCheck('client-pages.js includes range and search filters',
   speedClientPagesV6.includes('zyClientNumFilter') && speedClientPagesV6.includes('num-range')
 );
 
@@ -1016,60 +1016,60 @@ assertCheck('speed-client-pages.js includes range and search filters',
 })();
 
 // ═══ V7: PAYTERM LIST + POLISH + FINAL (Master List, Alias Map, Empty/Loading States) ═══
-// (a) speed-panel.css defines V7 components
-const speedPanelCssV7 = fs.readFileSync(path.resolve('Alpha SMS/static/css/speed-panel.css'), 'utf8');
-assertCheck('speed-panel.css defines .zy-empty-state and .zy-empty-icon',
+// (a) humex-panel.css defines V7 components
+const speedPanelCssV7 = fs.readFileSync(path.resolve('humex-sms/static/css/humex-panel.css'), 'utf8');
+assertCheck('humex-panel.css defines .zy-empty-state and .zy-empty-icon',
   speedPanelCssV7.includes('.zy-empty-state') && speedPanelCssV7.includes('.zy-empty-icon')
 );
-assertCheck('speed-panel.css defines .zy-empty-title and .zy-empty-desc',
+assertCheck('humex-panel.css defines .zy-empty-title and .zy-empty-desc',
   speedPanelCssV7.includes('.zy-empty-title') && speedPanelCssV7.includes('.zy-empty-desc')
 );
-assertCheck('speed-panel.css defines .zy-loading-spinner and .zy-loading-wrap',
+assertCheck('humex-panel.css defines .zy-loading-spinner and .zy-loading-wrap',
   speedPanelCssV7.includes('.zy-loading-spinner') && speedPanelCssV7.includes('.zy-loading-wrap')
 );
-assertCheck('speed-panel.css defines .zy-loading-overlay',
+assertCheck('humex-panel.css defines .zy-loading-overlay',
   speedPanelCssV7.includes('.zy-loading-overlay')
 );
-assertCheck('speed-panel.css defines .zy-payterm-badge',
+assertCheck('humex-panel.css defines .zy-payterm-badge',
   speedPanelCssV7.includes('.zy-payterm-badge')
 );
-assertCheck('speed-panel.css defines .zy-pt-1-1 and .zy-pt-weekly',
+assertCheck('humex-panel.css defines .zy-pt-1-1 and .zy-pt-weekly',
   speedPanelCssV7.includes('.zy-pt-1-1') && speedPanelCssV7.includes('.zy-pt-weekly')
 );
-assertCheck('speed-panel.css defines .zy-pt-15-15 and .zy-pt-monthly60',
+assertCheck('humex-panel.css defines .zy-pt-15-15 and .zy-pt-monthly60',
   speedPanelCssV7.includes('.zy-pt-15-15') && speedPanelCssV7.includes('.zy-pt-monthly60')
 );
 
-// (b) speed-kit.js defines V7 helpers
-const speedKitJsV7 = fs.readFileSync(path.resolve('Alpha SMS/static/js/speed-kit.js'), 'utf8');
-assertCheck('speed-kit.js defines ZY_DEFAULT_MASTER_PAYTERMS',
+// (b) shared-ui-kit.js defines V7 helpers
+const speedKitJsV7 = fs.readFileSync(path.resolve('humex-sms/static/js/shared-ui-kit.js'), 'utf8');
+assertCheck('shared-ui-kit.js defines ZY_DEFAULT_MASTER_PAYTERMS',
   speedKitJsV7.includes('ZY_DEFAULT_MASTER_PAYTERMS')
 );
-assertCheck('speed-kit.js defines ZY_PAYTERM_ALIAS_MAP',
+assertCheck('shared-ui-kit.js defines ZY_PAYTERM_ALIAS_MAP',
   speedKitJsV7.includes('ZY_PAYTERM_ALIAS_MAP')
 );
-assertCheck('speed-kit.js defines zyMasterPaytermsList',
+assertCheck('shared-ui-kit.js defines zyMasterPaytermsList',
   speedKitJsV7.includes('zyMasterPaytermsList')
 );
-assertCheck('speed-kit.js defines zyNormalizePayterm',
+assertCheck('shared-ui-kit.js defines zyNormalizePayterm',
   speedKitJsV7.includes('zyNormalizePayterm')
 );
-assertCheck('speed-kit.js defines zyRenderPaytermOptions',
+assertCheck('shared-ui-kit.js defines zyRenderPaytermOptions',
   speedKitJsV7.includes('zyRenderPaytermOptions')
 );
-assertCheck('speed-kit.js defines zyPaytermBadge',
+assertCheck('shared-ui-kit.js defines zyPaytermBadge',
   speedKitJsV7.includes('zyPaytermBadge')
 );
-assertCheck('speed-kit.js defines zyEmptyState',
+assertCheck('shared-ui-kit.js defines zyEmptyState',
   speedKitJsV7.includes('zyEmptyState')
 );
-assertCheck('speed-kit.js defines zyLoadingSpinner',
+assertCheck('shared-ui-kit.js defines zyLoadingSpinner',
   speedKitJsV7.includes('zyLoadingSpinner')
 );
-assertCheck('speed-kit.js defines zyShowLoading and zyHideLoading',
+assertCheck('shared-ui-kit.js defines zyShowLoading and zyHideLoading',
   speedKitJsV7.includes('zyShowLoading') && speedKitJsV7.includes('zyHideLoading')
 );
-assertCheck('speed-kit.js table empty row integrates zyEmptyState',
+assertCheck('shared-ui-kit.js table empty row integrates zyEmptyState',
   speedKitJsV7.includes('zyEmptyState({ icon: \'fa-magnifying-glass\'') && speedKitJsV7.includes('zyEmptyState({ icon: \'fa-inbox\'')
 );
 
@@ -1155,12 +1155,12 @@ assertCheck('speed-kit.js table empty row integrates zyEmptyState',
 // F2: ONE PROFILE PLACE & SESSION LOGOUT TESTS
 // ═══════════════════════════════════════════════════════════════
 (function testF2OneProfilePlace() {
-  const agentHtml = fs.readFileSync(path.resolve('Alpha SMS/static/agent.html'), 'utf8');
-  const mgrHtml = fs.readFileSync(path.resolve('Alpha SMS/static/manager.html'), 'utf8');
-  const clientHtml = fs.readFileSync(path.resolve('Alpha SMS/static/client.html'), 'utf8');
-  const ownerHtml = fs.readFileSync(path.resolve('Alpha SMS/static/index.html'), 'utf8');
-  const testHtml = fs.readFileSync(path.resolve('Alpha SMS/static/testpanel.html'), 'utf8');
-  const profileSecJs = fs.readFileSync(path.resolve('Alpha SMS/static/js/speed-profile-security.js'), 'utf8');
+  const agentHtml = fs.readFileSync(path.resolve('humex-sms/static/agent.html'), 'utf8');
+  const mgrHtml = fs.readFileSync(path.resolve('humex-sms/static/manager.html'), 'utf8');
+  const clientHtml = fs.readFileSync(path.resolve('humex-sms/static/client.html'), 'utf8');
+  const ownerHtml = fs.readFileSync(path.resolve('humex-sms/static/index.html'), 'utf8');
+  const testHtml = fs.readFileSync(path.resolve('humex-sms/static/testpanel.html'), 'utf8');
+  const profileSecJs = fs.readFileSync(path.resolve('humex-sms/static/js/shared-profile-security.js'), 'utf8');
 
   // 1. Top-right avatar menu in all 5 panels
   [
@@ -1178,29 +1178,29 @@ assertCheck('speed-kit.js table empty row integrates zyEmptyState',
   });
 
   // 2. Sidebar Account group removed from sidebar order
-  const speedAgent = fs.readFileSync(path.resolve('Alpha SMS/static/js/speed-agent.js'), 'utf8');
-  const speedPanel = fs.readFileSync(path.resolve('Alpha SMS/static/js/speed-panel.js'), 'utf8');
-  const speedClient = fs.readFileSync(path.resolve('Alpha SMS/static/js/speed-client.js'), 'utf8');
-  const speedAdmin = fs.readFileSync(path.resolve('Alpha SMS/static/js/speed-admin.js'), 'utf8');
-  const testpanelJs = fs.readFileSync(path.resolve('Alpha SMS/static/js/testpanel.js'), 'utf8');
+  const speedAgent = fs.readFileSync(path.resolve('humex-sms/static/js/agent-shell.js'), 'utf8');
+  const speedPanel = fs.readFileSync(path.resolve('humex-sms/static/js/manager-shell.js'), 'utf8');
+  const speedClient = fs.readFileSync(path.resolve('humex-sms/static/js/client-shell.js'), 'utf8');
+  const speedAdmin = fs.readFileSync(path.resolve('humex-sms/static/js/owner-shell.js'), 'utf8');
+  const testpanelJs = fs.readFileSync(path.resolve('humex-sms/static/js/testpanel.js'), 'utf8');
 
-  assertCheck('F2: speed-agent.js ZY_SIDE_ORDER removes account group', !speedAgent.includes("ZY_SIDE_ORDER = ['dashboard', 'clisearch', 'smsmodule', 'smstest', 'users', 'cdr', 'payments', 'account']"));
-  assertCheck('F2: speed-panel.js ZY_SIDE_ORDER removes account group', !speedPanel.includes("ZY_SIDE_ORDER = ['dashboard', 'clisearch', 'smsmodule', 'smstest', 'users', 'cdr', 'payments', 'account']"));
-  assertCheck('F2: speed-client.js ZY_SIDE_ORDER removes account group', !speedClient.includes("ZY_SIDE_ORDER = ['dash', 'clisearch', 'smsmodule', 'testpanel', 'cdr', 'credit', 'payments', 'account']"));
-  assertCheck('F2: speed-admin.js ZY_ADMIN_MENU removes ACCOUNT group', !speedAdmin.includes('{ t: "ACCOUNT"'));
+  assertCheck('F2: agent-shell.js ZY_SIDE_ORDER removes account group', !speedAgent.includes("ZY_SIDE_ORDER = ['dashboard', 'clisearch', 'smsmodule', 'smstest', 'users', 'cdr', 'payments', 'account']"));
+  assertCheck('F2: manager-shell.js ZY_SIDE_ORDER removes account group', !speedPanel.includes("ZY_SIDE_ORDER = ['dashboard', 'clisearch', 'smsmodule', 'smstest', 'users', 'cdr', 'payments', 'account']"));
+  assertCheck('F2: client-shell.js ZY_SIDE_ORDER removes account group', !speedClient.includes("ZY_SIDE_ORDER = ['dash', 'clisearch', 'smsmodule', 'testpanel', 'cdr', 'credit', 'payments', 'account']"));
+  assertCheck('F2: owner-shell.js ZY_ADMIN_MENU removes ACCOUNT group', !speedAdmin.includes('{ t: "ACCOUNT"'));
 
   // 3. Bottom profile/online box removed across panels
-  assertCheck('F2: speed-agent.js does not render zy-foot-profile box', !speedAgent.includes('zy-foot-profile'));
-  assertCheck('F2: speed-panel.js does not render zy-foot-profile box', !speedPanel.includes('zy-foot-profile'));
-  assertCheck('F2: speed-client.js does not render zy-foot-profile box', !speedClient.includes('zy-foot-profile'));
-  assertCheck('F2: speed-admin.js does not render zy-foot-profile box', !speedAdmin.includes('zy-foot-profile'));
+  assertCheck('F2: agent-shell.js does not render zy-foot-profile box', !speedAgent.includes('zy-foot-profile'));
+  assertCheck('F2: manager-shell.js does not render zy-foot-profile box', !speedPanel.includes('zy-foot-profile'));
+  assertCheck('F2: client-shell.js does not render zy-foot-profile box', !speedClient.includes('zy-foot-profile'));
+  assertCheck('F2: owner-shell.js does not render zy-foot-profile box', !speedAdmin.includes('zy-foot-profile'));
   assertCheck('F2: testpanel.js does not render zy-foot-profile box', !testpanelJs.includes('zy-foot-profile'));
 
   // 4. REST API and Audit Log moved into profile page as tabs
-  assertCheck('F2: speed-profile-security.js defines profile tabs', profileSecJs.includes('zy-profile-tabs') && profileSecJs.includes('tab-btn-api') && profileSecJs.includes('tab-btn-audit'));
-  assertCheck('F2: speed-profile-security.js defines REST API panel tab', profileSecJs.includes('pro-tab-api') && profileSecJs.includes('REST API INTEGRATION'));
-  assertCheck('F2: speed-profile-security.js defines Audit Log panel tab', profileSecJs.includes('pro-tab-audit') && profileSecJs.includes('ACCOUNT AUDIT LOG'));
-  assertCheck('F2: speed-profile-security.js switchTab and loadAuditLogs exported', profileSecJs.includes('switchTab') && profileSecJs.includes('loadAuditLogs'));
+  assertCheck('F2: shared-profile-security.js defines profile tabs', profileSecJs.includes('zy-profile-tabs') && profileSecJs.includes('tab-btn-api') && profileSecJs.includes('tab-btn-audit'));
+  assertCheck('F2: shared-profile-security.js defines REST API panel tab', profileSecJs.includes('pro-tab-api') && profileSecJs.includes('REST API INTEGRATION'));
+  assertCheck('F2: shared-profile-security.js defines Audit Log panel tab', profileSecJs.includes('pro-tab-audit') && profileSecJs.includes('ACCOUNT AUDIT LOG'));
+  assertCheck('F2: shared-profile-security.js switchTab and loadAuditLogs exported', profileSecJs.includes('switchTab') && profileSecJs.includes('loadAuditLogs'));
 
   // 5. Client storage cleared and redirect to /login on logout
   const mockStorage = {
@@ -1259,28 +1259,28 @@ assertCheck('speed-kit.js table empty row integrates zyEmptyState',
 // F3: NO MISSING RECORDS TESTS (Paging, Limits, Totals, Streaming, Archives)
 // ═══════════════════════════════════════════════════════════════
 (function testF3NoMissingRecords() {
-  const speedKitJs = fs.readFileSync(path.resolve('Alpha SMS/static/js/speed-kit.js'), 'utf8');
-  const agentPagesJs = fs.readFileSync(path.resolve('Alpha SMS/static/js/speed-agent-pages.js'), 'utf8');
-  const adminJs = fs.readFileSync(path.resolve('Alpha SMS/static/js/speed-admin.js'), 'utf8');
-  const clientPagesJs = fs.readFileSync(path.resolve('Alpha SMS/static/js/speed-client-pages.js'), 'utf8');
+  const speedKitJs = fs.readFileSync(path.resolve('humex-sms/static/js/shared-ui-kit.js'), 'utf8');
+  const agentPagesJs = fs.readFileSync(path.resolve('humex-sms/static/js/agent-pages.js'), 'utf8');
+  const adminJs = fs.readFileSync(path.resolve('humex-sms/static/js/owner-shell.js'), 'utf8');
+  const clientPagesJs = fs.readFileSync(path.resolve('humex-sms/static/js/client-pages.js'), 'utf8');
   const serverJs = fs.readFileSync(path.resolve('server.js'), 'utf8');
 
   // 1. speed-kit exports zyExportCdrStream and zyBuildCdrTotalRow summary support
-  assertCheck('F3: speed-kit.js exports zyExportCdrStream', speedKitJs.includes('function zyExportCdrStream') && speedKitJs.includes('window.zyExportCdrStream = zyExportCdrStream'));
-  assertCheck('F3: speed-kit.js zyBuildCdrTotalRow supports options.summary', speedKitJs.includes('options && options.summary') && speedKitJs.includes('sum.total_sms'));
+  assertCheck('F3: shared-ui-kit.js exports zyExportCdrStream', speedKitJs.includes('function zyExportCdrStream') && speedKitJs.includes('window.zyExportCdrStream = zyExportCdrStream'));
+  assertCheck('F3: shared-ui-kit.js zyBuildCdrTotalRow supports options.summary', speedKitJs.includes('options && options.summary') && speedKitJs.includes('sum.total_sms'));
 
   // 2. UI controls across Agent, Admin, Client panels
-  assertCheck('F3: speed-agent-pages.js includes rp-limit selector', agentPagesJs.includes('id="rp-limit"') && agentPagesJs.includes('value="all"'));
-  assertCheck('F3: speed-agent-pages.js wires zyExportCdrStream', agentPagesJs.includes('zyExportCdrStream('));
-  assertCheck('F3: speed-agent-pages.js passes summary totals to zyBuildCdrTotalRow', agentPagesJs.includes('{ summary: logs.summary }'));
+  assertCheck('F3: agent-pages.js includes rp-limit selector', agentPagesJs.includes('id="rp-limit"') && agentPagesJs.includes('value="all"'));
+  assertCheck('F3: agent-pages.js wires zyExportCdrStream', agentPagesJs.includes('zyExportCdrStream('));
+  assertCheck('F3: agent-pages.js passes summary totals to zyBuildCdrTotalRow', agentPagesJs.includes('{ summary: logs.summary }'));
 
-  assertCheck('F3: speed-admin.js includes rp-limit selector', adminJs.includes('id="rp-limit"') && adminJs.includes('value="all"'));
-  assertCheck('F3: speed-admin.js wires zyExportCdrStream', adminJs.includes('zyExportCdrStream('));
-  assertCheck('F3: speed-admin.js passes summary totals to zyBuildCdrTotalRow', adminJs.includes('{ summary: logs.summary }'));
+  assertCheck('F3: owner-shell.js includes rp-limit selector', adminJs.includes('id="rp-limit"') && adminJs.includes('value="all"'));
+  assertCheck('F3: owner-shell.js wires zyExportCdrStream', adminJs.includes('zyExportCdrStream('));
+  assertCheck('F3: owner-shell.js passes summary totals to zyBuildCdrTotalRow', adminJs.includes('{ summary: logs.summary }'));
 
-  assertCheck('F3: speed-client-pages.js includes rp-limit selector', clientPagesJs.includes('id="rp-limit"') && clientPagesJs.includes('value="all"'));
-  assertCheck('F3: speed-client-pages.js wires zyExportCdrStream', clientPagesJs.includes('zyExportCdrStream('));
-  assertCheck('F3: speed-client-pages.js uses logs.summary for global totals', clientPagesJs.includes('logs && logs.summary'));
+  assertCheck('F3: client-pages.js includes rp-limit selector', clientPagesJs.includes('id="rp-limit"') && clientPagesJs.includes('value="all"'));
+  assertCheck('F3: client-pages.js wires zyExportCdrStream', clientPagesJs.includes('zyExportCdrStream('));
+  assertCheck('F3: client-pages.js uses logs.summary for global totals', clientPagesJs.includes('logs && logs.summary'));
 
   // 3. Server has streaming export and archive integration
   assertCheck('F3: server.js defines /api/sms/export streaming endpoint', serverJs.includes("app.get('/api/sms/export'") && serverJs.includes("attachment; filename="));
@@ -1319,10 +1319,10 @@ assertCheck('speed-kit.js table empty row integrates zyEmptyState',
 // F4: DASHBOARD TOP ROW TESTS (Four Cards, Exact Order, Bottom Owner Cards, Period Stats)
 // ═══════════════════════════════════════════════════════════════
 (function testF4DashboardTopRow() {
-  const speedAdminJs = fs.readFileSync(path.resolve('Alpha SMS/static/js/speed-admin.js'), 'utf8');
-  const speedPanelJs = fs.readFileSync(path.resolve('Alpha SMS/static/js/speed-panel.js'), 'utf8');
-  const speedAgentJs = fs.readFileSync(path.resolve('Alpha SMS/static/js/speed-agent.js'), 'utf8');
-  const speedClientJs = fs.readFileSync(path.resolve('Alpha SMS/static/js/speed-client.js'), 'utf8');
+  const speedAdminJs = fs.readFileSync(path.resolve('humex-sms/static/js/owner-shell.js'), 'utf8');
+  const speedPanelJs = fs.readFileSync(path.resolve('humex-sms/static/js/manager-shell.js'), 'utf8');
+  const speedAgentJs = fs.readFileSync(path.resolve('humex-sms/static/js/agent-shell.js'), 'utf8');
+  const speedClientJs = fs.readFileSync(path.resolve('humex-sms/static/js/client-shell.js'), 'utf8');
   const serverJs = fs.readFileSync(path.resolve('server.js'), 'utf8');
 
   // 1. Check server-side route
@@ -1340,13 +1340,13 @@ assertCheck('speed-kit.js table empty row integrates zyEmptyState',
       idxToday < idxWeek && idxWeek < idxMonth && idxMonth < idxYear;
   }
 
-  assertCheck('F4: speed-admin.js has top row four cards in exact order (Today, Weekly, Monthly, Yearly)', checkFourCardOrder(speedAdminJs, 'speed-admin'));
-  assertCheck('F4: speed-panel.js has top row four cards in exact order (Today, Weekly, Monthly, Yearly)', checkFourCardOrder(speedPanelJs, 'speed-panel'));
-  assertCheck('F4: speed-agent.js has top row four cards in exact order (Today, Weekly, Monthly, Yearly)', checkFourCardOrder(speedAgentJs, 'speed-agent'));
-  assertCheck('F4: speed-client.js has top row four cards in exact order (Today, Weekly, Monthly, Yearly)', checkFourCardOrder(speedClientJs, 'speed-client'));
+  assertCheck('F4: owner-shell.js has top row four cards in exact order (Today, Weekly, Monthly, Yearly)', checkFourCardOrder(speedAdminJs, 'speed-admin'));
+  assertCheck('F4: manager-shell.js has top row four cards in exact order (Today, Weekly, Monthly, Yearly)', checkFourCardOrder(speedPanelJs, 'speed-panel'));
+  assertCheck('F4: agent-shell.js has top row four cards in exact order (Today, Weekly, Monthly, Yearly)', checkFourCardOrder(speedAgentJs, 'speed-agent'));
+  assertCheck('F4: client-shell.js has top row four cards in exact order (Today, Weekly, Monthly, Yearly)', checkFourCardOrder(speedClientJs, 'speed-client'));
 
   // 3. Owner only: Revenue, Active number pool, Delivery rate at the bottom
-  assertCheck('F4: speed-admin.js has bottom cards for Revenue, Active number pool, and Delivery rate',
+  assertCheck('F4: owner-shell.js has bottom cards for Revenue, Active number pool, and Delivery rate',
     speedAdminJs.includes('bottomKpiCardsHtml') &&
     speedAdminJs.includes('title: "Revenue"') &&
     speedAdminJs.includes('title: "Active number pool"') &&
@@ -1369,45 +1369,45 @@ assertCheck('speed-kit.js table empty row integrates zyEmptyState',
 // F5: CDR FILTER BAR TESTS (.zy-filter-grid, 2-col, 7 chips, buttons, toolbar)
 // ═══════════════════════════════════════════════════════════════
 (function testF5CdrFilterBar() {
-  const speedPanelCss = fs.readFileSync(path.resolve('Alpha SMS/static/css/speed-panel.css'), 'utf8');
-  const speedKitJs = fs.readFileSync(path.resolve('Alpha SMS/static/js/speed-kit.js'), 'utf8');
-  const speedAdminJs = fs.readFileSync(path.resolve('Alpha SMS/static/js/speed-admin.js'), 'utf8');
-  const speedAgentPagesJs = fs.readFileSync(path.resolve('Alpha SMS/static/js/speed-agent-pages.js'), 'utf8');
-  const speedClientPagesJs = fs.readFileSync(path.resolve('Alpha SMS/static/js/speed-client-pages.js'), 'utf8');
-  const testpanelJs = fs.readFileSync(path.resolve('Alpha SMS/static/js/testpanel.js'), 'utf8');
+  const speedPanelCss = fs.readFileSync(path.resolve('humex-sms/static/css/humex-panel.css'), 'utf8');
+  const speedKitJs = fs.readFileSync(path.resolve('humex-sms/static/js/shared-ui-kit.js'), 'utf8');
+  const speedAdminJs = fs.readFileSync(path.resolve('humex-sms/static/js/owner-shell.js'), 'utf8');
+  const speedAgentPagesJs = fs.readFileSync(path.resolve('humex-sms/static/js/agent-pages.js'), 'utf8');
+  const speedClientPagesJs = fs.readFileSync(path.resolve('humex-sms/static/js/client-pages.js'), 'utf8');
+  const testpanelJs = fs.readFileSync(path.resolve('humex-sms/static/js/testpanel.js'), 'utf8');
   const serverJs = fs.readFileSync(path.resolve('server.js'), 'utf8');
 
   // 1. CSS components defined
-  assertCheck('F5: speed-panel.css defines .zy-filter-grid card with radius 16',
+  assertCheck('F5: humex-panel.css defines .zy-filter-grid card with radius 16',
     speedPanelCss.includes('.zy-filter-grid') && speedPanelCss.includes('border-radius: 16px')
   );
-  assertCheck('F5: speed-panel.css defines .zy-filter-grid-fields with 2 columns at 340px',
+  assertCheck('F5: humex-panel.css defines .zy-filter-grid-fields with 2 columns at 340px',
     speedPanelCss.includes('.zy-filter-grid-fields') && speedPanelCss.includes('repeat(2, minmax(0, 1fr))')
   );
-  assertCheck('F5: speed-panel.css defines .zy-filter-input with 48px height and radius 12',
+  assertCheck('F5: humex-panel.css defines .zy-filter-input with 48px height and radius 12',
     speedPanelCss.includes('height: 48px') && speedPanelCss.includes('border-radius: 12px')
   );
-  assertCheck('F5: speed-panel.css defines .zy-groupby-card and .zy-chip-pill',
+  assertCheck('F5: humex-panel.css defines .zy-groupby-card and .zy-chip-pill',
     speedPanelCss.includes('.zy-groupby-card') && speedPanelCss.includes('.zy-chip-pill')
   );
-  assertCheck('F5: speed-panel.css defines .zy-btn-amber and .zy-btn-blue-solid in .zy-filter-actions',
+  assertCheck('F5: humex-panel.css defines .zy-btn-amber and .zy-btn-blue-solid in .zy-filter-actions',
     speedPanelCss.includes('.zy-btn-amber') && speedPanelCss.includes('.zy-btn-blue-solid') && speedPanelCss.includes('.zy-filter-actions')
   );
-  assertCheck('F5: speed-panel.css defines .zy-table-toolbar and .zy-btn-pill',
+  assertCheck('F5: humex-panel.css defines .zy-table-toolbar and .zy-btn-pill',
     speedPanelCss.includes('.zy-table-toolbar') && speedPanelCss.includes('.zy-btn-pill')
   );
-  assertCheck('F5: speed-panel.css ensures modal short form fields sit side by side',
+  assertCheck('F5: humex-panel.css ensures modal short form fields sit side by side',
     speedPanelCss.includes('.zy-modal-grid-2') && speedPanelCss.includes('.modal .form-row')
   );
 
-  // 2. speed-kit.js exports
-  assertCheck('F5: speed-kit.js exports zyDefaultFromDateTime and zyDefaultToDateTime',
+  // 2. shared-ui-kit.js exports
+  assertCheck('F5: shared-ui-kit.js exports zyDefaultFromDateTime and zyDefaultToDateTime',
     speedKitJs.includes('zyDefaultFromDateTime') && speedKitJs.includes('zyDefaultToDateTime')
   );
-  assertCheck('F5: speed-kit.js exports zyRenderCdrFilterGrid and zyRenderNumbersFilterGrid',
+  assertCheck('F5: shared-ui-kit.js exports zyRenderCdrFilterGrid and zyRenderNumbersFilterGrid',
     speedKitJs.includes('zyRenderCdrFilterGrid') && speedKitJs.includes('zyRenderNumbersFilterGrid')
   );
-  assertCheck('F5: speed-kit.js exports table toolbar actions (Copy, CSV, Excel, PDF, Print, Columns)',
+  assertCheck('F5: shared-ui-kit.js exports table toolbar actions (Copy, CSV, Excel, PDF, Print, Columns)',
     speedKitJs.includes('zyExportTableCopy') && speedKitJs.includes('zyExportTableCsv') && speedKitJs.includes('zyExportTablePdf')
   );
 
@@ -1417,45 +1417,45 @@ assertCheck('speed-kit.js table empty row integrates zyEmptyState',
   );
 
   // 4. Admin panel integration
-  assertCheck('F5: speed-admin.js uses .zy-filter-grid for CDR filter bar',
+  assertCheck('F5: owner-shell.js uses .zy-filter-grid for CDR filter bar',
     speedAdminJs.includes('class="zy-filter-grid"') && speedAdminJs.includes('class="zy-filter-grid-fields"')
   );
-  assertCheck('F5: speed-admin.js has separate fields From, To, Range, Client, Number, CLI',
+  assertCheck('F5: owner-shell.js has separate fields From, To, Range, Client, Number, CLI',
     speedAdminJs.includes('id="rp-from"') && speedAdminJs.includes('id="rp-to"') &&
     speedAdminJs.includes('id="rp-range"') && speedAdminJs.includes('id="rp-client"') &&
     speedAdminJs.includes('id="rp-num"') && speedAdminJs.includes('id="rp-cli"')
   );
-  assertCheck('F5: speed-admin.js has exactly 7 Group By chips',
+  assertCheck('F5: owner-shell.js has exactly 7 Group By chips',
     speedAdminJs.includes('Hour') && speedAdminJs.includes('Date') && speedAdminJs.includes('Month') &&
     speedAdminJs.includes('Range') && speedAdminJs.includes('Client') && speedAdminJs.includes('Number') && speedAdminJs.includes('CLI')
   );
-  assertCheck('F5: speed-admin.js has Export Report (amber) and Show Report (blue)',
+  assertCheck('F5: owner-shell.js has Export Report (amber) and Show Report (blue)',
     speedAdminJs.includes('zy-btn-amber') && speedAdminJs.includes('Export Report') &&
     speedAdminJs.includes('zy-btn-blue-solid') && speedAdminJs.includes('Show Report')
   );
-  assertCheck('F5: speed-admin.js has search, limit select, and pill buttons under divider',
+  assertCheck('F5: owner-shell.js has search, limit select, and pill buttons under divider',
     speedAdminJs.includes('zy-filter-divider') && speedAdminJs.includes('zy-table-toolbar') &&
     speedAdminJs.includes('zy-btn-pill') && speedAdminJs.includes('Copy') && speedAdminJs.includes('CSV')
   );
-  assertCheck('F5: speed-admin.js removed date presets and detailed/grouped tabs as UI',
+  assertCheck('F5: owner-shell.js removed date presets and detailed/grouped tabs as UI',
     !speedAdminJs.includes('zyRenderDatePresets') && !speedAdminJs.includes('zyCdrTabs')
   );
 
   // 5. Agent panel integration
-  assertCheck('F5: speed-agent-pages.js uses .zy-filter-grid for CDR filter bar',
+  assertCheck('F5: agent-pages.js uses .zy-filter-grid for CDR filter bar',
     speedAgentPagesJs.includes('class="zy-filter-grid"') && speedAgentPagesJs.includes('zy-btn-amber')
   );
-  assertCheck('F5: speed-agent-pages.js reuses .zy-filter-grid in pgMySmsNumbers with side-by-side Filter + Reset',
+  assertCheck('F5: agent-pages.js reuses .zy-filter-grid in pgMySmsNumbers with side-by-side Filter + Reset',
     speedAgentPagesJs.includes('id="num-starts-with"') && speedAgentPagesJs.includes('id="num-range-contains"') &&
     speedAgentPagesJs.includes('class="zy-btn-blue-solid"') && speedAgentPagesJs.includes('Filter') &&
     speedAgentPagesJs.includes('Reset')
   );
 
   // 6. Client panel integration
-  assertCheck('F5: speed-client-pages.js uses .zy-filter-grid for CDR filter bar',
+  assertCheck('F5: client-pages.js uses .zy-filter-grid for CDR filter bar',
     speedClientPagesJs.includes('class="zy-filter-grid"') && speedClientPagesJs.includes('zy-btn-blue-solid')
   );
-  assertCheck('F5: speed-client-pages.js reuses .zy-filter-grid in pgMyNumbers',
+  assertCheck('F5: client-pages.js reuses .zy-filter-grid in pgMyNumbers',
     speedClientPagesJs.includes('class="zy-filter-grid"') && speedClientPagesJs.includes('id="num-starts-with"')
   );
 

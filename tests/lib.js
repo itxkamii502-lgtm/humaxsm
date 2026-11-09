@@ -19,7 +19,7 @@ export function summary(title = '') {
 }
 
 export function makeFixture(overrides = {}) {
-  const src = path.join(ROOT, 'Alpha SMS', 'data');
+  const src = fs.existsSync(path.join(ROOT, 'humex-sms', 'data')) ? path.join(ROOT, 'humex-sms', 'data') : path.join(ROOT, 'Alpha SMS', 'data');
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'alpha-test-'));
   for (const f of fs.readdirSync(src)) { const sp = path.join(src, f); if (fs.statSync(sp).isFile()) fs.copyFileSync(sp, path.join(dir, f)); }
   const W = (n, v) => fs.writeFileSync(path.join(dir, n + '.json'), JSON.stringify(v));

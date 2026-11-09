@@ -1,6 +1,6 @@
-# Alpha SMS — Change Rules & Guidelines
+# HUMEX SMS — Change Rules & Guidelines
 
-This document establishes the strict operating protocols and change governance rules for all future engineering tasks on the Alpha SMS codebase.
+This document establishes the strict operating protocols and change governance rules for all future engineering tasks on the HUMEX SMS codebase.
 
 ---
 
@@ -14,7 +14,7 @@ When implementing any future user request or change, you MUST strictly adhere to
 4. **No Full-Project Rescans**: Do not scan, list, or reread the entire project for small, localized changes.
 5. **No Unrelated File Regeneration**: Do not regenerate or rewrite unrelated files.
 6. **Preserve Existing Architecture**: Preserve existing business logic, APIs, database schemas, and UI layout unless explicitly instructed otherwise.
-7. **Inspect Shared Dependencies**: If a change affects shared functionality (e.g. `speed-kit.js`, `speed-panel.css`, `server.js`), inspect all directly affected portal dependencies.
+7. **Inspect Shared Dependencies**: If a change affects shared functionality (e.g. `shared-ui-kit.js`, `humex-panel.css`, `server.js`), inspect all directly affected portal dependencies.
 8. **Pre-Change Reporting**: Report which files need modification before making changes.
 9. **Zero Unrelated Refactoring**: Never perform unsolicited cleanup, styling "fixes", or speculative refactoring outside the brief.
 10. **Targeted Completion**: Stop immediately when the requested task and its relevant tests are complete.

@@ -22,7 +22,7 @@ if (!newPassword || String(newPassword).trim().length < 6) {
   process.exit(1);
 }
 
-const dataDir = process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR) : path.join(__dirname, 'Alpha SMS', 'data');
+const dataDir = process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR) : (fs.existsSync(path.join(__dirname, 'humex-sms', 'data')) ? path.join(__dirname, 'humex-sms', 'data') : path.join(__dirname, 'Alpha SMS', 'data'));
 const usersFile = path.join(dataDir, 'users.json');
 const sessionsFile = path.join(dataDir, 'sessions.json');
 
@@ -59,8 +59,8 @@ try {
     fs.writeFileSync(sessionsFile, JSON.stringify({}, null, 2), 'utf8');
   }
 
-  console.log(`[ALPHA SMS] Successfully updated password for Owner (${users[ownerIndex].username})`);
-  console.log('[ALPHA SMS] All active sessions have been cleared.');
+  console.log(`[HUMEX SMS] Successfully updated password for Owner (${users[ownerIndex].username})`);
+  console.log('[HUMEX SMS] All active sessions have been cleared.');
 } catch (err) {
   console.error('Failed to reset owner password:', err.message);
   process.exit(1);

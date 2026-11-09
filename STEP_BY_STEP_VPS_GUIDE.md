@@ -9,12 +9,12 @@ Yeh guide bilkul asan aur simple lafzon mein likhi gayi hai taake agar aapko peh
 ### Step 1: GitHub par Account aur New Repository Banayein
 1. [GitHub.com](https://github.com) par login karein (ya account banayein).
 2. Upar right corner par **`+`** icon par click karein aur **New repository** choose karein.
-3. **Repository name** likhein (maslan: `alpha-sms`).
+3. **Repository name** likhein (maslan: `humex-sms`).
 4. Isko **Private** select karein (kyunke isme aapka telecom aur panel business logic hai).
 5. Kisi checkbox ("Add README", etc.) ko tick **mat** karein.
 6. **Create repository** green button par click karein.
 7. Ab aapko ek link milega, jaise:  
-   `https://github.com/aapka-username/alpha-sms.git`  
+   `https://github.com/aapka-username/humex-sms.git`  
    (Is link ko copy kar lein).
 
 ---
@@ -38,7 +38,7 @@ git commit -m "First production ready commit"
 git branch -M main
 
 # 5. Apni GitHub repository ka link connect karein (apna link replace karein)
-git remote add origin https://github.com/aapka-username/alpha-sms.git
+git remote add origin https://github.com/aapka-username/humex-sms.git
 
 # 6. GitHub par code bhej dein
 git push -u origin main
@@ -99,10 +99,10 @@ sudo npm install -g pm2
 cd /var/www
 
 # 2. GitHub se project clone karein (apna link dalein)
-git clone https://github.com/aapka-username/alpha-sms.git alphasms
+git clone https://github.com/aapka-username/humex-sms.git humexsms
 
 # 3. Folder ke andar jayein
-cd alphasms
+cd humexsms
 
 # 4. Packages install karein
 npm install
@@ -156,7 +156,7 @@ Apne domain provider (Cloudflare, Namecheap, GoDaddy etc.) mein ja kar:
 
 ### Step 9: Nginx Reverse Proxy Configure Karein
 ```bash
-sudo nano /etc/nginx/sites-available/alphasms
+sudo nano /etc/nginx/sites-available/humexsms
 ```
 Neeche wala code paste karein (apna domain replace karein):
 
@@ -188,7 +188,7 @@ Save karein (`Ctrl + O`, `Enter`, `Ctrl + X`).
 
 Ab Nginx ko activate karein:
 ```bash
-sudo ln -s /etc/nginx/sites-available/alphasms /etc/nginx/sites-enabled/
+sudo ln -s /etc/nginx/sites-available/humexsms /etc/nginx/sites-enabled/
 sudo nginx -t
 sudo systemctl reload nginx
 ```
@@ -228,8 +228,8 @@ git push
 VPS par update karne ke liye sirf yeh 3 commands deni hongi:
 ```bash
 # VPS terminal par:
-cd /var/www/alphasms
+cd /var/www/humexsms
 git pull
-pm2 restart alpha-sms
+pm2 restart humex-sms
 ```
 Bus! New update foran VPS par live ho jayegi bina kisi data loss ke.

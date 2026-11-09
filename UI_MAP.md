@@ -1,10 +1,10 @@
-# Alpha SMS — UI Map & Design System
+# HUMEX SMS — UI Map & Design System
 
 This document outlines the user interface architecture, shared component standards, CSS classes, and page map across all four role portals.
 
 ---
 
-## 1. Universal Design System (`speed-panel.css`)
+## 1. Universal Design System (`humex-panel.css`)
 
 All pages across Owner, Manager, Agent, and Client portals adhere strictly to a single unified UI design language:
 
@@ -81,7 +81,7 @@ Used on all reporting, CDR, and inventory pages:
 
 ## 2. Page Inventory by Portal
 
-### 2.1 Owner / Admin Portal (`Alpha SMS/static/index.html` + `app.js`)
+### 2.1 Owner / Admin Portal (`HUMEX SMS/static/index.html` + `owner-engine.js`)
 
 | Page Route | Function Handler | Core Features |
 |---|---|---|
@@ -98,7 +98,7 @@ Used on all reporting, CDR, and inventory pages:
 | `clients` | `renderClients()` | View all downline clients across all agents |
 | `settings` | `renderSettings()` | Global branding: site name, logo, colors, font family |
 
-### 2.2 Manager Portal (`Alpha SMS/static/manager.html` + `speed-pages.js`)
+### 2.2 Manager Portal (`HUMEX SMS/static/manager.html` + `manager-pages.js`)
 
 | Page Route | Function Handler | Core Features |
 |---|---|---|
@@ -112,7 +112,7 @@ Used on all reporting, CDR, and inventory pages:
 | `payout-requests`| `pgPaymentRequests()` | Payment requests submitted by agents |
 | `my-earnings` | `pgCreditNotes()` | Credit notes and payable balances |
 
-### 2.3 Agent Portal (`Alpha SMS/static/agent.html` + `speed-agent-pages.js`)
+### 2.3 Agent Portal (`HUMEX SMS/static/agent.html` + `agent-pages.js`)
 
 | Page Route | Function Handler | Core Features |
 |---|---|---|
@@ -125,7 +125,7 @@ Used on all reporting, CDR, and inventory pages:
 | `sms-test-panel` | `pgSmsTestPanel()` | Agent view of test numbers and incoming test traffic |
 | `payment-requests`| `pgPaymentRequests()`| Request payouts from manager |
 
-### 2.4 Client Portal (`Alpha SMS/static/client.html` + `speed-client-pages.js`)
+### 2.4 Client Portal (`HUMEX SMS/static/client.html` + `client-pages.js`)
 
 | Page Route | Core Features |
 |---|---|
