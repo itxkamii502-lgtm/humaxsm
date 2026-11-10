@@ -384,10 +384,13 @@ function buildSortableNumbersTable(numbersData, rangeInfoFor, rateInfoFor, opts 
 }
 
 function statCard(label, icon, value, color, sub = '', trend = 'up') {
+  const safeLabel = String(label || '').replace(/"/g, '&quot;');
+  const safeVal = String(value ?? '').replace(/"/g, '&quot;');
+  const safeSub = String(sub || '').replace(/"/g, '&quot;');
   return `<div class="stat-card stat-card-ims ${color}">
-    <div class="stat-label">${label}</div>
-    <div class="stat-value">${value}</div>
-    ${sub ? `<div class="stat-change">${sub}</div>` : ''}
+    <div class="stat-label" title="${safeLabel}">${label}</div>
+    <div class="stat-value" title="${safeVal}">${value}</div>
+    ${sub ? `<div class="stat-change" title="${safeSub}">${sub}</div>` : ''}
     <div class="stat-icon-corner"><i class="fas fa-arrow-${trend === 'down' ? 'down' : 'up'}"></i></div>
   </div>`;
 }
@@ -609,7 +612,7 @@ async function pgDashboard() {
     // ── Fetch all data in parallel ──
     const [clients, numbers, dailyStats, announcements, periodStats] = await Promise.all([
       apiFetch(`/api/clients?agent_id=${AGENT_ID}&limit=100`),
-      apiFetch(`/api/numbers?agent_id=${AGENT_ID}&limit=100000`),
+      apiFetch(`/api/numbers?agent_id=${AGENT_ID}&limit=1`),
       apiFetch(`/api/sms/daily-stats?agent_id=${AGENT_ID}`),
       apiFetch(buildAnnouncementsUrl('Agent', AGENT_ID, AGENT_USER.manager_id)),
       apiFetch(`/api/sms/period-stats?agent_id=${AGENT_ID}`).catch(() => null)
@@ -2395,7 +2398,7 @@ async function pgDetailedSms(page = 1) {
               escapeHtml(s.cli || '—'),
               `<span class="text-muted">${escapeHtml(s.message || '—')}</span>`,
               'USD',
-              `<span class="text-success">$${(s.profit || 0).toFixed ? (s.profit || 0).toFixed(4) : s.profit}</span>`
+              `<span class="text-success">$${Number(s.my_payout ?? s.agent_amount ?? s.agent_payout ?? s.profit ?? 0).toFixed(4)}</span>`
             ];
           })
         )}

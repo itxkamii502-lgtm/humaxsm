@@ -1092,25 +1092,76 @@
         }
       }
       @media (max-width: 640px) {
-        .stats-grid, body.rmsui .stats-grid, .adminui .zy-strips,
-        .zy-strips, .zy-circles, .adminui .zy-tiles, .zy-tiles,
-        .settings-stops-grid, .settings-presets-grid,
-        div[style*="grid-template-columns: 1fr 1fr"],
-        div[style*="grid-template-columns:1fr 1fr"],
+        .stats-grid, body.rmsui .stats-grid,
+        .stat-grid, .kpi-grid, .sp-kpi-grid,
+        div[style*="grid-template-columns: repeat(2, 1fr)"],
+        div[style*="grid-template-columns:repeat(2, 1fr)"],
         div[style*="grid-template-columns: repeat(3, 1fr)"],
         div[style*="grid-template-columns:repeat(3, 1fr)"],
         div[style*="grid-template-columns:repeat(3,1fr)"],
         div[style*="grid-template-columns: repeat(4, 1fr)"],
         div[style*="grid-template-columns:repeat(4, 1fr)"],
         div[style*="grid-template-columns:repeat(4,1fr)"] {
-          grid-template-columns: 1fr !important;
-          display: flex !important;
-          flex-direction: column !important;
-          width: 100% !important;
-        }
-        .stat-card, body.rmsui .stat-card {
+          grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+          display: grid !important;
+          flex-direction: unset !important;
+          gap: 8px 10px !important;
           width: 100% !important;
           box-sizing: border-box !important;
+        }
+        .stat-card, body.rmsui .stat-card, .stat-card-ims {
+          width: 100% !important;
+          min-width: 0 !important;
+          max-width: 100% !important;
+          box-sizing: border-box !important;
+          padding: 10px 12px !important;
+          min-height: auto !important;
+          border-radius: 8px !important;
+          overflow: hidden !important;
+          position: relative !important;
+        }
+        .stat-card .stat-label, body.rmsui .stat-card .stat-label, body.rmsui .stat-label {
+          font-size: 10.5px !important;
+          font-weight: 700 !important;
+          text-transform: uppercase !important;
+          letter-spacing: 0.3px !important;
+          margin-bottom: 4px !important;
+          white-space: nowrap !important;
+          overflow: hidden !important;
+          text-overflow: ellipsis !important;
+          display: block !important;
+          max-width: 100% !important;
+          line-height: 1.25 !important;
+        }
+        .stat-card .stat-value, body.rmsui .stat-card .stat-value, body.rmsui .stat-value {
+          font-size: 18px !important;
+          font-weight: 800 !important;
+          line-height: 1.2 !important;
+          white-space: nowrap !important;
+          overflow: hidden !important;
+          text-overflow: ellipsis !important;
+          display: block !important;
+          max-width: 100% !important;
+        }
+        .stat-card .stat-change, body.rmsui .stat-card .stat-change {
+          font-size: 10.5px !important;
+          line-height: 1.2 !important;
+          margin-top: 3px !important;
+          white-space: nowrap !important;
+          overflow: hidden !important;
+          text-overflow: ellipsis !important;
+          display: block !important;
+          max-width: 100% !important;
+          opacity: 0.85 !important;
+        }
+        .stat-card .stat-icon-corner, body.rmsui .stat-card .stat-icon-corner {
+          width: 20px !important;
+          height: 20px !important;
+          right: 6px !important;
+          bottom: 6px !important;
+          font-size: 9px !important;
+          opacity: 0.22 !important;
+          pointer-events: none !important;
         }
         input[type="text"], input[type="number"], input[type="password"],
         input[type="email"], select, textarea {

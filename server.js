@@ -280,6 +280,52 @@ function flushPendingWrites() {
   for (const [name, t] of Array.from(debounceTimers.entries())) { clearTimeout(t); debounceTimers.delete(name); const cur = DB_CACHE.get(name); if (cur) writeDb(name, cur); }
 }
 
+// ── High-Performance Indexed In-Memory Lookup for Numbers & Ingestion ──
+let CACHED_NUMBERS_BY_DIGITS = null;
+let CACHED_NUMBERS_BY_RAW = null;
+let CACHED_NUMBERS_MTIME = 0;
+
+function getIndexedNumbers() {
+  const currentMtime = DB_MTIME.get('numbers') || 0;
+  if (!CACHED_NUMBERS_BY_DIGITS || CACHED_NUMBERS_MTIME !== currentMtime) {
+    const numbers = readDb('numbers') || [];
+    const byDigits = new Map();
+    const byRaw = new Map();
+    for (let i = 0; i < numbers.length; i++) {
+      const n = numbers[i];
+      if (!n) continue;
+      const raw = String(n.number || '').trim();
+      const d = raw.replace(/\D/g, '');
+      if (raw && !byRaw.has(raw)) byRaw.set(raw, n);
+      if (d && !byDigits.has(d)) byDigits.set(d, n);
+    }
+    CACHED_NUMBERS_BY_DIGITS = byDigits;
+    CACHED_NUMBERS_BY_RAW = byRaw;
+    CACHED_NUMBERS_MTIME = currentMtime;
+  }
+  return { byDigits: CACHED_NUMBERS_BY_DIGITS, byRaw: CACHED_NUMBERS_BY_RAW };
+}
+
+let CACHED_TEST_NUMBERS_MAP = null;
+let CACHED_TEST_NUMBERS_MTIME = 0;
+
+function getIndexedTestNumbers() {
+  const currentMtime = DB_MTIME.get('test_numbers') || 0;
+  if (!CACHED_TEST_NUMBERS_MAP || CACHED_TEST_NUMBERS_MTIME !== currentMtime) {
+    const list = readDb('test_numbers') || [];
+    const byNum = new Map();
+    for (let i = 0; i < list.length; i++) {
+      const item = list[i];
+      if (!item) continue;
+      const raw = String(item.number || '').trim();
+      if (raw) byNum.set(raw, item);
+    }
+    CACHED_TEST_NUMBERS_MAP = byNum;
+    CACHED_TEST_NUMBERS_MTIME = currentMtime;
+  }
+  return CACHED_TEST_NUMBERS_MAP;
+}
+
 // SMS id counter (persisted, never recomputed from a huge array on every SMS)
 let smsLastId = null;
 function nextSmsId(log) {
@@ -379,42 +425,61 @@ function readArchivedJsonCached(filePath) {
 
 function readSmsWithArchive(fromDate) {
   const current = readDb('sms_log') || [];
-  const out = [];
-  const seenIds = new Set();
-  for (const r of current) {
-    if (r && r.id != null) seenIds.add(String(r.id));
-    out.push(r);
-  }
+  let archiveFiles = [];
   try {
     if (fs.existsSync(ARCHIVE_DIR)) {
       const fromMonth = fromDate ? String(fromDate).slice(0, 7) : '0000-00';
       const files = fs.readdirSync(ARCHIVE_DIR);
-      for (const f of files) {
+      archiveFiles = files.filter(f => {
         const m = /^sms_log_(\d{4}-\d{2})\.json$/.exec(f);
-        if (!m || m[1] < fromMonth) continue;
-        const archived = readArchivedJsonCached(path.join(ARCHIVE_DIR, f));
-        for (const r of archived) {
-          const idStr = r && r.id != null ? String(r.id) : null;
-          if (!idStr || !seenIds.has(idStr)) {
-            if (idStr) seenIds.add(idStr);
-            out.push(r);
-          }
-        }
-      }
+        return m && m[1] >= fromMonth;
+      });
     }
   } catch (e) { /* ignore */ }
+
+  if (!archiveFiles.length) {
+    return current;
+  }
+
+  const out = current.slice();
+  const seenIds = new Set();
+  for (let i = 0; i < current.length; i++) {
+    const r = current[i];
+    if (r && r.id != null) seenIds.add(String(r.id));
+  }
+  for (const f of archiveFiles) {
+    const archived = readArchivedJsonCached(path.join(ARCHIVE_DIR, f));
+    for (let i = 0; i < archived.length; i++) {
+      const r = archived[i];
+      const idStr = r && r.id != null ? String(r.id) : null;
+      if (!idStr || !seenIds.has(idStr)) {
+        if (idStr) seenIds.add(idStr);
+        out.push(r);
+      }
+    }
+  }
   return out;
 }
 // Real traffic counters (no random numbers)
 const recentSmsTs = [];
 function noteSmsArrival() { const now = Date.now(); recentSmsTs.push(now); while (recentSmsTs.length && recentSmsTs[0] < now - 60000) recentSmsTs.shift(); }
+
+let CACHED_SAMPLE_LOG = null;
+let CACHED_SAMPLE_MTIME = 0;
+let CACHED_SAMPLE_RATE = 0;
+
 function liveTrafficStats() {
   const now = Date.now(); while (recentSmsTs.length && recentSmsTs[0] < now - 60000) recentSmsTs.shift();
   const last10 = recentSmsTs.filter(t => t >= now - 10000).length;
-  const log = readDb('sms_log') || [];
-  const sample = log.slice(0, 200);
-  const rate = sample.length ? Math.round(sample.filter(r => r.status === 'delivered').length / sample.length * 100) : 0;
-  return { mps: Math.round(last10 / 10 * 10) / 10, per_minute: recentSmsTs.length, success_rate: rate, dlr: rate };
+  const mtime = DB_MTIME.get('sms_log') || 0;
+  if (!CACHED_SAMPLE_LOG || CACHED_SAMPLE_MTIME !== mtime) {
+    const log = readDb('sms_log') || [];
+    const sample = log.slice(0, 200);
+    CACHED_SAMPLE_RATE = sample.length ? Math.round(sample.filter(r => r.status === 'delivered').length / sample.length * 100) : 0;
+    CACHED_SAMPLE_LOG = sample;
+    CACHED_SAMPLE_MTIME = mtime;
+  }
+  return { mps: Math.round(last10 / 10 * 10) / 10, per_minute: recentSmsTs.length, success_rate: CACHED_SAMPLE_RATE, dlr: CACHED_SAMPLE_RATE };
 }
 function newSecretToken(prefix = 'tok_') { return prefix + crypto.randomBytes(24).toString('hex'); }
 function sha256Hex(v) { return crypto.createHash('sha256').update(String(v)).digest('hex'); }
@@ -912,10 +977,12 @@ function ingestSms({
       return { status: 'error', error: 'Missing number or message' };
     }
 
-    const testNumbers = readDb('test_numbers') || [];
-    const testNumRec = testNumbers.find(n => n.number === cleanTo);
-    const numbersPool = readDb('numbers') || [];
-    const assignedNumberRec = numbersPool.find(n => n.number === cleanTo && (n.manager_id || n.agent_id || n.client_id));
+    const testNumMap = getIndexedTestNumbers();
+    const testNumRec = testNumMap.get(cleanTo) || null;
+    const { byDigits, byRaw } = getIndexedNumbers();
+    const digits = cleanTo.replace(/\D/g, '');
+    let numberRec = byRaw.get(cleanTo) || byDigits.get(digits) || null;
+    const assignedNumberRec = (numberRec && (numberRec.manager_id || numberRec.agent_id || numberRec.client_id)) ? numberRec : null;
 
     // Handle test numbers pool - write to test_sms_logs for testpanel visibility
     if (testNumRec) {
@@ -964,8 +1031,9 @@ function ingestSms({
       return { status: 'ok', duplicate: true, sms_id: sms_id || dedupeKey };
     }
 
-    const digits = cleanTo.replace(/\D/g, '');
-    let numberRec = numbersPool.find(n => (n.number || '').replace(/\D/g, '') === digits);
+    if (!numberRec) {
+      numberRec = byRaw.get(cleanTo) || byDigits.get(digits) || null;
+    }
 
     const ranges = readDb('sms_ranges') || [];
     const rateCard = readDb('rate_card') || [];
@@ -1717,6 +1785,12 @@ app.use((req, res, next) => {
    HUMEX SMS REBRANDING COMPATIBILITY ALIAS MIDDLEWARE (END)
    ══════════════════════════════════════════════════════════════════════════ */
 
+const uploadsDir = path.join(DATA_DIR, 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  try { fs.mkdirSync(uploadsDir, { recursive: true }); } catch (_) {}
+}
+app.use('/static/img', express.static(uploadsDir, staticOpts));
+app.use('/uploads', express.static(uploadsDir, staticOpts));
 app.use('/static', express.static(STATIC_DIR, staticOpts));
 app.use('/css', express.static(path.join(STATIC_DIR, 'css'), staticOpts));
 app.use('/js', express.static(path.join(STATIC_DIR, 'js'), staticOpts));
@@ -2976,7 +3050,7 @@ const API_RULES = [
   { p: /^\/(rate-limits|testpanel-accounts)(\/|$)/, roles: ['owner'] },
   { m: WRITE_METHODS, p: /^\/(settings|permissions|payout-rates|services|registration-requests|payterms)(\/|$)/, roles: ['owner'] },
   { m: WRITE_METHODS, p: /^\/numbers\/(sms-ranges|rate-card)(\/.*)?$/, roles: ['owner'] },
-  { m: WRITE_METHODS, p: /^\/number-transfers(\/|$)/, roles: ['owner'] },
+  { m: WRITE_METHODS, p: /^\/number-transfers(\/|$)/, roles: ['owner', 'manager'] },
   { m: new Set(['POST']), p: /^\/notifications$/, roles: ['owner'] },
   { m: new Set(['PATCH', 'DELETE']), p: /^\/payout-requests(\/|$)/, roles: ['owner', 'manager'] },
   { m: new Set(['POST']), p: /^\/payout-requests(\/|$)/, roles: ['owner', 'manager', 'agent', 'client'] },
@@ -2992,7 +3066,7 @@ const CLIENT_ALLOW = [
   { m: new Set(['GET']), p: /^\/numbers\/rate-card$/ },
   { m: new Set(['POST']), p: /^\/numbers\/(\d+\/)?return$/ },
   { m: new Set(['GET']), p: /^\/sms\/(logs|export|client-logs|daily-stats|period-stats|client-stats|stats|test-logs|test-numbers|test-stats)$/ },
-  { m: new Set(['GET']), p: /^\/clients(\/\d+)?$/ },
+  { m: new Set(['GET', 'PATCH']), p: /^\/clients(\/\d+)?$/ },
   { m: new Set(['GET']), p: /^\/client\/\d+\// },
   { m: new Set(['GET']), p: /^\/(cli-search|credit-notes)(\/|$)/ },
   { m: new Set(['GET', 'POST']), p: /^\/payout-requests(\/|$)/ },
@@ -3169,11 +3243,10 @@ app.post('/api/auth/login', (req, res) => {
     ? ('login_user:' + clientIp + ':' + user.id)
     : ('login_user:' + clientIp + ':unknown:' + cleanU);
 
-  if (!isOwnerOrAdmin) {
-    const userBucket = rateLimitBuckets.get(userLockKey);
-    if (userBucket && (Date.now() - userBucket.start < 15 * 60 * 1000) && userBucket.count >= 5) {
-      return res.status(429).json({ success: false, error: 'Too many failed login attempts. Please wait 15 minutes before trying again.', detail: 'Rate limit exceeded' });
-    }
+  const maxLoginAttempts = isOwnerOrAdmin ? 10 : 5;
+  const userBucket = rateLimitBuckets.get(userLockKey);
+  if (userBucket && (Date.now() - userBucket.start < 15 * 60 * 1000) && userBucket.count >= maxLoginAttempts) {
+    return res.status(429).json({ success: false, error: 'Too many failed login attempts. Please wait 15 minutes before trying again.', detail: 'Rate limit exceeded' });
   }
 
   // Password Verification: strict bcrypt verification
@@ -3206,7 +3279,7 @@ app.post('/api/auth/login', (req, res) => {
       const is2faValid = verifyTotp(two_fa_code, user.two_fa_secret) ||
         (Array.isArray(user.two_fa_backup_codes) && user.two_fa_backup_codes.includes(String(two_fa_code).trim()));
       if (!is2faValid) {
-        if (!isOwnerOrAdmin) isRateLimited(userLockKey, 5, 15 * 60 * 1000);
+        isRateLimited(userLockKey, maxLoginAttempts, 15 * 60 * 1000);
         return res.status(401).json({
           success: false,
           require_2fa: true,
@@ -3262,10 +3335,10 @@ app.post('/api/auth/login', (req, res) => {
     res.setHeader('Set-Cookie', [
       `alpha_session_token=${sessionToken}; Path=/; HttpOnly; SameSite=${sameSite}; Max-Age=86400${sec}`,
       `alpha_session_role=${role}; Path=/; SameSite=${sameSite}; Max-Age=86400${sec}`,
-      `session_token=${sessionToken}; Path=/; SameSite=${sameSite}; Max-Age=86400${sec}`
+      `session_token=${sessionToken}; Path=/; HttpOnly; SameSite=${sameSite}; Max-Age=86400${sec}`
     ]);
 
-    if (!isOwnerOrAdmin) rateLimitBuckets.delete(userLockKey);
+    rateLimitBuckets.delete(userLockKey);
     logAudit(user.username, 'Login Success', `Logged in as ${role}`, 'Auth');
 
     return res.json({
@@ -3281,7 +3354,7 @@ app.post('/api/auth/login', (req, res) => {
     });
   }
 
-  if (!isOwnerOrAdmin) isRateLimited(userLockKey, 5, 15 * 60 * 1000);
+  isRateLimited(userLockKey, maxLoginAttempts, 15 * 60 * 1000);
   logAudit(u, 'Login Failed', 'Invalid username or password', 'Auth');
   return res.status(401).json({ success: false, error: 'Invalid username or password', detail: 'Invalid username or password' });
 });
@@ -3467,7 +3540,8 @@ function handleSessionLogout(req, res) {
   const sec = isHttps ? '; Secure' : '';
   res.setHeader('Set-Cookie', [
     `alpha_session_token=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; SameSite=Lax${sec}`,
-    `alpha_session_role=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax${sec}`
+    `alpha_session_role=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax${sec}`,
+    `session_token=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; SameSite=Lax${sec}`
   ]);
   res.json({ success: true, message: 'Logged out successfully' });
 }
@@ -4796,6 +4870,8 @@ app.get(['/api/payments', '/api/payments/balance', '/api/payments/summary'], req
 
   const balance = Math.round((earned - totalPaid) * 10000) / 10000;
   const availableBalance = Math.max(0, Math.round((earned - totalPaid - pendingHold) * 10000) / 10000);
+  const userRec = findUserAnywhere(sessionUser.username)?.user;
+  const dbBalance = userRec && userRec.balance !== undefined ? Number(userRec.balance) : balance;
 
   res.json({
     success: true,
@@ -4807,6 +4883,8 @@ app.get(['/api/payments', '/api/payments/balance', '/api/payments/summary'], req
     pending_hold: Math.round(pendingHold * 10000) / 10000,
     available_balance: availableBalance,
     balance: balance,
+    main_balance: Math.round(dbBalance * 10000) / 10000,
+    ledger_balance: balance,
     payouts: userPayouts
   });
 });
@@ -4858,14 +4936,18 @@ app.post('/api/payments', requireAuth, (req, res) => {
     }
   }
 
-  const finalUsername = targetUser ? targetUser.username : (recipient_username || `user_${recipient_id}`);
+  if (!targetUser) {
+    return res.status(404).json({ error: 'Recipient user not found. Please provide a valid username or ID.' });
+  }
+
+  const finalUsername = targetUser.username;
   const finalRole = targetRole || (recipient_role || 'Client');
 
   if (isAgent) {
     if (finalRole.toLowerCase() !== 'client') {
       return res.status(403).json({ error: 'Agents can only record payouts for Clients.' });
     }
-    if (targetUser && targetUser.agent_id && Number(targetUser.agent_id) !== Number(sessionUser.id)) {
+    if (Number(targetUser.agent_id) !== Number(sessionUser.id)) {
       return res.status(403).json({ error: 'Access denied. This client does not belong to your account.' });
     }
   }
@@ -4873,21 +4955,19 @@ app.post('/api/payments', requireAuth, (req, res) => {
     if (finalRole.toLowerCase() !== 'agent') {
       return res.status(403).json({ error: 'Managers can only record payouts for Agents.' });
     }
-    if (targetUser && targetUser.manager_id && Number(targetUser.manager_id) !== Number(sessionUser.id)) {
+    if (Number(targetUser.manager_id) !== Number(sessionUser.id)) {
       return res.status(403).json({ error: 'Access denied. This agent does not belong to your account.' });
     }
   }
 
   // Check available balance of recipient
-  if (targetUser) {
-    const curBal = Number(targetUser.balance || 0);
-    if (curBal < numAmount) {
-      return res.status(400).json({ error: `Insufficient balance. Recipient only has $${curBal.toFixed(2)} available.` });
-    }
+  const curBal = Number(targetUser.balance || 0);
+  if (curBal < numAmount) {
+    return res.status(400).json({ error: `Insufficient balance. Recipient only has $${curBal.toFixed(4)} available.` });
   }
 
   const payouts = readDb('payout_requests') || [];
-  const targetId = targetUser ? targetUser.id : (recipient_id ? Number(recipient_id) : null);
+  const targetId = targetUser.id;
   const rec = {
     id: nextId(payouts),
     user: finalUsername,
@@ -4912,15 +4992,13 @@ app.post('/api/payments', requireAuth, (req, res) => {
   writeDb('payout_requests', payouts);
 
   // Synchronize balance reduction on recipient
-  if (targetUser) {
-    const tbl = finalRole.toLowerCase() === 'agent' ? 'agents' : (finalRole.toLowerCase() === 'client' ? 'clients' : 'users');
-    const records = readDb(tbl) || [];
-    const idx = records.findIndex(r => r && (r.id === targetUser.id || r.username === targetUser.username));
-    if (idx !== -1) {
-      const curBal = Number(records[idx].balance || 0);
-      records[idx].balance = Math.max(0, Math.round((curBal - numAmount) * 100) / 100);
-      writeDb(tbl, records);
-    }
+  const tbl = finalRole.toLowerCase() === 'agent' ? 'agents' : (finalRole.toLowerCase() === 'client' ? 'clients' : 'users');
+  const records = readDb(tbl) || [];
+  const idx = records.findIndex(r => r && (r.id === targetUser.id || r.username === targetUser.username));
+  if (idx !== -1) {
+    const curBalRec = Number(records[idx].balance || 0);
+    records[idx].balance = Math.max(0, Math.round((curBalRec - numAmount) * 1000000) / 1000000);
+    writeDb(tbl, records);
   }
 
   logAudit(sessionUser.username, 'Record Payout', `Paid ${numAmount} to ${finalRole} ${finalUsername}`, 'Payments');
@@ -7022,8 +7100,10 @@ function registerPaginatedCrud(routePath, tableName) {
     }
 
     const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 10000;
-    const start = (page - 1) * limit;
+    const rawLimit = String(req.query.limit || '').trim().toLowerCase();
+    const isAll = rawLimit === 'all' || rawLimit === '0' || rawLimit === '-1';
+    const limit = isAll ? data.length : Math.max(1, Math.min(10000, parseInt(req.query.limit) || 1000));
+    const start = isAll ? 0 : (page - 1) * limit;
 
     let slice = data.slice(start, start + limit);
     if (tableName === 'clients') {
@@ -7340,8 +7420,10 @@ function registerPaginatedCrud(routePath, tableName) {
         }
       }
       if (tableName === 'clients') {
+        const isClient = sRole === 'client';
         const canEdit = (isAgent && Number(existing.agent_id) === Number(sessionUser.id)) ||
-                        (isManager && Number(existing.manager_id) === Number(sessionUser.id));
+                        (isManager && Number(existing.manager_id) === Number(sessionUser.id)) ||
+                        (isClient && Number(existing.id) === Number(sessionUser.id));
         if (!canEdit) {
           return res.status(403).json({ error: 'Forbidden. You can only modify your own clients.' });
         }
@@ -9211,6 +9293,36 @@ registerPaginatedCrud('payout-requests', 'payout_requests');
 registerPaginatedCrud('bank-accounts', 'bank_accounts');
 registerPaginatedCrud('testpanel-accounts', 'testpanel_credentials');
 registerPaginatedCrud('number-transfers', 'number_transfers');
+app.post('/api/number-transfers/:id/cancel', requireAuth, (req, res) => {
+  const sessionUser = req.sessionUser;
+  const sRole = (sessionUser.role || '').toLowerCase();
+  const isOwner = sRole === 'owner' || sRole === 'admin';
+  const isManager = sRole === 'manager';
+
+  if (!isOwner && !isManager) {
+    return res.status(403).json({ success: false, error: 'Only Owner and Managers can cancel number transfers.' });
+  }
+
+  const transferId = Number(req.params.id);
+  const transfers = readDb('number_transfers') || [];
+  const idx = transfers.findIndex(t => Number(t.id) === transferId);
+
+  if (idx === -1) {
+    return res.status(404).json({ success: false, error: 'Transfer not found.' });
+  }
+
+  const transfer = transfers[idx];
+  if (isManager && Number(transfer.manager_id) !== Number(sessionUser.id) && String(transfer.manager_username || '').toLowerCase() !== String(sessionUser.username).toLowerCase()) {
+    return res.status(403).json({ success: false, error: 'Access denied. You can only cancel transfers for your own account.' });
+  }
+
+  transfers[idx].status = 'cancelled';
+  transfers[idx].updated_at = new Date().toISOString();
+  writeDb('number_transfers', transfers);
+
+  logAudit(sessionUser.username, 'Cancel Transfer', `Cancelled number transfer #${transferId}`, 'Transfers');
+  return res.json({ success: true, message: 'Transfer cancelled successfully', transfer: transfers[idx] });
+});
 registerPaginatedCrud('login-activity', 'login_activity');
 
 // ── Notifications Endpoints (Real-time Sensitive) ────────────
@@ -10863,10 +10975,19 @@ function handleSmsLogsQuery(req, res) {
           grp.failed_count++;
         }
 
-        const p = parseFloat(s.payout ?? s.profit ?? 0) || 0;
+        let rolePayout = 0;
+        if (isAgent) {
+          rolePayout = parseFloat(s.agent_amount != null ? s.agent_amount : s.agent_payout) || 0;
+        } else if (isManager) {
+          rolePayout = parseFloat(s.manager_amount != null ? s.manager_amount : s.manager_payout) || 0;
+        } else if (isClient) {
+          rolePayout = parseFloat(s.client_amount != null ? s.client_amount : s.client_payout) || 0;
+        } else {
+          rolePayout = parseFloat(s.payout ?? s.profit ?? 0) || 0;
+        }
         const cp = parseFloat(s.client_payout ?? s.client_amount ?? 0) || 0;
         const prof = parseFloat(s.profit ?? s.owner_amount ?? 0) || 0;
-        grp.payout = Math.round((grp.payout + p) * 10000) / 10000;
+        grp.payout = Math.round((grp.payout + rolePayout) * 10000) / 10000;
         grp.client_payout = Math.round((grp.client_payout + cp) * 10000) / 10000;
         grp.profit = Math.round((grp.profit + prof) * 10000) / 10000;
       }
@@ -10939,7 +11060,8 @@ function handleSmsLogsQuery(req, res) {
       const totalPages = isAll ? 1 : (limit > 0 ? Math.ceil(groupedResult.length / limit) : 1);
       if (!isOwner) delete summary.profit;
 
-      const safeGroupedResult = isOwner ? sliced : sliced.map(g => {
+      const pageSlice = isAll ? groupedResult : groupedResult.slice(start, start + limit);
+      const safeGroupedResult = isOwner ? pageSlice : pageSlice.map(g => {
         const copy = { ...g };
         delete copy.profit;
         if (copy.cli) copy.cli = serverMaskCli(copy.cli);
@@ -10972,10 +11094,19 @@ function handleSmsLogsQuery(req, res) {
   for (const s of list) {
     if (s.status === 'delivered' || s.status === 'success') totalDelivered++;
     else if (s.status === 'failed') totalFailed++;
-    const p = parseFloat(s.payout ?? s.profit ?? 0) || 0;
+    let rolePayout = 0;
+    if (isAgent) {
+      rolePayout = parseFloat(s.agent_amount != null ? s.agent_amount : s.agent_payout) || 0;
+    } else if (isManager) {
+      rolePayout = parseFloat(s.manager_amount != null ? s.manager_amount : s.manager_payout) || 0;
+    } else if (isClient) {
+      rolePayout = parseFloat(s.client_amount != null ? s.client_amount : s.client_payout) || 0;
+    } else {
+      rolePayout = parseFloat(s.payout ?? s.profit ?? 0) || 0;
+    }
     const cp = parseFloat(s.client_payout ?? s.client_amount ?? 0) || 0;
     const pr = parseFloat(s.profit ?? s.owner_amount ?? 0) || 0;
-    totalPayout += p;
+    totalPayout += rolePayout;
     totalClientPayout += cp;
     totalProfit += pr;
 
@@ -10983,7 +11114,7 @@ function handleSmsLogsQuery(req, res) {
     if (!currencies[cur]) {
       currencies[cur] = { in: 0, out: 0, profit: 0, count: 0 };
     }
-    currencies[cur].in += p;
+    currencies[cur].in += rolePayout;
     currencies[cur].out += cp;
     currencies[cur].profit += pr;
     currencies[cur].count++;
@@ -11101,10 +11232,19 @@ function handleSmsLogsQuery(req, res) {
         delete item.agent_rate;
         delete item.manager_amount;
         delete item.manager_percent;
+        item.my_payout = Number(item.client_amount != null ? item.client_amount : (item.client_payout || 0));
+        item.payout = item.my_payout;
       } else if (isAgent) {
         delete item.manager_amount;
         delete item.manager_percent;
+        item.my_payout = Number(item.agent_amount != null ? item.agent_amount : (item.agent_payout || 0));
+        item.payout = item.my_payout;
+      } else if (isManager) {
+        item.my_payout = Number(item.manager_amount != null ? item.manager_amount : (item.manager_payout || 0));
+        item.payout = item.my_payout;
       }
+    } else {
+      item.my_payout = Number(item.owner_amount != null ? item.owner_amount : (item.profit || 0));
     }
     return item;
   });
@@ -11916,6 +12056,13 @@ app.post('/api/settings/upload-logo', (req, res) => {
     const filePath = path.join(imgDir, filename);
     fs.writeFileSync(filePath, buffer);
 
+    // Also persist custom logo into uploadsDir (DATA_DIR/uploads) so it survives VPS code updates
+    try {
+      if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+      fs.writeFileSync(path.join(uploadsDir, filename), buffer);
+      fs.writeFileSync(path.join(uploadsDir, 'custom-logo.png'), buffer);
+    } catch (_) {}
+
     // Also maintain custom-logo.png and sync all fallbacks so old logos never persist
     try {
       fs.writeFileSync(path.join(imgDir, 'custom-logo.png'), buffer);
@@ -12043,12 +12190,14 @@ app.get(['/api/download-project-zip', '/download-project', '/api/project/downloa
     const safePrefix = siteName.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'humex_sms';
     const downloadFilename = `humex-sms-complete-project.zip`;
 
-    let zipPath = path.join(__dirname, 'Humex-SMS-Production-VPS.zip');
-    if (!fs.existsSync(zipPath)) {
-      zipPath = path.join(__dirname, 'Alpha-SMS-Production-VPS.zip');
+    const distDir = path.join(__dirname, 'dist');
+    let zipPath = null;
+    if (fs.existsSync(distDir)) {
+      const zips = fs.readdirSync(distDir).filter(f => f.startsWith('humex-sms-vps-') && f.endsWith('.zip')).sort().reverse();
+      if (zips.length > 0) zipPath = path.join(distDir, zips[0]);
     }
-    if (!fs.existsSync(zipPath)) {
-      return res.status(404).json({ error: 'Project zip file not found' });
+    if (!zipPath || !fs.existsSync(zipPath)) {
+      return res.status(404).json({ error: 'Production VPS package not found in dist/. Please run build script first.' });
     }
     const stat = fs.statSync(zipPath);
     res.setHeader('Content-Type', 'application/zip');
@@ -12436,16 +12585,19 @@ wss.on('connection', (ws, req) => {
   ws.user = { id: user.id, role: user.role, username: user.username };
   const now = new Date().toISOString();
   ws.send(JSON.stringify({ type: 'connected', time: now, timestamp: now }));
+  ws.on('error', () => { /* ignore unhandled socket drops */ });
   const interval = setInterval(() => {
     if (ws.readyState === 1) {
       const ts = new Date().toISOString();
       const live = liveTrafficStats();
+      const cachedLog = DB_CACHE.get('sms_log');
+      const totalCount = Array.isArray(cachedLog) ? cachedLog.length : (readDb('sms_log') || []).length;
       ws.send(JSON.stringify({
         type: 'heartbeat',
         time: ts,
         timestamp: ts,
         mps: live.mps,
-        total: (readDb('sms_log') || []).length,
+        total: totalCount,
         success_rate: live.success_rate,
         dlr: live.dlr
       }));

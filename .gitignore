@@ -1,15 +1,17 @@
 node_modules
 dist
+*.zip
+*.tar
+*.gz
 .env
 .env.*
 .DS_Store
-Alpha SMS/data/sessions/*
-
+humex-sms/data/sessions/*
+humex-sms/data/archive/
+humex-sms/data/sms_log.journal.ndjson
+humex-sms/data/sessions.json
+humex-sms/data/*.key
+humex-sms/data/.smpp.key
+humex-sms/data/backups/
 _removed_backups/
 backups/
-Alpha SMS/data/archive/
-Alpha SMS/data/sms_log.journal.ndjson
-Alpha SMS/data/sessions.json
-Alpha SMS/data/*.key
-Alpha SMS/data/.smpp.key
-Alpha SMS/data/backups/

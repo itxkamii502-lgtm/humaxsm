@@ -1,1 +1,38 @@
-[]
+[
+  {
+    "id": 1,
+    "panel_name": "OctoPanel_1794305419005",
+    "panel_url": "https://panel.example.com/1794305419005",
+    "token": "tok_test_1794305419005",
+    "interval": 5,
+    "active": true,
+    "last_pulled_at": "2026-11-10T11:56:26.527Z",
+    "last_status": "Error — fetch failed",
+    "total_pulled": 0,
+    "created": "2026-11-10T10:10:19.012Z"
+  },
+  {
+    "id": 2,
+    "panel_name": "OctoPanel_1794311109016",
+    "panel_url": "https://panel.example.com/1794311109016",
+    "token": "tok_test_1794311109016",
+    "interval": 5,
+    "active": true,
+    "last_pulled_at": "2026-11-10T11:56:26.527Z",
+    "last_status": "Error — fetch failed",
+    "total_pulled": 0,
+    "created": "2026-11-10T11:45:09.018Z"
+  },
+  {
+    "id": 3,
+    "panel_name": "OctoPanel_1794311787365",
+    "panel_url": "https://panel.example.com/1794311787365",
+    "token": "tok_test_1794311787365",
+    "interval": 5,
+    "active": true,
+    "last_pulled_at": "2026-11-10T11:56:27.371Z",
+    "last_status": "Error — fetch failed",
+    "total_pulled": 0,
+    "created": "2026-11-10T11:56:27.367Z"
+  }
+]

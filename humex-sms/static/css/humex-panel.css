@@ -2442,9 +2442,9 @@ body.rmsui .table-wrap td {
 body.rmsui .table-wrap tr:hover td { background: var(--sp-bg-hover) !important; }
 
 /* stat cards → clean 12px radius cards */
-body.rmsui .stats-grid { display: grid; grid-template-columns: 1fr; gap: var(--sp-space-4); margin-bottom: var(--sp-space-5); }
-@media (min-width: 768px)  { body.rmsui .stats-grid { grid-template-columns: repeat(2, 1fr); } }
-@media (min-width: 1200px) { body.rmsui .stats-grid { grid-template-columns: repeat(4, 1fr); } }
+body.rmsui .stats-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-space-3); margin-bottom: var(--sp-space-5); }
+@media (min-width: 768px)  { body.rmsui .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 1024px) { body.rmsui .stats-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 body.rmsui .stat-card {
   background: var(--sp-bg-card) !important;
   border: 1px solid var(--sp-border) !important;
@@ -2847,12 +2847,70 @@ body.rmsui .monospace { font-family: Menlo, Consolas, monospace; font-size: 11px
   body.rmsui .stat-card,
   .apx-stat-card,
   .zy-stat-card,
-  .sp-card {
+  .sp-card,
+  .stat-card-ims {
     width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
     padding: 10px 12px !important;
     min-height: auto !important;
     border-radius: 8px !important;
     box-sizing: border-box !important;
+    overflow: hidden !important;
+    position: relative !important;
+  }
+
+  .stat-card .stat-label,
+  body.rmsui .stat-card .stat-label,
+  body.rmsui .stat-label {
+    font-size: 10.5px !important;
+    font-weight: 700 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.3px !important;
+    margin-bottom: 4px !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    display: block !important;
+    max-width: 100% !important;
+    line-height: 1.25 !important;
+  }
+
+  .stat-card .stat-value,
+  body.rmsui .stat-card .stat-value,
+  body.rmsui .stat-value {
+    font-size: 18px !important;
+    font-weight: 800 !important;
+    line-height: 1.2 !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    display: block !important;
+    max-width: 100% !important;
+  }
+
+  .stat-card .stat-change,
+  body.rmsui .stat-card .stat-change {
+    font-size: 10.5px !important;
+    line-height: 1.2 !important;
+    margin-top: 3px !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    display: block !important;
+    max-width: 100% !important;
+    opacity: 0.85 !important;
+  }
+
+  .stat-card .stat-icon-corner,
+  body.rmsui .stat-card .stat-icon-corner {
+    width: 20px !important;
+    height: 20px !important;
+    right: 6px !important;
+    bottom: 6px !important;
+    font-size: 9px !important;
+    opacity: 0.22 !important;
+    pointer-events: none !important;
   }
 
   input[type="text"],
@@ -3832,7 +3890,16 @@ body.adminui .zy-main {
 @media (max-width: 399px) {
   .stats-grid,
   body.rmsui .stats-grid {
-    grid-template-columns: 1fr !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 6px 8px !important;
+  }
+  .stat-card,
+  body.rmsui .stat-card {
+    padding: 8px 10px !important;
+  }
+  .stat-card .stat-value,
+  body.rmsui .stat-value {
+    font-size: 16px !important;
   }
   .page-actions .btn {
     flex: 1 1 100% !important;

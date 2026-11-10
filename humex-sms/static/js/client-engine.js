@@ -264,10 +264,13 @@ function buildTable(headers, rows, options = {}) {
 }
 
 function statCard(label, icon, value, color, sub = '', trend = 'up') {
+  const safeLabel = String(label || '').replace(/"/g, '&quot;');
+  const safeVal = String(value ?? '').replace(/"/g, '&quot;');
+  const safeSub = String(sub || '').replace(/"/g, '&quot;');
   return `<div class="stat-card stat-card-ims ${color}">
-    <div class="stat-label">${label}</div>
-    <div class="stat-value">${value}</div>
-    ${sub ? `<div class="stat-change">${sub}</div>` : ''}
+    <div class="stat-label" title="${safeLabel}">${label}</div>
+    <div class="stat-value" title="${safeVal}">${value}</div>
+    ${sub ? `<div class="stat-change" title="${safeSub}">${sub}</div>` : ''}
     <div class="stat-icon-corner"><i class="fas fa-arrow-${trend === 'down' ? 'down' : 'up'}"></i></div>
   </div>`;
 }
@@ -808,7 +811,7 @@ async function pgMySms(page = 1) {
         </div>
       </div>
 
-      <div class="stats-grid" style="grid-template-columns:1fr;margin-bottom:20px;">
+      <div class="stats-grid" style="margin-bottom:20px;">
         ${statCard('Total SMS', 'fas fa-comment-sms', stats.total_sms || 0, 'blue', 'All time')}
         ${statCard('Delivered', 'fas fa-circle-check', stats.delivered || 0, 'green', 'Successful')}
         ${statCard('Failed', 'fas fa-circle-xmark', stats.failed || 0, 'red', 'Failed')}
@@ -914,7 +917,7 @@ async function pgBalance() {
         </div>
       </div>
 
-      <div class="stats-grid" style="grid-template-columns:1fr;margin-bottom:20px;">
+      <div class="stats-grid" style="margin-bottom:20px;">
         <div class="stat-card">
           <div class="stat-icon green"><i class="fas fa-dollar-sign"></i></div>
           <div>
@@ -1272,7 +1275,7 @@ async function pgEarnings() {
           </button>
         </div>
       </div>
-      <div class="stats-grid" style="grid-template-columns:1fr;">
+      <div class="stats-grid">
         ${statCard('Total SMS', 'fas fa-comment-sms', stats?.total_sms || 0, 'blue', 'All time')}
         ${statCard('Total Cost', 'fas fa-dollar-sign', '$' + (earnings?.total_cost || 0).toFixed(2), 'red', 'Total spent')}
         ${statCard('Average Cost', 'fas fa-chart-line', '$' + (earnings?.avg_cost || 0).toFixed(4), 'yellow', 'Per SMS')}

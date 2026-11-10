@@ -5,89 +5,118 @@ import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
 const ROOT_DIR = path.resolve(__dirname, '..');
-const OUTPUT_ZIP = path.join(ROOT_DIR, 'Humex-SMS-Production-VPS.zip');
 
-const IGNORE_PATTERNS = [
-  'node_modules',
-  '.git',
-  '.aistudio',
-  '.cache',
-  '.tmp',
-  'sessions',
-  'coverage',
-  '.vscode',
-  '.idea'
+// Date stamp YYYYMMDD
+const now = new Date();
+const year = now.getFullYear();
+const month = String(now.getMonth() + 1).padStart(2, '0');
+const day = String(now.getDate()).padStart(2, '0');
+const dateStr = `${year}${month}${day}`;
+
+const DIST_DIR = path.join(ROOT_DIR, 'dist');
+if (!fs.existsSync(DIST_DIR)) {
+  fs.mkdirSync(DIST_DIR, { recursive: true });
+}
+
+// Clean up older vps zips in dist/
+const oldZips = fs.readdirSync(DIST_DIR).filter(f => f.startsWith('humex-sms-vps-') && f.endsWith('.zip'));
+for (const oldZip of oldZips) {
+  try {
+    fs.unlinkSync(path.join(DIST_DIR, oldZip));
+    console.log(`Cleaned older build archive: dist/${oldZip}`);
+  } catch (e) {}
+}
+
+const OUTPUT_ZIP = path.join(DIST_DIR, `humex-sms-vps-${dateStr}.zip`);
+
+// Strict Whitelist
+const ROOT_FILES_WHITELIST = [
+  'server.js',
+  'ecosystem.config.cjs',
+  'reset-owner-password.js',
+  'README.md',
+  'VPS_DEPLOYMENT_GUIDE.md',
+  'STEP_BY_STEP_VPS_GUIDE.md',
+  'RENAME_MAP.md'
 ];
 
-function shouldInclude(filePath) {
-  const rel = path.relative(ROOT_DIR, filePath);
-  if (!rel || rel === '.' || rel.startsWith('..')) return true;
-
-  // Never include attachments or AI Studio assets
-  if (rel.startsWith(path.join('public', 'assets', 'aistudio')) || rel.includes('aistudio')) {
-    return false;
+// Production-only package.json with the 8 proven runtime dependencies
+const RUNTIME_PKG = {
+  name: 'humex-sms',
+  private: true,
+  version: '1.0.0',
+  type: 'module',
+  scripts: {
+    start: 'node server.js --port 3000',
+    lint: 'node --check server.js'
+  },
+  dependencies: {
+    'adm-zip': '^0.6.1',
+    'bcryptjs': '^3.0.3',
+    'compression': '^1.8.2',
+    'express': '^4.21.2',
+    'multer': '^2.4.0',
+    'qrcode': '^1.5.4',
+    'smpp': '0.5.0',
+    'ws': '^8.18.0'
   }
+};
 
-  // Never ship data/ inside the deployable package (data belongs outside code tree on VPS)
-  if (rel === 'humex-sms/data' || rel.startsWith('humex-sms/data/') ||
-      rel === 'Alpha SMS/data' || rel.startsWith('Alpha SMS/data/')) {
-    return false;
-  }
+try {
+  console.log(`Building production package: dist/humex-sms-vps-${dateStr}.zip...`);
+  const zip = new AdmZip();
 
-  // Never include the target zip file or any other archives
-  if (filePath.toLowerCase().endsWith('.zip') || 
-      filePath.toLowerCase().endsWith('.tar') || 
-      filePath.toLowerCase().endsWith('.gz') ||
-      filePath.toLowerCase().endsWith('.tgz')) {
-    return false;
-  }
-
-  // Exclude heavy video / audio files
-  if (/\.(mp4|mov|avi|mkv|webm|mp3|wav|ogg)$/i.test(filePath)) {
-    return false;
-  }
-
-  // Check against ignore directory/file patterns
-  const parts = rel.split(path.sep);
-  for (const part of parts) {
-    if (IGNORE_PATTERNS.includes(part)) {
-      return false;
+  // 1. Add whitelisted root files directly from workspace (byte-for-byte SHA matching)
+  for (const rel of ROOT_FILES_WHITELIST) {
+    const fullPath = path.join(ROOT_DIR, rel);
+    if (fs.existsSync(fullPath)) {
+      const buf = fs.readFileSync(fullPath);
+      zip.addFile(rel, buf);
+      console.log(`  + [WHITELIST] ${rel}`);
+    } else {
+      console.warn(`  ! [MISSING] Whitelisted file not found: ${rel}`);
     }
   }
 
-  return true;
-}
+  // 2. Add pruned runtime-only package.json
+  const pkgJsonStr = JSON.stringify(RUNTIME_PKG, null, 2) + '\n';
+  zip.addFile('package.json', Buffer.from(pkgJsonStr, 'utf8'));
+  console.log('  + [RUNTIME PKG] package.json (8 runtime dependencies)');
 
-function addDirectoryToZip(zip, dirPath, zipSubdir = '') {
-  const entries = fs.readdirSync(dirPath, { withFileTypes: true });
-  for (const entry of entries) {
-    const fullPath = path.join(dirPath, entry.name);
-    if (!shouldInclude(fullPath)) continue;
-
-    const entryZipPath = zipSubdir ? path.join(zipSubdir, entry.name) : entry.name;
-    if (entry.isDirectory()) {
-      addDirectoryToZip(zip, fullPath, entryZipPath);
-    } else if (entry.isFile()) {
-      try {
-        const content = fs.readFileSync(fullPath);
-        zip.addFile(entryZipPath, content);
-      } catch (e) {
-        console.warn('Skipping file:', fullPath, e.message);
+  // 3. Add humex-sms/static/** (HTML, JS, CSS, IMG, ICONS)
+  const staticDir = path.join(ROOT_DIR, 'humex-sms', 'static');
+  function addStaticFiles(dir, subDir = '') {
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      const full = path.join(dir, entry.name);
+      const relZipPath = subDir ? `${subDir}/${entry.name}` : entry.name;
+      if (entry.isDirectory()) {
+        addStaticFiles(full, relZipPath);
+      } else if (entry.isFile()) {
+        // Exclude any temporary / backup files
+        if (entry.name.endsWith('.tmp') || entry.name.endsWith('.bak') || entry.name.endsWith('.zip')) {
+          continue;
+        }
+        const buf = fs.readFileSync(full);
+        zip.addFile(`humex-sms/static/${relZipPath}`, buf);
       }
     }
   }
-}
 
-try {
-  console.log(`Building Humex-SMS-Production-VPS.zip...`);
-  const zip = new AdmZip();
-  addDirectoryToZip(zip, ROOT_DIR, '');
+  if (fs.existsSync(staticDir)) {
+    addStaticFiles(staticDir);
+    console.log('  + [STATIC ASSETS] humex-sms/static/** added successfully');
+  } else {
+    throw new Error('Static directory not found at humex-sms/static');
+  }
+
   zip.writeZip(OUTPUT_ZIP);
   const stat = fs.statSync(OUTPUT_ZIP);
-  console.log(`Successfully created ${OUTPUT_ZIP} (${(stat.size / 1024 / 1024).toFixed(2)} MB)`);
+  console.log(`\nSuccessfully created production package:`);
+  console.log(`  Destination: ${OUTPUT_ZIP}`);
+  console.log(`  Package Size: ${(stat.size / 1024 / 1024).toFixed(2)} MB (${stat.size} bytes)`);
 } catch (err) {
-  console.error('Error building zip:', err);
+  console.error('Error building production package:', err);
   process.exit(1);
 }

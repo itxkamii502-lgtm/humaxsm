@@ -387,10 +387,13 @@ function buildTable(headers, rows, options = {}) {
 }
 
 function statCard(label, icon, value, color, sub = '', trend = 'up') {
+  const safeLabel = String(label || '').replace(/"/g, '&quot;');
+  const safeVal = String(value ?? '').replace(/"/g, '&quot;');
+  const safeSub = String(sub || '').replace(/"/g, '&quot;');
   return `<div class="stat-card stat-card-ims ${color}">
-    <div class="stat-label">${label}</div>
-    <div class="stat-value">${value}</div>
-    ${sub ? `<div class="stat-change">${sub}</div>` : ''}
+    <div class="stat-label" title="${safeLabel}">${label}</div>
+    <div class="stat-value" title="${safeVal}">${value}</div>
+    ${sub ? `<div class="stat-change" title="${safeSub}">${sub}</div>` : ''}
     <div class="stat-icon-corner"><i class="fas fa-arrow-${trend === 'down' ? 'down' : 'up'}"></i></div>
   </div>`;
 }
@@ -772,14 +775,14 @@ async function renderDashboard() {
         <i class="fas fa-calendar-day"></i> ${new Date().toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
       </div>
 
-      <div class="stats-grid" style="grid-template-columns:1fr;margin-bottom:24px;">
+      <div class="stats-grid" style="margin-bottom:24px;">
         ${statCard('Today SMS', 'fas fa-calendar-day', todaySms, 'green', 'Daily')}
         ${statCard('Weekly SMS', 'fas fa-calendar-week', thisWeekSms, 'blue', 'Weekly')}
         ${statCard('Monthly SMS', 'fas fa-calendar-alt', thisMonthSms, 'purple', 'Monthly')}
         ${statCard('Yearly SMS', 'fas fa-calendar-check', thisYearSms, 'cyan', 'Yearly')}
       </div>
 
-      <div class="stats-grid" style="grid-template-columns:1fr;margin-bottom:24px;">
+      <div class="stats-grid" style="margin-bottom:24px;">
         ${statCard('Total Numbers', 'fas fa-mobile-screen', stats.total_numbers || 0, 'blue', (stats.active_numbers || 0) + ' active')}
         ${statCard('Active Users', 'fas fa-users', stats.active_users || 0, 'purple', 'Across all roles')}
         ${statCard('SMPP Sessions', 'fas fa-plug', stats.smpp_sessions || 0, 'cyan', 'Live connections')}
@@ -788,7 +791,7 @@ async function renderDashboard() {
       </div>
 
       <div style="margin:24px 0 12px;font-size:14px;font-weight:600;color:var(--text-primary);">Today's Payout Breakdown</div>
-      <div class="stats-grid" style="grid-template-columns:1fr;margin-bottom:24px;">
+      <div class="stats-grid" style="margin-bottom:24px;">
         ${statCard('Test Panel OTPs', 'fas fa-vial', stats.test_panel_otps_today || 0, 'cyan', 'Today — raw OTP count')}
         ${statCard('Test Panel Payout', 'fas fa-dollar-sign', '$' + (stats.test_panel_payout_today || 0), 'blue', "Today — counted even at $0 rate")}
         ${statCard('Agent Payout', 'fas fa-hand-holding-dollar', '$' + (stats.agent_payout_today || 0), 'purple', 'Today — what Agents are owed')}
@@ -822,7 +825,7 @@ async function renderDashboard() {
       </div>
 
       <div style="margin:28px 0 14px;font-size:14px;font-weight:600;color:var(--text-primary);">System Performance & Revenue</div>
-      <div class="stats-grid" style="grid-template-columns:1fr;margin-bottom:24px;">
+      <div class="stats-grid" style="margin-bottom:24px;">
         ${statCard('Revenue', 'fas fa-dollar-sign', '$' + (stats.revenue_today || 0), 'yellow', 'Daily earnings')}
         ${statCard('Active number pool', 'fas fa-mobile-screen', stats.active_numbers || 0, 'blue', (stats.total_numbers || 0) + ' total pool')}
         ${statCard('Delivery rate', 'fas fa-chart-line', (stats.success_rate || 0) + '%', 'green', 'Delivery rate')}
@@ -2643,9 +2646,9 @@ function exportAdminNumbersPdf() {
 async function renderBulkAllocation() {
   try {
     const [managersData, agentsData, clientsData, ranges] = await Promise.all([
-      apiFetch('/api/users?role=Manager&limit=100000'),
-      apiFetch('/api/agents?limit=100000'),
-      apiFetch('/api/clients?limit=100000'),
+      apiFetch('/api/users?role=Manager&limit=1000'),
+      apiFetch('/api/agents?limit=1000'),
+      apiFetch('/api/clients?limit=1000'),
       apiFetch('/api/numbers/sms-ranges')
     ]);
     const managers = (managersData?.data || []).filter(m => m && m.status !== 'inactive' && m.status !== 'suspended' && m.status !== 'blocked');
@@ -4990,9 +4993,9 @@ async function renderMySms(page = 1, isSummary = false) {
   try {
     const [rangesRes, managersRes, agentsRes, clientsRes] = await Promise.all([
       apiFetch('/api/numbers/sms-ranges').catch(() => []),
-      apiFetch('/api/users?role=Manager&limit=100000').catch(() => ({ data: [] })),
-      apiFetch('/api/agents?limit=100000').catch(() => ({ data: [] })),
-      apiFetch('/api/clients?limit=100000').catch(() => ({ data: [] }))
+      apiFetch('/api/users?role=Manager&limit=1000').catch(() => ({ data: [] })),
+      apiFetch('/api/agents?limit=1000').catch(() => ({ data: [] })),
+      apiFetch('/api/clients?limit=1000').catch(() => ({ data: [] }))
     ]);
 
     const ranges = (Array.isArray(rangesRes) ? rangesRes : (rangesRes && rangesRes.data)) || [];
