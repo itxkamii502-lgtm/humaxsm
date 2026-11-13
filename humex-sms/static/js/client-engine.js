@@ -691,7 +691,7 @@ async function pgMyNumbers(page = 1) {
               return [
                 dispRange,
                 rInfo?.prefix || n.prefix || '—',
-                `<span class="monospace fw-600">${n.number || '—'}</span>`,
+                typeof zyRenderNumberCopyBox === 'function' ? zyRenderNumberCopyBox(n.number) : `<span class="monospace fw-600">${n.number || '—'}</span>`,
                 (rInfo?.payout_schedule || n.payment_term) ? (rInfo?.payout_schedule || n.payment_term).charAt(0).toUpperCase() + (rInfo?.payout_schedule || n.payment_term).slice(1) : '—',
                 n.client_payout != null ? `$${n.client_payout}` : '$0',
                 `SD : ${n.otp_limit ?? clientDailyLimit} | SW : ${n.weekly_limit ?? 0}`
@@ -858,16 +858,19 @@ async function pgMySms(page = 1) {
             rgLookup[`${r.country}|${r.provider}`] = r;
           });
           return buildTable(
-          ['DATE', 'RANGE', 'NUMBER', 'CLI', 'SMS', 'CURRENCY', 'PAYOUT'],
+          ['DATE', 'PROVIDER', 'RANGE', 'TYPE', 'NUMBER', 'CLI', 'SMS', 'CURRENCY', 'PAYOUT'],
           logs.map(s => {
             const rInfo = (s.range_id && rgLookup[s.range_id]) || rgLookup[`${s.country}|${s.provider}`];
             const dispRange = s.range_name || s.range_label || s.range || rInfo?.range_name || rInfo?.name || (s.country && s.provider && s.provider !== 'Manual' ? `${s.country} - ${s.provider}` : (s.country || '—'));
+            const msgHtml = typeof zyHighlightOtp === 'function' ? zyHighlightOtp(s.message) : escapeHtml(s.message || '');
             return [
-              fmtShort(s.timestamp),
+              typeof zyFormatDateTimeStacked === 'function' ? zyFormatDateTimeStacked(s.timestamp || s.date).h : fmtShort(s.timestamp),
+              escapeHtml(s.provider || '—'),
               escapeHtml(dispRange),
+              s.type === 'Test Panel' ? 'Test Panel' : 'General',
               `<span class="monospace">${escapeHtml(s.number || '—')}</span>`,
-              escapeHtml(s.cli || '—'),
-              typeof zyHighlightOtp === 'function' ? zyHighlightOtp(s.message) : `<span class="text-muted">${escapeHtml(s.message || '—')}</span>`,
+              `<span class="monospace">${escapeHtml(s.cli || '—')}</span>`,
+              `<div style="max-width:300px;white-space:normal;line-height:1.4;word-break:break-word;">${msgHtml}</div>`,
               'USD',
               `<span class="text-success">$${s.profit || s.cost || 0}</span>`
             ];
@@ -1064,7 +1067,7 @@ async function loadClTestNumbers() {
     ['Range', 'Test Number'],
     rows.map(n => [
       n.range_label || '—',
-      `<span class="monospace fw-600">${n.number || '—'}</span>`
+      typeof zyRenderNumberCopyBox === 'function' ? zyRenderNumberCopyBox(n.number) : `<span class="monospace fw-600">${n.number || '—'}</span>`
     ])
   ) + `
     <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;">
@@ -1087,11 +1090,13 @@ async function loadClRecentSms() {
   const perPage = clRsPerPage === 'all' ? (total || 1) : clRsPerPage;
 
   wrap.innerHTML = buildTable(
-    ['Date', 'Range', 'Number', 'CLI', 'SMS'],
+    ['Date', 'Provider', 'Range', 'Type', 'Number', 'CLI', 'SMS'],
     rows.map(s => [
-      fmtShort(s.timestamp),
-      s.range_label || '—',
-      `<span class="monospace">${s.number || '—'}</span>`,
+      typeof zyFormatDateTimeStacked === 'function' ? zyFormatDateTimeStacked(s.timestamp || s.date).h : fmtShort(s.timestamp),
+      escapeHtml(s.provider || '—'),
+      escapeHtml(s.range_label || '—'),
+      'Test Panel',
+      `<span class="monospace">${escapeHtml(s.number || '—')}</span>`,
       s.cli ? (s.cli.charAt(0).toUpperCase() + 'XXXXX') : '—',
       '********'
     ])

@@ -2219,7 +2219,7 @@ async function loadMgTestNumbers() {
     ['Range', 'Test Number'],
     rows.map(n => [
       n.range_label || '—',
-      `<span class="monospace fw-600">${n.number || '—'}</span>`
+      typeof zyRenderNumberCopyBox === 'function' ? zyRenderNumberCopyBox(n.number) : `<span class="monospace fw-600">${n.number || '—'}</span>`
     ])
   ) + `
     <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;">
@@ -2242,11 +2242,13 @@ async function loadMgRecentSms() {
   const perPage = mgRsPerPage === 'all' ? (total || 1) : mgRsPerPage;
 
   wrap.innerHTML = buildTable(
-    ['Date', 'Range', 'Number', 'CLI', 'SMS'],
+    ['Date', 'Provider', 'Range', 'Type', 'Number', 'CLI', 'SMS'],
     rows.map(s => [
-      fmtShort(s.timestamp),
-      s.range_label || '—',
-      `<span class="monospace">${s.number || '—'}</span>`,
+      typeof zyFormatDateTimeStacked === 'function' ? zyFormatDateTimeStacked(s.timestamp || s.date).h : fmtShort(s.timestamp),
+      escapeHtml(s.provider || '—'),
+      escapeHtml(s.range_label || '—'),
+      'Test Panel',
+      `<span class="monospace">${escapeHtml(s.number || '—')}</span>`,
       s.cli ? (s.cli.charAt(0).toUpperCase() + 'XXXXX') : '—',
       '********'
     ])
@@ -2557,7 +2559,7 @@ function mgrBuildNumbersTable(numbers, rangeLookup, rateLookup, agents, ranges) 
     return [
       `<input type="checkbox" class="mgr-num-check" value="${n.id}" data-assigned="${n.client_id ? '1' : '0'}" onchange="mgrUpdateSelectedCount()">`,
       r.range, r.prefix,
-      `<span class="monospace fw-600">${r.number || '—'}</span>`,
+      typeof zyRenderNumberCopyBox === 'function' ? zyRenderNumberCopyBox(r.number) : `<span class="monospace fw-600">${r.number || '—'}</span>`,
       r.my_payout != null ? `${(r.range_term || n.payment_term) ? (r.range_term || n.payment_term).charAt(0).toUpperCase()+(r.range_term || n.payment_term).slice(1) : 'Not set'}<br><span class="text-success fw-600">$${r.my_payout}</span>` : '—',
       r.client
         ? `${r.client} <button class="btn-icon" onclick="mgrQuickAssign(${n.id},'${n.number || ''}')" title="Reassign"><i class="fas fa-pen"></i></button> <button class="btn-icon" onclick="mgrRevokeOne(${n.id})" title="Revoke"><i class="fas fa-rotate-left"></i></button>`

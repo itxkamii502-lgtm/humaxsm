@@ -348,8 +348,9 @@ async function pgSmsNumbers() {
     const rInfo = (n.range_id && ZY_RANGES.find(rg => rg.id === n.range_id)) || ZY_RANGES.find(rg => rg.range_name && rg.range_name === n.range_name) || ZY_RANGES.find(rg => rg.country === n.country && (rg.provider === n.provider || !n.provider));
     const rDisplayName = n.range_name || n.range_label || n.range || (rInfo && (rInfo.range_name || rInfo.name)) || (n.country && n.provider && n.provider !== 'Manual' ? `${n.country} ${n.provider}` : (n.country || '—'));
     const isAssigned = !!n.agent_id;
-    const copyBtn = n.number ? `<button type="button" class="zy-num-copy-btn" onclick="event.stopPropagation();window.zyCopyNumber('${zyEsc(n.number)}', this)" title="Copy number" style="background:none;border:none;cursor:pointer;padding:2px 4px;font-size:12px;color:#94a3b8;border-radius:3px;transition:all 0.15s ease;" onmouseover="this.style.color='#10b981'" onmouseout="this.style.color='#94a3b8'"><i class="far fa-copy"></i></button>` : '';
-    const numHtml = n.number ? `<span style="display:inline-flex;align-items:center;gap:6px;"><span style="font-family:monospace;font-weight:600;color:var(--brand-primary,#166534);">${zyEsc(n.number)}</span>${copyBtn}</span>` : '—';
+    const numHtml = typeof zyRenderNumberCopyBox === 'function'
+      ? zyRenderNumberCopyBox(n.number)
+      : (n.number ? `<span style="font-family:monospace;font-weight:600;color:var(--brand-primary,#166534);">${zyEsc(n.number)}</span>` : '—');
 
     const r = [
       rDisplayName,
@@ -1398,14 +1399,16 @@ async function pgSmsReportsLoad(pageOrSummary = 1) {
         date: 'Date',
         daily: 'Date',
         month: 'Month',
+        provider: 'Provider',
         range: 'Range',
         agent: 'Agent',
+        client: 'Client',
         number: 'Number',
         cli: 'CLI'
       };
       const cols = [...checkedBoxes.map(k => keyLabels[k] || k), 'SMS Count', 'Currency', 'My Payout', 'Agent Payout', 'Profit'];
       const rows = data.map(g => [
-        ...checkedBoxes.map(k => g[k] || '—'),
+        ...checkedBoxes.map(k => (k === 'agent' || k === 'client' || k === 'manager') ? (g[k] || '') : (g[k] || '—')),
         g.sms_count || 0,
         g.currency || '$',
         Number(g.payout || 0).toFixed(4),
@@ -1435,7 +1438,12 @@ async function pgSmsReportsLoad(pageOrSummary = 1) {
       });
       zy2Render('dt-reports');
     } else {
-      const cols = ['Date', 'Range', 'Number', 'CLI', 'SMS', 'Curr.', 'My Payout', 'Agent Payout', 'Profit'];
+      const cleanOrg = (v) => {
+        const s = String(v || '').trim();
+        if (!s) return '';
+        return ['—', '-', 'direct', 'general', 'unallocated', 'unassigned', 'test panel', 'unknown', 'none', 'null'].includes(s.toLowerCase()) ? '' : s;
+      };
+      const cols = ['Date', 'Provider', 'Range', 'Type', 'Number', 'CLI', 'SMS', 'Agent', 'Client', 'Curr.', 'My Payout', 'Agent Payout', 'Profit'];
       const rows = data.map(s => {
         const dtCell = typeof zyFormatDateTimeStacked === 'function'
           ? zyFormatDateTimeStacked(s.timestamp || s.date)
@@ -1444,13 +1452,21 @@ async function pgSmsReportsLoad(pageOrSummary = 1) {
         const agP = parseFloat(s.agent_payout != null ? s.agent_payout : (s.agent_rate || 0)) || 0;
         const prof = Math.max(0, myP - agP);
         const smsHtml = typeof zyHighlightOtp === 'function' ? zyHighlightOtp(s.message || '') : zyEsc(s.message || '');
+        const agName = cleanOrg(s.agent || s.agent_username || s.agent_name);
+        const clName = cleanOrg(s.client || s.client_username || s.client_name || s.user);
+        const numStr = String(s.number || '').trim();
+        const cliStr = String(s.cli || s.app || '').trim();
 
         return [
           dtCell,
-          s.range_name || s.range_label || s.range || (s.country || '—'),
-          { v: s.number || '—', h: `<span class="monospace" style="font-weight:600;">${zyEsc(s.number || '—')}</span>` },
-          { v: s.cli || '—', h: `<span class="monospace">${zyEsc(s.cli || s.app || '—')}</span>` },
-          { v: s.message || '', h: `<div style="max-width:320px;white-space:normal;line-height:1.4;">${smsHtml}</div>` },
+          zyEsc(s.provider || '—'),
+          zyEsc(s.range_name || s.range_label || s.range || (s.country || '—')),
+          s.type === 'Test Panel' ? 'Test Panel' : 'General',
+          { v: numStr, h: numStr ? `<span class="monospace" style="font-weight:600;">${zyEsc(numStr)}</span>` : '—' },
+          { v: cliStr, h: `<span class="monospace">${zyEsc(cliStr || '—')}</span>` },
+          { v: s.message || '', h: `<div style="max-width:300px;white-space:normal;line-height:1.4;word-break:break-word;">${smsHtml}</div>` },
+          { v: agName, h: agName ? zyEsc(agName) : '' },
+          { v: clName, h: clName ? zyEsc(clName) : '' },
           s.currency || '$',
           Number(myP).toFixed(4),
           Number(agP).toFixed(4),
@@ -1465,7 +1481,7 @@ async function pgSmsReportsLoad(pageOrSummary = 1) {
       const totalProfit = (sum.profit != null) ? sum.profit : Math.max(0, totalPayout - totalAgentPayout);
 
       const footRow = `<td><b>Total SMS<br>${totalSms.toLocaleString()}</b></td>` +
-        '<td></td><td></td><td></td><td></td><td></td>' +
+        '<td></td>'.repeat(9) +
         `<td><b>My Payout<br>${Number(totalPayout).toFixed(4)}</b></td>` +
         `<td><b>Agent Payout<br>${Number(totalAgentPayout).toFixed(4)}</b></td>` +
         `<td><b>Profit<br>${Number(totalProfit).toFixed(4)}</b></td>`;
@@ -1626,7 +1642,7 @@ async function pgTestPanel() {
   ZY_TESTNUMS = zyList(nums).map(n => [
     n.range_name || n.range_label || n.range || (n.country ? `${n.country}` : '—'),
     n.prefix || (n.number ? n.number.slice(0, 4) : '—'),
-    { v: n.number || '', h: `<span class="monospace fw-600">${n.number || '—'}</span>` },
+    { v: n.number || '', h: typeof zyRenderNumberCopyBox === 'function' ? zyRenderNumberCopyBox(n.number) : `<span class="monospace fw-600">${n.number || '—'}</span>` },
     { v: '', h: `<span style="font-size:11px;color:#64748b;">SD: <b>${n.sms_daily || 0}</b> | SW: <b>${n.sms_weekly || 0}</b></span>` }
   ]);
   document.getElementById('tp-nums-wrap').innerHTML =
@@ -1634,19 +1650,23 @@ async function pgTestPanel() {
   zy2Render('dt-testnums');
 
   const rows = zyList(logs).map(s => {
-    const ts = (s.timestamp || s.date || '').replace('T', ' ').slice(0, 19);
+    const dtCell = typeof zyFormatDateTimeStacked === 'function'
+      ? zyFormatDateTimeStacked(s.timestamp || s.date)
+      : (s.timestamp || s.date || '').replace('T', ' ').slice(0, 19);
     const rLabel = s.range_name || s.range_label || s.range || (s.country ? `${s.country}` : '—');
-    const msgText = typeof zyHighlightOtp === 'function' ? zyHighlightOtp(s.message) : (s.message || '—');
+    const msgText = typeof zyHighlightOtp === 'function' ? zyHighlightOtp(s.message) : zyEsc(s.message || '—');
     return [
-      ts,
-      rLabel,
-      { v: s.number || '', h: `<span class="monospace">${s.number || '—'}</span>` },
-      { v: s.cli || '', h: `<span class="monospace">${zyMaskCli(s.cli)}</span>` },
-      { v: s.message || '', h: msgText }
+      dtCell,
+      zyEsc(s.provider || '—'),
+      zyEsc(rLabel),
+      'Test Panel',
+      { v: s.number || '', h: `<span class="monospace" style="font-weight:600;">${zyEsc(s.number || '—')}</span>` },
+      { v: s.cli || '', h: `<span class="monospace">${zyEsc(zyMaskCli(s.cli))}</span>` },
+      { v: s.message || '', h: `<div style="max-width:300px;white-space:normal;line-height:1.4;word-break:break-word;">${msgText}</div>` }
     ];
   });
   document.getElementById('tp-recent').innerHTML =
-    zyDT2('dt-testlog', { cols: ['Date', 'Range', 'Number', 'CLI', 'SMS'], rows, sort: 0, dir: -1 });
+    zyDT2('dt-testlog', { cols: ['Date', 'Provider', 'Range', 'Type', 'Number', 'CLI', 'SMS'], rows, sort: 0, dir: -1 });
   zy2Render('dt-testlog');
 }
 let ZY_TESTNUMS = [];

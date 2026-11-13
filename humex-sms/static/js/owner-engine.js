@@ -1955,10 +1955,13 @@ async function renderMyNumbers(page = 1, search = '', status = '') {
       const agentPayout = (rInfo?.payout ?? rateInfo?.sell_rate ?? n.agent_rate ?? n.payout) ?? 0;
       const isAssigned = !!(n.client_id || n.agent_id || n.manager_id || isTestPanel);
 
+      const numBox = typeof zyRenderNumberCopyBox === 'function'
+        ? zyRenderNumberCopyBox(n.number)
+        : `<span class="monospace fw-600">${n.number || '—'}</span>`;
       const r = [
         rangeDisplayName,
         prefixDisplay,
-        { v: n.number || '', h: `<div style="display:flex;align-items:center;gap:6px;"><span class="monospace fw-600" style="color:var(--text);font-size:13px;">${n.number || '—'}</span><button class="btn-icon" style="padding:1px 4px;font-size:11px;color:var(--text-muted);cursor:pointer;border:none;background:none;" onclick="navigator.clipboard.writeText('${n.number}');toast('Number copied!','info');" title="Copy Number"><i class="fas fa-copy"></i></button></div>` },
+        { v: n.number || '', h: numBox },
         { v: assignedVal, h: assignedHtml },
         `$ ${carrierCost}`,
         `$ ${agentPayout}`,
@@ -4267,7 +4270,7 @@ async function renderTestPanelNumbers(page = 1) {
             ['Range', 'Number', 'Added', 'Actions'],
             numbers.map(n => [
               n.range_name || n.range_label || n.range || n.country || '—',
-              `<span class="monospace fw-600">${n.number || '—'}</span>`,
+              typeof zyRenderNumberCopyBox === 'function' ? zyRenderNumberCopyBox(n.number) : `<span class="monospace fw-600">${n.number || '—'}</span>`,
               fmtShort(n.created),
               `<button class="btn-icon" onclick="removeTestPanelNumber(${n.id})" title="Remove"><i class="fas fa-trash" style="color:var(--red-light);"></i></button>`
             ])
@@ -4669,9 +4672,11 @@ async function loadAdTestNumbers() {
 
     const cols = ['Range', 'Prefix', 'Test Number', 'Limits', 'Action'];
     const dtRows = rows.map(n => {
-      const rName = n.range_label || n.range_name || n.country || 'Direct';
+      const rName = n.range_label || n.range_name || n.country || '—';
       const prefix = n.prefix || (n.number ? n.number.slice(0, 4) : '—');
-      const numCell = `<span class="monospace fw-600" style="color:#0f172a;letter-spacing:0.5px;">${n.number || '—'}</span>`;
+      const numCell = typeof zyRenderNumberCopyBox === 'function'
+        ? zyRenderNumberCopyBox(n.number)
+        : `<span class="monospace fw-600" style="color:#0f172a;letter-spacing:0.5px;">${n.number || '—'}</span>`;
       const limitsHtml = `<span style="font-size:11px;color:#64748b;">SD: <b>${n.sms_daily || 0}</b> | SW: <b>${n.sms_weekly || 0}</b></span>`;
       const actHtml = `<button class="zy-rowbtn" onclick="openTestNumberModal('${n.number}')" title="Test SMS"><i class="fas fa-paper-plane" style="color:#2563eb;"></i></button>` +
                       `<button class="zy-rowbtn" onclick="confirmRemoveTestPanelNumber(${n.id})" title="Remove"><i class="fas fa-trash" style="color:#ef4444;"></i></button>`;
@@ -4712,21 +4717,24 @@ async function loadAdRecentSms() {
     const rows = (data && data.data) || [];
     ZY_AD_TESTLOGS = rows;
 
-    const cols = ['Date Time', 'Range', 'Number', 'CLI', 'SMS Message', 'Status'];
+    const cols = ['Date', 'Provider', 'Range', 'Type', 'Number', 'CLI', 'SMS', 'Status'];
     const dtRows = rows.map(s => {
-      const ts = (s.timestamp || s.date || '').replace('T', ' ').slice(0, 19);
-      const rLabel = escapeHtml(s.range_label || s.range_name || s.country || 'Direct');
+      const dtCell = typeof zyFormatDateTimeStacked === 'function'
+        ? zyFormatDateTimeStacked(s.timestamp || s.date)
+        : (s.timestamp || s.date || '').replace('T', ' ').slice(0, 19);
+      const prov = escapeHtml(s.provider || '—');
+      const rLabel = escapeHtml(s.range_label || s.range_name || s.country || '—');
       const numCell = `<span class="monospace" style="font-weight:600;">${escapeHtml(s.number || '—')}</span>`;
       const cliCell = `<span class="monospace" style="color:#2563eb;font-weight:600;">${escapeHtml(s.cli || s.app || '—')}</span>`;
-      const msgCell = zyHighlightOtp(s.message);
+      const msgCell = `<div style="max-width:300px;white-space:normal;line-height:1.4;word-break:break-word;">${zyHighlightOtp(s.message)}</div>`;
       const statusBadge = `<span class="badge badge-green" style="font-size:11px;"><i class="fas fa-check"></i> Delivered</span>`;
 
-      return [ts, rLabel, { v: s.number || '', h: numCell }, { v: s.cli || '', h: cliCell }, { v: s.message || '', h: msgCell }, { v: 'delivered', h: statusBadge }];
+      return [dtCell, prov, rLabel, 'Test Panel', { v: s.number || '', h: numCell }, { v: s.cli || '', h: cliCell }, { v: s.message || '', h: msgCell }, { v: 'delivered', h: statusBadge }];
     });
 
     wrap.innerHTML = (typeof zyDT2 === 'function')
       ? zyDT2('dt-testlog', { cols, rows: dtRows, sort: 0, dir: -1 })
-      : buildTable(cols, rows.map(s => [fmtShort(s.timestamp), escapeHtml(s.range_label || '—'), escapeHtml(s.number || '—'), escapeHtml(s.cli || '—'), escapeHtml(s.message || '—'), 'Delivered']));
+      : buildTable(cols, rows.map(s => [fmtShort(s.timestamp), escapeHtml(s.provider || '—'), escapeHtml(s.range_label || '—'), 'Test Panel', escapeHtml(s.number || '—'), escapeHtml(s.cli || '—'), escapeHtml(s.message || '—'), 'Delivered']));
 
     if (typeof zy2Render === 'function') zy2Render('dt-testlog');
   } catch (err) {
@@ -5066,7 +5074,7 @@ async function renderMySmsLoad(isSummary = false) {
       ];
 
       const rows = data.map(g => [
-        ...checkedBoxes.map(k => g[k] || '—'),
+        ...checkedBoxes.map(k => (k === 'manager' || k === 'agent' || k === 'client') ? (g[k] || '') : (g[k] || '—')),
         g.sms_count || 0,
         g.delivered_count != null ? g.delivered_count : (g.sms_count || 0),
         g.currency || '$',
@@ -5102,7 +5110,12 @@ async function renderMySmsLoad(isSummary = false) {
       if (typeof zy2Render === 'function') zy2Render('dt-cdr');
     } else {
       // Detailed View
-      const cols = ['Date Time', 'Range', 'Type', 'Number', 'CLI', 'SMS Message', 'Manager', 'Agent', 'Client', 'Currency', 'Carrier Cost', 'Payout Given', 'Owner Profit', 'Status', 'IP'];
+      const cleanOrg = (v) => {
+        const s = String(v || '').trim();
+        if (!s) return '';
+        return ['—', '-', 'direct', 'general', 'unallocated', 'unassigned', 'test panel', 'unknown', 'none', 'null'].includes(s.toLowerCase()) ? '' : s;
+      };
+      const cols = ['Date', 'Provider', 'Range', 'Type', 'Number', 'CLI', 'SMS', 'Manager', 'Agent', 'Client', 'Currency', 'Carrier Cost', 'Payout Given', 'Owner Profit', 'Status', 'IP'];
       const rows = data.map(s => {
         const dtCell = typeof zyFormatDateTimeStacked === 'function'
           ? zyFormatDateTimeStacked(s.timestamp || s.date)
@@ -5117,14 +5130,15 @@ async function renderMySmsLoad(isSummary = false) {
 
         return [
           dtCell,
-          s.range_name || s.range_label || s.range || (s.country || '—'),
-          s.type || 'General',
+          escapeHtml(s.provider || '—'),
+          escapeHtml(s.range_name || s.range_label || s.range || (s.country || '—')),
+          s.type === 'Test Panel' ? 'Test Panel' : 'General',
           `<span class="monospace" style="font-weight:600;">${escapeHtml(s.number || '—')}</span>`,
           `<span class="monospace" style="color:#2563eb;font-weight:600;">${escapeHtml(s.cli || s.app || '—')}</span>`,
-          zyHighlightOtp(s.message),
-          escapeHtml(s.manager || s.manager_username || '—'),
-          escapeHtml(s.agent || s.agent_username || '—'),
-          escapeHtml(s.client || s.client_username || '—'),
+          `<div style="max-width:300px;white-space:normal;line-height:1.4;word-break:break-word;">${zyHighlightOtp(s.message)}</div>`,
+          escapeHtml(cleanOrg(s.manager || s.manager_username)),
+          escapeHtml(cleanOrg(s.agent || s.agent_username)),
+          escapeHtml(cleanOrg(s.client || s.client_username)),
           s.currency || '$',
           carrierCost.toFixed(4),
           payoutGiven.toFixed(4),
@@ -5137,13 +5151,13 @@ async function renderMySmsLoad(isSummary = false) {
       const totalSms = rows.length;
       let sumCost = 0, sumPayout = 0;
       rows.forEach(r => {
-        sumCost += parseFloat(r[10]) || 0;
-        sumPayout += parseFloat(r[11]) || 0;
+        sumCost += parseFloat(r[11]) || 0;
+        sumPayout += parseFloat(r[12]) || 0;
       });
       const sumProfit = Math.max(0, sumCost - sumPayout);
 
       const footRow = `<td><b>Total SMS: ${totalSms}</b></td>` +
-        '<td></td>'.repeat(8) +
+        '<td></td>'.repeat(9) +
         `<td><b>$</b></td>` +
         `<td><b>${sumCost.toFixed(4)}</b></td>` +
         `<td><b>${sumPayout.toFixed(4)}</b></td>` +

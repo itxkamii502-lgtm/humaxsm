@@ -1062,9 +1062,10 @@ function ingestSms({
     }
 
     const country = (rng && rng.country) || (numberRec && numberRec.country) || (testNumRec && testNumRec.country) || detectCountry(cleanTo);
-    const provider = (rng && rng.provider) || (numberRec && numberRec.provider) || (testNumRec && testNumRec.provider) || '';
+    const rawProvider = (rng && rng.provider) || (numberRec && numberRec.provider) || (testNumRec && testNumRec.provider) || '';
+    const provider = (rawProvider && rawProvider !== 'Manual' && rawProvider !== '—' && rawProvider !== 'Direct') ? rawProvider : '';
     const rawRange = (rng && (rng.range_name || rng.name)) || (testNumRec && (testNumRec.range_name || testNumRec.range_label || testNumRec.range)) || (numberRec && (numberRec.range_name || numberRec.range));
-    const fallbackRange = (country && provider && provider !== 'Manual' && provider !== '—') ? `${country} ${provider}` : (country || 'Direct');
+    const fallbackRange = (country && provider) ? `${country} ${provider}` : (country || '');
     const rangeLabel = rawRange || fallbackRange;
 
     // ── STAGE C: Precise Ledger Stamping & Rate Calculations ──
@@ -1154,7 +1155,7 @@ function ingestSms({
       }
       if (!client_rate) {
         const clients = readDb('clients') || [];
-        const cl = clients.find(c => (numberRec.client_id && Number(c.id) === Number(numberRec.client_id)) || (numberRec.client_username && String(c.username).toLowerCase() === String(numberRec.client_username).toLowerCase()));
+        const cl = clients.find(c => (resolvedClientId && Number(c.id) === Number(resolvedClientId)) || (numberRec && numberRec.client_username && String(c.username).toLowerCase() === String(numberRec.client_username).toLowerCase()));
         if (cl && cl.client_rate != null) {
           client_rate = round6(cl.client_rate);
         } else {
@@ -1172,7 +1173,7 @@ function ingestSms({
     let manager_percent = 0;
     if (hasManager) {
       const allUsers = readDb('users') || [];
-      const mgr = allUsers.find(u => Number(u.id) === Number(numberRec.manager_id) || (numberRec.manager_username && String(u.username).toLowerCase() === String(numberRec.manager_username).toLowerCase()));
+      const mgr = allUsers.find(u => (resolvedManagerId && Number(u.id) === Number(resolvedManagerId)) || (numberRec && numberRec.manager_username && String(u.username).toLowerCase() === String(numberRec.manager_username).toLowerCase()));
       if (mgr) {
         const rName = rangeLabel || (rng && (rng.range_name || rng.name)) || (numberRec && numberRec.range_name) || '';
         if (mgr.range_commissions && rName && mgr.range_commissions[rName] != null) {
@@ -1211,23 +1212,33 @@ function ingestSms({
     const datePart = finalTimestamp.slice(0, 10);
     const timePart = finalTimestamp.slice(11, 19);
 
+    const cleanHierarchyStr = (val) => {
+      const s = String(val || '').trim();
+      if (!s) return '';
+      const sl = s.toLowerCase();
+      if (['unallocated', 'unassigned', 'test panel', 'direct', 'general', '—', '-', 'unknown', 'none', 'null'].includes(sl)) return '';
+      return s;
+    };
+
     const appName = (numberRec && numberRec.app) || detectApp(sender, cleanMsg);
-    let manager_username = (numberRec && (numberRec.manager_username || numberRec.manager)) || '';
-    let agent_username = (numberRec && (numberRec.agent_username || numberRec.agent)) || '';
-    let client_username = (numberRec && (numberRec.client_username || numberRec.client_name || numberRec.user)) || '';
+    let manager_username = cleanHierarchyStr(numberRec && (numberRec.manager_username || numberRec.manager));
+    let agent_username = cleanHierarchyStr(numberRec && (numberRec.agent_username || numberRec.agent));
+    let client_username = cleanHierarchyStr(numberRec && (numberRec.client_username || numberRec.client_name || numberRec.user));
     if (!manager_username && hasManager) {
-      const uRec = (readDb('users') || []).find(u => Number(u.id) === Number(numberRec.manager_id));
-      if (uRec) manager_username = uRec.username;
+      const uRec = (readDb('users') || []).find(u => Number(u.id) === Number(resolvedManagerId));
+      if (uRec) manager_username = cleanHierarchyStr(uRec.username);
     }
     if (!agent_username && hasAgent) {
-      const aRec = (readDb('agents') || []).find(a => Number(a.id) === Number(numberRec.agent_id));
-      if (aRec) agent_username = aRec.username;
+      const aRec = (readDb('agents') || []).find(a => Number(a.id) === Number(resolvedAgentId));
+      if (aRec) agent_username = cleanHierarchyStr(aRec.username);
     }
     if (!client_username && hasClient) {
-      const cRec = (readDb('clients') || []).find(c => Number(c.id) === Number(numberRec.client_id));
-      if (cRec) client_username = cRec.username;
+      const cRec = (readDb('clients') || []).find(c => Number(c.id) === Number(resolvedClientId));
+      if (cRec) client_username = cleanHierarchyStr(cRec.username);
     }
 
+    const isTestPanelNumber = source === 'test' || Boolean(numberRec && (numberRec.fixed_for_test || numberRec.is_test_panel || numberRec.user === 'Test Panel'));
+    const smsType = isTestPanelNumber ? 'Test Panel' : 'General';
     const finalOtp = otp || extractOtp(cleanMsg);
 
     const entry = {
@@ -1242,11 +1253,11 @@ function ingestSms({
       range_label: rangeLabel,
       range_name: rangeLabel,
       range: rangeLabel,
-      country: country || '—',
-      provider: provider || '—',
+      country: country || '',
+      provider: provider || '',
       range_id: rng ? rng.id : null,
       app: appName,
-      type: 'General',
+      type: smsType,
       status: 'delivered',
       cause: 'Success',
       currency: (rng && rng.currency) || 'USD',
@@ -1277,7 +1288,7 @@ function ingestSms({
       manager_username: manager_username || null,
       agent_username: agent_username || null,
       client_username: client_username || null,
-      user: client_username || (numberRec ? (numberRec.user || '') : ''),
+      user: client_username || '',
       source: source || 'api',
       panel_id: panel_id || null,
       panel_name: panel_name || '',
@@ -1299,7 +1310,7 @@ function ingestSms({
       if (hasClient && client_amount > 0) {
         const cIdx = allClients.findIndex(c => c && (
           (client_username && String(c.username).trim().toLowerCase() === String(client_username).trim().toLowerCase()) ||
-          (numberRec.client_id && Number(c.id) === Number(numberRec.client_id))
+          (resolvedClientId && Number(c.id) === Number(resolvedClientId))
         ));
         if (cIdx !== -1) {
           const curBal = Number(allClients[cIdx].balance || 0);
@@ -1312,7 +1323,7 @@ function ingestSms({
       if (hasAgent && agent_amount > 0) {
         const aIdx = allAgents.findIndex(a => a && (
           (agent_username && String(a.username).trim().toLowerCase() === String(agent_username).trim().toLowerCase()) ||
-          (numberRec.agent_id && Number(a.id) === Number(numberRec.agent_id))
+          (resolvedAgentId && Number(a.id) === Number(resolvedAgentId))
         ));
         if (aIdx !== -1) {
           const curBal = Number(allAgents[aIdx].balance || 0);
@@ -1325,7 +1336,7 @@ function ingestSms({
       if (hasManager && manager_amount > 0) {
         const mIdx = allUsers.findIndex(u => u && (u.role || '').toLowerCase() === 'manager' && (
           (manager_username && String(u.username).trim().toLowerCase() === String(manager_username).trim().toLowerCase()) ||
-          (numberRec.manager_id && Number(u.id) === Number(numberRec.manager_id))
+          (resolvedManagerId && Number(u.id) === Number(resolvedManagerId))
         ));
         if (mIdx !== -1) {
           const curBal = Number(allUsers[mIdx].balance || 0);
@@ -10879,7 +10890,23 @@ app.get('/api/client/:client_id/transactions', requireAuth, (req, res) => {
 });
 
 app.get('/api/sms/client-logs', requireAuth, (req, res) => {
-  const data = getScopedSmsList(req);
+  const sessionUser = req.sessionUser;
+  const sRole = (sessionUser && sessionUser.role ? String(sessionUser.role).toLowerCase() : '');
+  const isOwner = sRole === 'owner' || sRole === 'admin';
+  const enrich = buildSmsEnricher();
+  let data = getScopedSmsList(req).map(s => {
+    const item = enrich(s);
+    if (!isOwner) {
+      item.cli = serverMaskCli(item.cli || item.app || item.sender);
+      delete item.company_rate;
+      delete item.company_cost;
+      delete item.owner_amount;
+      delete item.profit;
+      delete item.admin_profit;
+      delete item.gross_margin;
+    }
+    return item;
+  });
   const page = parseInt(req.query.page) || 1;
   const limit = parseInt(req.query.limit) || 100;
   const start = (page - 1) * limit;
@@ -11035,6 +11062,182 @@ function serverMaskCli(v) {
   return s.slice(0, 1) + 'XXXXX';
 }
 
+function cleanSmsHierarchyName(val) {
+  const s = String(val || '').trim();
+  if (!s) return '';
+  const sl = s.toLowerCase();
+  if (['—', '-', 'direct', 'general', 'unassigned', 'unallocated', 'test panel', 'unknown', 'none', 'null', 'n/a'].includes(sl)) return '';
+  return s;
+}
+
+function cleanSmsMetaVal(val) {
+  const s = String(val || '').trim();
+  if (!s) return '';
+  const sl = s.toLowerCase();
+  if (['—', '-', 'manual', 'direct', 'general range', 'unknown', 'none', 'null'].includes(sl)) return '';
+  return s;
+}
+
+function buildSmsEnricher() {
+  const agents = readDb('agents') || [];
+  const agentMap = {};
+  const agentByUsername = {};
+  agents.forEach(a => {
+    if (!a) return;
+    if (a.id != null) agentMap[Number(a.id)] = a;
+    if (a.username) agentByUsername[String(a.username).trim().toLowerCase()] = a;
+  });
+
+  const clients = readDb('clients') || [];
+  const clientMap = {};
+  const clientByUsername = {};
+  clients.forEach(c => {
+    if (!c) return;
+    if (c.id != null) clientMap[Number(c.id)] = c;
+    if (c.username) clientByUsername[String(c.username).trim().toLowerCase()] = c;
+  });
+
+  const managers = (readDb('users') || []).filter(u => u && String(u.role || '').toLowerCase() === 'manager');
+  const managerMap = {};
+  const managerByUsername = {};
+  managers.forEach(m => {
+    if (!m) return;
+    if (m.id != null) managerMap[Number(m.id)] = m;
+    if (m.username) managerByUsername[String(m.username).trim().toLowerCase()] = m;
+  });
+
+  const numbers = readDb('numbers') || [];
+  const numByRaw = new Map();
+  const numByDigits = new Map();
+  numbers.forEach(n => {
+    if (!n || !n.number) return;
+    const raw = String(n.number).trim();
+    const dig = raw.replace(/\D/g, '');
+    if (raw) numByRaw.set(raw, n);
+    if (dig) numByDigits.set(dig, n);
+  });
+
+  const testNumbers = readDb('test_numbers') || [];
+  const testNumByRaw = new Map();
+  const testNumByDigits = new Map();
+  testNumbers.forEach(t => {
+    if (!t || !t.number) return;
+    const raw = String(t.number).trim();
+    const dig = raw.replace(/\D/g, '');
+    if (raw) testNumByRaw.set(raw, t);
+    if (dig) testNumByDigits.set(dig, t);
+  });
+
+  const ranges = readDb('sms_ranges') || [];
+  const rangeById = new Map();
+  const rangeByName = new Map();
+  ranges.forEach(r => {
+    if (!r) return;
+    if (r.id != null) rangeById.set(Number(r.id), r);
+    const rn = String(r.range_name || r.name || '').trim().toLowerCase();
+    if (rn) rangeByName.set(rn, r);
+  });
+
+  return function enrichSms(s) {
+    const item = { ...s };
+    const numRaw = String(item.number || '').trim();
+    const numDig = numRaw.replace(/\D/g, '');
+    const numRec = numByRaw.get(numRaw) || (numDig ? numByDigits.get(numDig) : null) || null;
+    const testRec = testNumByRaw.get(numRaw) || (numDig ? testNumByDigits.get(numDig) : null) || null;
+
+    const rCandidate = cleanSmsMetaVal(item.range_name || item.range_label || item.range);
+    const rng = (item.range_id && rangeById.get(Number(item.range_id)))
+      || (rCandidate && rangeByName.get(rCandidate.toLowerCase()))
+      || (numRec && numRec.range_id && rangeById.get(Number(numRec.range_id)))
+      || (numRec && numRec.range_name && rangeByName.get(String(numRec.range_name).trim().toLowerCase()))
+      || (testRec && testRec.range_id && rangeById.get(Number(testRec.range_id)))
+      || (testRec && (testRec.range_name || testRec.range_label) && rangeByName.get(String(testRec.range_name || testRec.range_label).trim().toLowerCase()))
+      || null;
+
+    // Provider
+    const providerVal = cleanSmsMetaVal(item.provider)
+      || cleanSmsMetaVal(rng && rng.provider)
+      || cleanSmsMetaVal(numRec && numRec.provider)
+      || cleanSmsMetaVal(testRec && testRec.provider)
+      || '';
+
+    // Range
+    const rangeVal = cleanSmsMetaVal(item.range_name || item.range_label || item.range)
+      || cleanSmsMetaVal(rng && (rng.range_name || rng.name))
+      || cleanSmsMetaVal(numRec && (numRec.range_name || numRec.range_label || numRec.range))
+      || cleanSmsMetaVal(testRec && (testRec.range_name || testRec.range_label || testRec.range))
+      || cleanSmsMetaVal(item.country)
+      || cleanSmsMetaVal(rng && rng.country)
+      || cleanSmsMetaVal(numRec && numRec.country)
+      || '';
+
+    // Type: strictly 'Test Panel' or 'General'
+    const isTestPanel = Boolean(
+      testRec
+      || String(item.source || '').toLowerCase() === 'test'
+      || String(item.type || '').toLowerCase() === 'test panel'
+      || (numRec && (numRec.fixed_for_test || numRec.is_test_panel || numRec.user === 'Test Panel'))
+    );
+    const smsType = isTestPanel ? 'Test Panel' : 'General';
+
+    // Hierarchy: Client -> Agent -> Manager (strictly '' when not attached)
+    let clientName = cleanSmsHierarchyName(item.client_username)
+      || cleanSmsHierarchyName(item.client)
+      || cleanSmsHierarchyName(item.client_name);
+    let clientRec = (item.client_id != null && clientMap[Number(item.client_id)]) || null;
+    if (!clientName && clientRec) clientName = cleanSmsHierarchyName(clientRec.username || clientRec.name);
+    if (!clientName) {
+      const uName = cleanSmsHierarchyName(item.user);
+      if (uName && clientByUsername[uName.toLowerCase()]) {
+        clientRec = clientByUsername[uName.toLowerCase()];
+        clientName = cleanSmsHierarchyName(clientRec.username || clientRec.name);
+      }
+    }
+    if (!clientRec && clientName) {
+      clientRec = clientByUsername[clientName.toLowerCase()] || null;
+    }
+
+    let agentName = cleanSmsHierarchyName(item.agent_username)
+      || cleanSmsHierarchyName(item.agent)
+      || cleanSmsHierarchyName(item.agent_name);
+    let agentRec = (item.agent_id != null && agentMap[Number(item.agent_id)]) || null;
+    if (!agentName && agentRec) agentName = cleanSmsHierarchyName(agentRec.username || agentRec.name);
+    if (!agentName && clientRec && clientRec.agent_id && agentMap[Number(clientRec.agent_id)]) {
+      agentRec = agentMap[Number(clientRec.agent_id)];
+      agentName = cleanSmsHierarchyName(agentRec.username || agentRec.name);
+    }
+    if (!agentRec && agentName) {
+      agentRec = agentByUsername[agentName.toLowerCase()] || null;
+    }
+
+    let managerName = cleanSmsHierarchyName(item.manager_username)
+      || cleanSmsHierarchyName(item.manager);
+    let managerRec = (item.manager_id != null && managerMap[Number(item.manager_id)]) || null;
+    if (!managerName && managerRec) managerName = cleanSmsHierarchyName(managerRec.username || managerRec.name);
+    if (!managerName && agentRec && agentRec.manager_id && managerMap[Number(agentRec.manager_id)]) {
+      managerRec = managerMap[Number(agentRec.manager_id)];
+      managerName = cleanSmsHierarchyName(managerRec.username || managerRec.name);
+    }
+    if (!managerName && clientRec && clientRec.manager_id && managerMap[Number(clientRec.manager_id)]) {
+      managerRec = managerMap[Number(clientRec.manager_id)];
+      managerName = cleanSmsHierarchyName(managerRec.username || managerRec.name);
+    }
+
+    item.provider = providerVal;
+    item.range = rangeVal;
+    item.range_name = rangeVal;
+    item.range_label = rangeVal;
+    item.type = smsType;
+    item.client = clientName || '';
+    item.agent = agentName || '';
+    item.manager = managerName || '';
+    item.number = numRaw;
+    item.cli = String(item.cli || item.app || item.sender || '').trim();
+    item.message = String(item.message || '');
+    return item;
+  };
+}
+
 function handleSmsLogsQuery(req, res) {
   const sessionUser = req.sessionUser;
   const sRole = (sessionUser && sessionUser.role ? String(sessionUser.role).toLowerCase() : '');
@@ -11045,7 +11248,8 @@ function handleSmsLogsQuery(req, res) {
 
   // Fix 2 & F3: Scoped strictly from session user, seamlessly loading archives
   const dateFrom = req.query.date_from || '';
-  let list = getScopedSmsList(req, dateFrom);
+  const enrichSms = buildSmsEnricher();
+  let list = getScopedSmsList(req, dateFrom).map(enrichSms);
 
   const {
     date_from,
@@ -11059,18 +11263,6 @@ function handleSmsLogsQuery(req, res) {
     status,
     group_by
   } = req.query;
-
-  const agents = readDb('agents') || [];
-  const agentMap = {};
-  agents.forEach(a => { if (a && a.id) agentMap[a.id] = a.username || a.name; });
-
-  const clients = readDb('clients') || [];
-  const clientMap = {};
-  clients.forEach(c => { if (c && c.id) clientMap[c.id] = c.username || c.name; });
-
-  const managers = (readDb('users') || []).filter(u => u.role === 'Manager');
-  const managerMap = {};
-  managers.forEach(m => { if (m && m.id) managerMap[m.id] = m.username || m.name; });
 
   const causeFilter = req.query.fcause || req.query.cause || status;
   if (causeFilter) {
@@ -11178,31 +11370,19 @@ function handleSmsLogsQuery(req, res) {
           } else if (k === 'year') {
             keyParts.year = dStr ? dStr.slice(0, 4) : 'Unknown';
           } else if (k === 'provider') {
-            keyParts.provider = s.provider || (s.country ? s.provider : '—') || 'Direct';
+            keyParts.provider = s.provider || '';
           } else if (k === 'range') {
-            keyParts.range = s.range_name || s.range_label || s.range || (s.country ? `${s.country}${s.provider && s.provider !== 'Manual' && s.provider !== '—' ? ` ${s.provider}` : ''}` : 'General Range');
+            keyParts.range = s.range_name || s.range_label || s.range || '';
           } else if (k === 'client') {
-            let clName = s.client || s.client_username || s.client_name || (s.client_id && clientMap[s.client_id]) || '';
-            if (!clName && s.user && s.user !== 'unallocated' && s.user !== 'Test Panel') clName = s.user;
-            keyParts.client = clName || (s.client_id ? `Client #${s.client_id}` : 'General');
+            keyParts.client = s.client || '';
           } else if (k === 'agent') {
-            let agName = s.agent || s.agent_username || s.agent_name || (s.agent_id && agentMap[s.agent_id]) || '';
-            if (!agName && (s.client_id || keyParts.client)) {
-              const cl = clients.find(c => (s.client_id && Number(c.id) === Number(s.client_id)) || (keyParts.client && c.username === keyParts.client));
-              if (cl && cl.agent_id && agentMap[cl.agent_id]) agName = agentMap[cl.agent_id];
-            }
-            keyParts.agent = agName || (s.agent_id ? `Agent #${s.agent_id}` : 'Direct');
+            keyParts.agent = s.agent || '';
           } else if (k === 'manager') {
-            let mgName = s.manager || s.manager_username || (s.manager_id && managerMap[s.manager_id]) || '';
-            if (!mgName && (s.agent_id || keyParts.agent)) {
-              const ag = agents.find(a => (s.agent_id && Number(a.id) === Number(s.agent_id)) || (keyParts.agent && a.username === keyParts.agent));
-              if (ag && ag.manager_id && managerMap[ag.manager_id]) mgName = managerMap[ag.manager_id];
-            }
-            keyParts.manager = mgName || (s.manager_id ? `Manager #${s.manager_id}` : 'General');
+            keyParts.manager = s.manager || '';
           } else if (k === 'number') {
-            keyParts.number = s.number || '—';
+            keyParts.number = s.number || '';
           } else if (k === 'cli') {
-            keyParts.cli = s.cli || s.app || '—';
+            keyParts.cli = s.cli || '';
           }
         }
 
@@ -11281,7 +11461,11 @@ function handleSmsLogsQuery(req, res) {
         res.write(headers.map(h => `"${h}"`).join(',') + '\r\n');
         for (const g of groupedResult) {
           const row = [
-            ...validKeys.map(k => (k === 'cli' && !isOwner) ? serverMaskCli(g[k]) : (g[k] || '—')),
+            ...validKeys.map(k => {
+              if (k === 'cli' && !isOwner) return serverMaskCli(g[k]);
+              if (k === 'manager' || k === 'agent' || k === 'client') return g[k] || '';
+              return g[k] || '—';
+            }),
             g.sms_count || 0,
             g.delivered_count || 0,
             g.failed_count || 0,
@@ -11403,18 +11587,22 @@ function handleSmsLogsQuery(req, res) {
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.setHeader('Cache-Control', 'no-cache');
-    const headers = ['Date Time', 'Range', 'Number', 'CLI / Sender', 'Client', 'Message', 'Status', 'Currency', 'Payout', 'Client Payout'];
+    const headers = ['Date Time', 'Provider', 'Range', 'Type', 'Number', 'CLI', 'SMS', 'Client', 'Agent', 'Manager', 'Status', 'Currency', 'Payout', 'Client Payout'];
     res.write(headers.map(h => `"${h}"`).join(',') + '\r\n');
     for (const s of list) {
       const safeMsg = String(s.message || '');
       const sanitizedMsg = /^[=\+\-@\t\r]/.test(safeMsg) ? "'" + safeMsg : safeMsg;
       const row = [
         (s.timestamp || '').replace('T', ' ').slice(0, 19),
-        s.range_name || s.range_label || s.range || s.country || '—',
+        s.provider || '',
+        s.range_name || s.range_label || s.range || '',
+        s.type || 'General',
         s.number || '',
-        isOwner ? (s.cli || s.app || s.sender || '—') : serverMaskCli(s.cli || s.app || s.sender || ''),
-        s.client || s.client_name || (s.client_id && clientMap[s.client_id]) || '—',
+        isOwner ? (s.cli || '') : serverMaskCli(s.cli || ''),
         sanitizedMsg,
+        s.client || '',
+        s.agent || '',
+        s.manager || '',
         s.status || 'delivered',
         s.currency || 'USD',
         Number(s.payout != null ? s.payout : (s.profit || 0)).toFixed(4),
@@ -11424,6 +11612,10 @@ function handleSmsLogsQuery(req, res) {
     }
     const footRow = [
       `Total SMS: ${summary.total_sms}`,
+      '',
+      '',
+      '',
+      '',
       '',
       '',
       '',
@@ -11449,30 +11641,6 @@ function handleSmsLogsQuery(req, res) {
 
   const sanitizedSliced = sliced.map(s => {
     const item = { ...s };
-
-    // Resolve client
-    let clientName = item.client_username || item.client || item.client_name || (item.client_id && clientMap[item.client_id]) || '';
-    if (!clientName && item.user && item.user !== 'unallocated' && item.user !== 'Test Panel') {
-      const c = clients.find(x => String(x.username).toLowerCase() === String(item.user).toLowerCase());
-      if (c) clientName = c.username;
-    }
-    item.client = clientName || '—';
-
-    // Resolve agent
-    let agentName = item.agent_username || item.agent || item.agent_name || (item.agent_id && agentMap[item.agent_id]) || '';
-    if (!agentName && (item.client_id || (clientName && clientName !== '—'))) {
-      const c = clients.find(x => (item.client_id && Number(x.id) === Number(item.client_id)) || (clientName && String(x.username).toLowerCase() === clientName.toLowerCase()));
-      if (c && c.agent_id && agentMap[c.agent_id]) agentName = agentMap[c.agent_id];
-    }
-    item.agent = agentName || (item.agent_id ? `Agent #${item.agent_id}` : 'Direct');
-
-    // Resolve manager
-    let managerName = item.manager_username || item.manager || (item.manager_id && managerMap[item.manager_id]) || '';
-    if (!managerName && agentName && agentName !== 'Direct') {
-      const a = agents.find(x => (item.agent_id && Number(x.id) === Number(item.agent_id)) || (agentName && String(x.username).toLowerCase() === agentName.toLowerCase()));
-      if (a && a.manager_id && managerMap[a.manager_id]) managerName = managerMap[a.manager_id];
-    }
-    item.manager = managerName || (item.manager_id ? `Manager #${item.manager_id}` : '—');
 
     if (!isOwner) {
       item.cli = serverMaskCli(item.cli || item.app || item.sender);
@@ -11699,25 +11867,27 @@ app.get('/api/sms/test-logs', (req, res) => {
   let list = readDb('test_sms_logs') || [];
   const ranges = readDb('sms_ranges') || [];
   const testNumbers = readDb('test_numbers') || [];
-  const numToRange = {};
+  const numToRec = {};
   testNumbers.forEach(tn => {
-    if (tn.number) numToRange[tn.number] = tn.range_name || tn.range_label || tn.range;
+    if (tn.number) numToRec[String(tn.number).trim()] = tn;
   });
 
   list = list.map(s => {
-    let rName = s.range_name || s.range_label || s.range;
-    if (!rName || rName.toLowerCase().includes('manual') || rName === '—') {
-      if (numToRange[s.number]) {
-        rName = numToRange[s.number];
-      } else if (s.range_id) {
-        const found = ranges.find(r => r.id === s.range_id);
-        if (found) rName = found.range_name || found.name;
-      }
-    }
-    if (!rName || rName.toLowerCase().includes('manual')) {
-      rName = s.country || 'Test Range';
-    }
-    return { ...s, range_name: rName, range_label: rName, range: rName };
+    const tn = s.number ? numToRec[String(s.number).trim()] : null;
+    const foundRng = (s.range_id && ranges.find(r => Number(r.id) === Number(s.range_id)))
+      || (tn && tn.range_id && ranges.find(r => Number(r.id) === Number(tn.range_id)))
+      || (tn && (tn.range_name || tn.range_label) && ranges.find(r => String(r.range_name || r.name || '').toLowerCase() === String(tn.range_name || tn.range_label).toLowerCase()))
+      || null;
+    let rName = cleanSmsMetaVal(s.range_name || s.range_label || s.range)
+      || cleanSmsMetaVal(tn && (tn.range_name || tn.range_label || tn.range))
+      || cleanSmsMetaVal(foundRng && (foundRng.range_name || foundRng.name))
+      || cleanSmsMetaVal(s.country)
+      || 'Test Range';
+    const prov = cleanSmsMetaVal(s.provider)
+      || cleanSmsMetaVal(tn && tn.provider)
+      || cleanSmsMetaVal(foundRng && foundRng.provider)
+      || '';
+    return { ...s, range_name: rName, range_label: rName, range: rName, provider: prov, type: 'Test Panel' };
   });
 
   const { date_from, date_to, period, filter_period, range, search, cli, group_by } = req.query;
@@ -11808,8 +11978,10 @@ app.get('/api/sms/test-numbers', (req, res) => {
   data = data.map(item => {
     const rng = (item.range_id && rangeMap[item.range_id]) || (item.range_name && rangeMap[item.range_name]);
     const rName = item.range_name || item.range_label || item.range || (rng && (rng.range_name || rng.name)) || item.country || '—';
+    const prov = cleanSmsMetaVal(item.provider) || cleanSmsMetaVal(rng && rng.provider) || '';
     return {
       ...item,
+      provider: prov,
       range_name: rName,
       range_label: rName,
       range: rName

@@ -130,6 +130,41 @@ function fmtDT(iso) {
   }
 }
 
+function tpFmtDtStacked(iso) {
+  const s = fmtDT(iso);
+  if (!s || s === '—') return '—';
+  const parts = s.split(' ');
+  const d = parts[0] || '—';
+  const t = parts[1] || '';
+  if (!t) return `<span class="zy-dt-date">${d}</span>`;
+  return `<div class="zy-dt-stacked"><span class="zy-dt-date">${d}</span><span class="zy-dt-time">${t}</span></div>`;
+}
+
+function tpCopyNum(num, el) {
+  if (!num) return;
+  const str = String(num).trim();
+  try { navigator.clipboard.writeText(str); } catch (_) {}
+  if (el) {
+    const badge = el.querySelector('.zy-copy-badge');
+    if (badge) {
+      el.classList.add('copied');
+      badge.innerHTML = '<i class="fas fa-check"></i> Copied';
+      if (el._t) clearTimeout(el._t);
+      el._t = setTimeout(() => {
+        el.classList.remove('copied');
+        badge.innerHTML = '<i class="far fa-copy"></i> Copy';
+      }, 1400);
+    }
+  }
+  toast('Copied: ' + str, 'success');
+}
+
+function tpRenderNumberCopyBox(num) {
+  const clean = String(num || '').trim();
+  if (!clean || clean === '—') return '—';
+  return `<button type="button" class="zy-num-copy-box" onclick="event.stopPropagation();tpCopyNum('${tpEsc(clean)}', this)" title="Click to copy number"><span class="zy-copy-num">${tpEsc(clean)}</span><span class="zy-copy-badge"><i class="far fa-copy"></i> Copy</span></button>`;
+}
+
 function fmtShort(iso) {
   if (!iso) return '—';
   if (typeof window.zyFormatShortTime === 'function') {
@@ -588,7 +623,7 @@ function renderTn() {
   const tbody = tn_rows.length
     ? tn_rows.map((r, i) => `<tr class="${i % 2 ? 'alt' : ''}">
         <td><b>${tpEsc(r.range_name || r.range_label || r.range || (r.country ? `${r.country}` : '—'))}</b></td>
-        <td><b>${tpEsc(r.number || '—')}</b></td>
+        <td>${tpRenderNumberCopyBox(r.number)}</td>
         <td style="text-align:center;"><button class="btn-icon" style="color:#d32f2f;background:none;border:none;cursor:pointer;font-size:14px;" onclick="removeTn(${r.id},'${tpEsc((r.number || '').replace(/'/g, "\\'"))}')" title="Remove from Test Panel and release to My Numbers"><i class="fas fa-trash"></i></button></td>
       </tr>`).join('')
     : `<tr><td colspan="3" style="text-align:center;padding:18px;color:var(--text-muted);">No test numbers yet — use "Show Report" to have Owner add some</td></tr>`;
@@ -640,17 +675,19 @@ function renderRecentSms() {
 
   const tbody = rs_rows.length
     ? rs_rows.map((s, i) => `<tr class="${i % 2 ? 'alt' : ''}">
-        <td style="white-space:nowrap;">${fmtDT(s.timestamp)}</td>
+        <td style="white-space:nowrap;">${tpFmtDtStacked(s.timestamp)}</td>
+        <td>${tpEsc(s.provider || '—')}</td>
         <td><b>${tpEsc(s.range_name || s.range_label || s.range || (s.country ? `${s.country}` : '—'))}</b></td>
-        <td><b>${tpEsc(s.number || '—')}</b></td>
+        <td>Test Panel</td>
+        <td><span class="monospace fw-600">${tpEsc(s.number || '—')}</span></td>
         <td>${maskCli(s.cli)}</td>
         <td>********</td>
       </tr>`).join('')
-    : `<tr><td colspan="5" style="text-align:center;padding:18px;color:var(--text-muted);">No SMS received on test numbers yet</td></tr>`;
+    : `<tr><td colspan="7" style="text-align:center;padding:18px;color:var(--text-muted);">No SMS received on test numbers yet</td></tr>`;
 
   document.getElementById('rs-wrap').innerHTML = `
     <table class="dt" id="dt-testlog"><thead><tr>
-      <th>Date ${tpSortBadge(false, 0)}</th><th>Range ${tpSortBadge(false, 0)}</th><th>Number ${tpSortBadge(false, 0)}</th><th>CLI ${tpSortBadge(false, 0)}</th><th>SMS ${tpSortBadge(false, 0)}</th>
+      <th>Date ${tpSortBadge(false, 0)}</th><th>Provider ${tpSortBadge(false, 0)}</th><th>Range ${tpSortBadge(false, 0)}</th><th>Type ${tpSortBadge(false, 0)}</th><th>Number ${tpSortBadge(false, 0)}</th><th>CLI ${tpSortBadge(false, 0)}</th><th>SMS ${tpSortBadge(false, 0)}</th>
     </tr></thead><tbody>${tbody}</tbody></table>
     <div class="dt-pager">${buildPager(rs_pg, pages, 'rsGo')}</div>
     <div class="dt-info">Showing ${rs_total === 0 ? 0 : start + 1}–${Math.min(start + rs_pp, rs_total)} of ${rs_total} entries</div>
@@ -919,7 +956,9 @@ function getCdrColumns() {
   }
   return [
     { key: 'date', label: 'Date' },
+    { key: 'provider', label: 'Provider' },
     { key: 'range', label: 'Range' },
+    { key: 'type', label: 'Type' },
     { key: 'number', label: 'Number' },
     { key: 'cli', label: 'CLI' },
     { key: 'sms', label: 'SMS' },
@@ -1099,9 +1138,11 @@ function renderCdr() {
 
     const getCellVal = (c, r) => {
       switch(c.key) {
-        case 'date': return fmtDT(r.date || r.timestamp);
+        case 'date': return tpFmtDtStacked(r.date || r.timestamp);
+        case 'provider': return tpEsc(r.provider || '—');
         case 'range': return tpEsc(r.range || r.range_name || '—');
-        case 'number': return tpEsc(r.number || '—');
+        case 'type': return 'Test Panel';
+        case 'number': return `<span class="monospace fw-600">${tpEsc(r.number || '—')}</span>`;
         case 'cli': return maskCli(r.cli);
         case 'sms': return (r.cli || r.sms || r.message ? '********' : '—');
         case 'status': return statusBadge(r.status || 'delivered');

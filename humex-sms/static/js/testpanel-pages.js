@@ -34,7 +34,7 @@ async function pgTestNumbers() {
   TP_TNROWS = ((nums && nums.data) || []).map(n => [
     n.range_label || n.range || `${n.country || ''} ${n.provider || ''}`.trim(),
     n.prefix || '',
-    n.number || '',
+    { v: n.number || '', h: typeof zyRenderNumberCopyBox === 'function' ? zyRenderNumberCopyBox(n.number) : (n.number || '') },
     n.payout != null && n.payout !== '' ? n.payout : 'Ask',
     { v: '', h: `SD : <b>${n.sd_limit != null ? n.sd_limit : 0}</b> | SW : <b>${n.sw_limit != null ? n.sw_limit : 0}</b>` }
   ]);
@@ -156,15 +156,17 @@ async function pgTestCdrStatsLoad() {
         typeof zyFormatDateTimeStacked === 'function'
           ? zyFormatDateTimeStacked(s.timestamp || s.date)
           : String(s.timestamp || s.date || '').replace('T', ' ').slice(0, 19),
-        s.range_label || s.range || `${s.country || ''} ${s.provider || ''}`.trim(),
-        s.number || '',
-        zyMaskCli(s.cli),
+        zyEsc(s.provider || '—'),
+        zyEsc(s.range_label || s.range || `${s.country || ''} ${s.provider || ''}`.trim() || '—'),
+        'Test Panel',
+        { v: s.number || '', h: `<span class="monospace" style="font-weight:600;">${zyEsc(s.number || '—')}</span>` },
+        { v: s.cli || '', h: `<span class="monospace">${zyEsc(zyMaskCli(s.cli))}</span>` },
         s.sms || s.message ? 'XXXXX' : '',
         s.status || ''
       ]);
 
     body.innerHTML = zyDT2('dt-testcdr', {
-      cols: ['Date', 'Range', 'Number', 'CLI', 'SMS', 'Status'],
+      cols: ['Date', 'Provider', 'Range', 'Type', 'Number', 'CLI', 'SMS', 'Status'],
       rows,
       sort: 0,
       dir: -1

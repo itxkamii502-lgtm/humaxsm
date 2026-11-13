@@ -363,7 +363,7 @@ function buildSortableNumbersTable(numbersData, rangeInfoFor, rateInfoFor, opts 
       `<input type="checkbox" class="sms-num-check" value="${n.id}" data-assigned="${n.client_id ? '1' : '0'}" onchange="updateSmsSelectedCount()">`,
       r.range,
       r.prefix,
-      `<span class="monospace fw-600">${r.number || '—'}</span>`,
+      typeof zyRenderNumberCopyBox === 'function' ? zyRenderNumberCopyBox(r.number) : `<span class="monospace fw-600">${r.number || '—'}</span>`,
       `<span class="fs-12 text-muted">${r.range_term}</span><br><strong class="text-success">$${Number(r.my_payout || 0).toFixed(4)}</strong>`,
       n.client_id
         ? `<span class="badge badge-blue"><i class="fas fa-user"></i> ${r.client}</span>`
@@ -1509,7 +1509,7 @@ async function loadAgTestNumbers() {
     ['Range', 'Test Number'],
     rows.map(n => [
       n.range_label || '—',
-      `<span class="monospace fw-600">${n.number || '—'}</span>`
+      typeof zyRenderNumberCopyBox === 'function' ? zyRenderNumberCopyBox(n.number) : `<span class="monospace fw-600">${n.number || '—'}</span>`
     ])
   ) + `
     <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;">
@@ -1532,11 +1532,13 @@ async function loadAgRecentSms() {
   const perPage = agRsPerPage === 'all' ? (total || 1) : agRsPerPage;
 
   wrap.innerHTML = buildTable(
-    ['Date', 'Range', 'Number', 'CLI', 'SMS'],
+    ['Date', 'Provider', 'Range', 'Type', 'Number', 'CLI', 'SMS'],
     rows.map(s => [
-      fmtShort(s.timestamp),
-      s.range_label || '—',
-      `<span class="monospace">${s.number || '—'}</span>`,
+      typeof zyFormatDateTimeStacked === 'function' ? zyFormatDateTimeStacked(s.timestamp || s.date).h : fmtShort(s.timestamp),
+      escapeHtml(s.provider || '—'),
+      escapeHtml(s.range_label || '—'),
+      'Test Panel',
+      `<span class="monospace">${escapeHtml(s.number || '—')}</span>`,
       s.cli ? (s.cli.charAt(0).toUpperCase() + 'XXXXX') : '—',
       '********'
     ])
@@ -2405,15 +2407,19 @@ async function pgDetailedSms(page = 1) {
           [cdrGroupBy.charAt(0).toUpperCase()+cdrGroupBy.slice(1), 'SMS Count', 'My Payout'],
           logs.map(g => [g.key || '—', g.sms_count || 0, `$${Number(g.payout || 0).toFixed(4)}`])
         ) : buildTable(
-          ['DATE', 'RANGE', 'NUMBER', 'CLI', 'SMS', 'CURRENCY', 'MY PAYOUT'],
+          ['DATE', 'PROVIDER', 'RANGE', 'TYPE', 'NUMBER', 'CLI', 'SMS', 'CLIENT', 'CURRENCY', 'MY PAYOUT'],
           logs.map(s => {
             const rInfo = rangeLookup[`${s.country}|${s.provider}`];
+            const cleanCl = ['—', '-', 'direct', 'general', 'unallocated', 'unassigned', 'test panel', 'unknown', 'none', 'null'].includes(String(s.client || '').trim().toLowerCase()) ? '' : String(s.client || '').trim();
             return [
-              fmtShort(s.timestamp),
+              typeof zyFormatDateTimeStacked === 'function' ? zyFormatDateTimeStacked(s.timestamp || s.date).h : fmtShort(s.timestamp),
+              escapeHtml(s.provider || '—'),
               escapeHtml(s.range_name || s.range_label || s.range || rInfo?.range_name || rInfo?.name || s.country || '—'),
+              s.type === 'Test Panel' ? 'Test Panel' : 'General',
               `<span class="monospace">${escapeHtml(s.number || '—')}</span>`,
-              escapeHtml(s.cli || '—'),
-              `<span class="text-muted">${escapeHtml(s.message || '—')}</span>`,
+              `<span class="monospace">${escapeHtml(s.cli || '—')}</span>`,
+              `<div style="max-width:300px;white-space:normal;line-height:1.4;word-break:break-word;">${escapeHtml(s.message || '')}</div>`,
+              escapeHtml(cleanCl),
               'USD',
               `<span class="text-success">$${Number(s.my_payout ?? s.agent_amount ?? s.agent_payout ?? s.profit ?? 0).toFixed(4)}</span>`
             ];

@@ -44,8 +44,11 @@ function zyColClass(colName) {
   if (cn === 'number' || cn === 'phone' || cn === 'cli' || cn === 'ip' || cn === 'ip address' || cn.includes('phone') || cn.includes('number')) {
     return 'col-mono';
   }
-  if (cn === 'status' || cn === 'cause' || cn === 'state') {
+  if (cn === 'status' || cn === 'cause' || cn === 'state' || cn === 'type' || cn === 'provider') {
     return 'col-status text-center';
+  }
+  if (cn === 'sms' || cn === 'message' || cn === 'sms message') {
+    return 'text-left';
   }
   if (cn === 'currency' || cn === 'curr.' || cn === 'curr') {
     return 'col-curr text-center';
@@ -2627,12 +2630,35 @@ window.zyCopyNumber = function(num, el) {
   } catch (_) {}
 
   if (el) {
-    const origHtml = el.innerHTML;
-    el.innerHTML = '<i class="fas fa-check" style="color:#10b981;font-size:12px;"></i>';
-    setTimeout(() => { el.innerHTML = origHtml; }, 1400);
+    const badge = el.querySelector ? el.querySelector('.zy-copy-badge') : null;
+    if (el.classList && el.classList.contains('zy-num-copy-box') && badge) {
+      if (!badge.dataset.origHtml) badge.dataset.origHtml = badge.innerHTML;
+      el.classList.add('copied');
+      badge.innerHTML = '<i class="fas fa-check"></i> Copied';
+      if (el._copyTimer) clearTimeout(el._copyTimer);
+      el._copyTimer = setTimeout(() => {
+        el.classList.remove('copied');
+        badge.innerHTML = badge.dataset.origHtml || '<i class="far fa-copy"></i> Copy';
+      }, 1400);
+    } else {
+      if (!el.dataset.origHtml) el.dataset.origHtml = el.innerHTML;
+      el.innerHTML = '<i class="fas fa-check" style="color:#10b981;font-size:12px;"></i>';
+      if (el._copyTimer) clearTimeout(el._copyTimer);
+      el._copyTimer = setTimeout(() => {
+        el.innerHTML = el.dataset.origHtml || '<i class="far fa-copy"></i>';
+      }, 1400);
+    }
   }
   if (typeof toast === 'function') toast('Copied: ' + str, 'success');
   else if (typeof zyFlash === 'function') zyFlash('Copied: ' + str);
+};
+
+// ── Large Clickable One-Click Number Copy Box (My Numbers / Test Numbers) ─
+window.zyRenderNumberCopyBox = function(num) {
+  const clean = String(num || '').trim();
+  if (!clean || clean === '—') return '—';
+  const esc = typeof zyEsc === 'function' ? zyEsc(clean) : clean.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  return `<button type="button" class="zy-num-copy-box" onclick="event.stopPropagation();window.zyCopyNumber('${esc}', this)" title="Click to copy number"><span class="zy-copy-num">${esc}</span><span class="zy-copy-badge"><i class="far fa-copy"></i> Copy</span></button>`;
 };
 
 // ── Professional Interactive Day-to-Day Calendar Picker ──────────────────

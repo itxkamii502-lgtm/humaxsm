@@ -964,11 +964,21 @@ body.adminui .text-warning {
     padding: 14px !important;
     overflow-x: auto !important;
   }
-  .table-container, table {
+  .table-container,
+  .zy-dt-wrap,
+  .table-wrap {
     display: block !important;
     width: 100% !important;
     overflow-x: auto !important;
     -webkit-overflow-scrolling: touch;
+  }
+  table.zy-dt,
+  table.zy-dt2-table,
+  table.dt,
+  #dt-cdr table,
+  #dt-reports table {
+    display: table !important;
+    width: 100% !important;
   }
   .modal {
     width: 94% !important;

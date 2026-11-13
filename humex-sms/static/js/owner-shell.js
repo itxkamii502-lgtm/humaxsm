@@ -986,6 +986,7 @@ async function renderMySmsLoad(pageOrSummary = 1) {
         range: 'Range',
         manager: 'Manager',
         agent: 'Agent',
+        client: 'Client',
         number: 'Number',
         cli: 'CLI'
       };
@@ -998,7 +999,7 @@ async function renderMySmsLoad(pageOrSummary = 1) {
         'Profit'
       ];
       const rows = data.map(g => [
-        ...checkedBoxes.map(k => g[k] || '—'),
+        ...checkedBoxes.map(k => (k === 'manager' || k === 'agent' || k === 'client') ? (g[k] || '') : (g[k] || '—')),
         g.sms_count || 0,
         g.currency || '$',
         Number(g.payout || 0).toFixed(4),
@@ -1032,8 +1033,7 @@ async function renderMySmsLoad(pageOrSummary = 1) {
       });
       zy2Render('dt-cdr');
     } else {
-      // ── Detailed Ungrouped Mode (Matching Video Columns 1:1) ──
-      // ── Detailed Ungrouped Mode (Matching Video Columns 1:1) ──
+      // ── Detailed Ungrouped Mode ──
       const cols = [
         'Date',
         'Provider',
@@ -1053,6 +1053,12 @@ async function renderMySmsLoad(pageOrSummary = 1) {
         'IP'
       ];
 
+      const cleanOrg = (v) => {
+        const s = String(v || '').trim();
+        if (!s) return '';
+        return ['—', '-', 'direct', 'general', 'unallocated', 'unassigned', 'test panel', 'unknown', 'none', 'null'].includes(s.toLowerCase()) ? '' : s;
+      };
+
       const rows = data.map(s => {
         const dtCell = typeof zyFormatDateTimeStacked === 'function'
           ? zyFormatDateTimeStacked(s.timestamp || s.date)
@@ -1062,24 +1068,29 @@ async function renderMySmsLoad(pageOrSummary = 1) {
         const profitVal = Math.max(0, myPayoutVal - agentPayoutVal);
         const causeVal = (s.cause || (s.status === 'delivered' || s.status === 'success' ? 'Success' : (s.status || '—')));
 
-        const copyBtn = s.number ? `<button type="button" class="zy-num-copy-btn" onclick="event.stopPropagation();window.zyCopyNumber('${zyEsc(s.number)}', this)" title="Copy number" style="background:none;border:none;cursor:pointer;padding:2px 4px;font-size:12px;color:#94a3b8;border-radius:3px;transition:all 0.15s ease;" onmouseover="this.style.color='#10b981'" onmouseout="this.style.color='#94a3b8'"><i class="far fa-copy"></i></button>` : '';
-        const numberHtml = s.number ? `<span style="display:inline-flex;align-items:center;gap:6px;"><span style="font-family:monospace;font-weight:600;">${zyEsc(s.number)}</span>${copyBtn}</span>` : '—';
+        const numStr = String(s.number || '').trim();
+        const numberHtml = numStr ? `<span class="monospace" style="font-weight:600;">${zyEsc(numStr)}</span>` : '—';
+        const cliStr = String(s.cli || s.app || '').trim();
+        const cliHtml = cliStr ? `<span class="monospace" style="white-space:normal;word-break:break-word;">${zyEsc(cliStr)}</span>` : '—';
+        const msgRaw = String(s.message || '');
+        const msgHtml = typeof zyHighlightOtp === 'function' ? zyHighlightOtp(msgRaw) : zyEsc(msgRaw);
 
-        const clientVal = s.client || s.client_username || s.client_name || (s.user && s.user !== 'unallocated' ? s.user : '—');
-        const agentVal = s.agent || s.agent_username || s.agent_name || '—';
-        const managerVal = s.manager || s.manager_username || '—';
+        const clientVal = cleanOrg(s.client || s.client_username || s.client_name || s.user);
+        const agentVal = cleanOrg(s.agent || s.agent_username || s.agent_name);
+        const managerVal = cleanOrg(s.manager || s.manager_username);
+        const typeVal = s.type === 'Test Panel' ? 'Test Panel' : 'General';
 
         return [
           dtCell,
-          s.provider || '—',
-          s.range || s.range_name || s.range_label || s.country || '—',
-          s.type || 'General',
-          { v: s.number || '', h: numberHtml },
-          typeof zyEsc === 'function' ? zyEsc(s.cli || s.app || '—') : (s.cli || s.app || '—'),
-          typeof zyHighlightOtp === 'function' ? zyHighlightOtp(s.message || '') : (typeof zyEsc === 'function' ? zyEsc(s.message || '') : (s.message || '')),
-          zyEsc(clientVal),
-          zyEsc(agentVal),
-          zyEsc(managerVal),
+          zyEsc(s.provider || '—'),
+          zyEsc(s.range_name || s.range_label || s.range || s.country || '—'),
+          typeVal,
+          { v: numStr, h: numberHtml },
+          { v: cliStr, h: cliHtml },
+          { v: msgRaw, h: `<div style="max-width:300px;white-space:normal;line-height:1.4;word-break:break-word;">${msgHtml}</div>` },
+          { v: clientVal, h: clientVal ? zyEsc(clientVal) : '' },
+          { v: agentVal, h: agentVal ? zyEsc(agentVal) : '' },
+          { v: managerVal, h: managerVal ? zyEsc(managerVal) : '' },
           s.currency || '$',
           myPayoutVal ? zyFmtMoney(myPayoutVal, 4) : '0',
           agentPayoutVal ? zyFmtMoney(agentPayoutVal, 4) : '0',
@@ -1100,7 +1111,6 @@ async function renderMySmsLoad(pageOrSummary = 1) {
       });
       const sumProfit = Math.max(0, sumMyPayout - sumAgentPayout);
 
-      // Clean single-line professional footer row matching Astra SMS (No stacked rainbow boxes)
       const usdIn = (sum.payout != null ? sum.payout : sumMyPayout);
       const usdOut = (sum.client_payout != null ? sum.client_payout : sumAgentPayout);
       const usdPr = (sum.profit != null ? sum.profit : sumProfit);

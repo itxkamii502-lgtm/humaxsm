@@ -4102,15 +4102,16 @@ body.adminui .zy-main {
     box-shadow: none !important;
   }
 
-  /* Unified single-row Date/Time column */
+  /* Unified single-column Date (top) / Time (bottom) */
   .zy-dt-stacked {
     display: inline-flex !important;
-    flex-direction: row !important;
+    flex-direction: column !important;
     align-items: center !important;
     justify-content: center !important;
     line-height: 1.25 !important;
     white-space: nowrap !important;
-    gap: 6px !important;
+    min-width: 84px !important;
+    gap: 2px !important;
   }
   .zy-dt-date {
     font-family: inherit !important;
@@ -5093,16 +5094,16 @@ table.zy-dt td div[style*="max-width"] {
   text-align: left !important;
 }
 
-/* Date / Time column: wide single row (date and time side-by-side in one column) */
+/* Date / Time column: stacked in ONE single column (date on top, time right below) */
 .zy-dt-stacked {
   display: inline-flex !important;
-  flex-direction: row !important;
+  flex-direction: column !important;
   align-items: center !important;
   justify-content: center !important;
-  gap: 5px !important;
-  line-height: 1.2 !important;
+  gap: 2px !important;
+  line-height: 1.25 !important;
   width: auto !important;
-  min-width: 116px !important;
+  min-width: 86px !important;
   max-width: none !important;
   white-space: nowrap !important;
 }
@@ -5551,3 +5552,93 @@ body.adminui .stats-grid {
   overflow: hidden !important;
   text-overflow: ellipsis !important;
 }
+
+/* ═══ LARGE ONE-CLICK NUMBER COPY BOX (My Numbers & Test Numbers) ═══ */
+.zy-num-copy-box {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 10px !important;
+  min-width: 185px !important;
+  min-height: 36px !important;
+  padding: 5px 10px 5px 12px !important;
+  border-radius: 8px !important;
+  border: 1.5px solid #cbd5e1 !important;
+  background: #f8fafc !important;
+  color: #0f172a !important;
+  cursor: pointer !important;
+  transition: all 0.16s ease !important;
+  font-family: inherit !important;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04) !important;
+}
+.zy-num-copy-box:hover {
+  border-color: #10b981 !important;
+  background: #ecfdf5 !important;
+  box-shadow: 0 2px 6px rgba(16, 185, 129, 0.14) !important;
+}
+.zy-num-copy-box:active {
+  transform: scale(0.985);
+}
+.zy-num-copy-box .zy-copy-num {
+  font-family: 'Consolas', 'SFMono-Regular', 'Roboto Mono', Menlo, monospace !important;
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.35px !important;
+  color: #0f172a !important;
+  white-space: nowrap !important;
+}
+.zy-num-copy-box .zy-copy-badge {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  padding: 3px 8px !important;
+  border-radius: 5px !important;
+  background: #e2e8f0 !important;
+  color: #334155 !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  line-height: 1.2 !important;
+  white-space: nowrap !important;
+  transition: all 0.16s ease !important;
+}
+.zy-num-copy-box:hover .zy-copy-badge {
+  background: #10b981 !important;
+  color: #ffffff !important;
+}
+.zy-num-copy-box.copied {
+  border-color: #059669 !important;
+  background: #d1fae5 !important;
+}
+.zy-num-copy-box.copied .zy-copy-num {
+  color: #065f46 !important;
+}
+.zy-num-copy-box.copied .zy-copy-badge {
+  background: #059669 !important;
+  color: #ffffff !important;
+}
+[data-theme="dark"] .zy-num-copy-box,
+body.dark .zy-num-copy-box {
+  background: #1e293b !important;
+  border-color: #334155 !important;
+  color: #f1f5f9 !important;
+}
+[data-theme="dark"] .zy-num-copy-box .zy-copy-num,
+body.dark .zy-num-copy-box .zy-copy-num {
+  color: #f8fafc !important;
+}
+[data-theme="dark"] .zy-num-copy-box .zy-copy-badge,
+body.dark .zy-num-copy-box .zy-copy-badge {
+  background: #334155 !important;
+  color: #cbd5e1 !important;
+}
+[data-theme="dark"] .zy-num-copy-box:hover,
+body.dark .zy-num-copy-box:hover {
+  border-color: #10b981 !important;
+  background: rgba(16, 185, 129, 0.15) !important;
+}
+[data-theme="dark"] .zy-num-copy-box.copied,
+body.dark .zy-num-copy-box.copied {
+  border-color: #10b981 !important;
+  background: rgba(16, 185, 129, 0.25) !important;
+}
+
