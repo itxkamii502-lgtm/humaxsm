@@ -36,9 +36,7 @@ const ROOT_FILES_WHITELIST = [
   'ecosystem.config.cjs',
   'reset-owner-password.js',
   'README.md',
-  'VPS_DEPLOYMENT_GUIDE.md',
-  'STEP_BY_STEP_VPS_GUIDE.md',
-  'RENAME_MAP.md'
+  'VPS_DEPLOYMENT_GUIDE.md'
 ];
 
 // Production-only package.json with the 8 proven runtime dependencies

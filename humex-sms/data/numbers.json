@@ -881,5 +881,22 @@
     "last_sms": null,
     "sms_count": 0,
     "notes": ""
+  },
+  {
+    "id": 148,
+    "number": "447700967351",
+    "range_id": 1,
+    "range_name": "United States Mobile (1202)",
+    "prefix": "+1202",
+    "app": "Unassigned",
+    "status": "active",
+    "user": "unallocated",
+    "country": "United States",
+    "provider": "Bandwidth Direct",
+    "otp_limit": 5,
+    "allocated_at": "2026-11-13T10:28:46.617Z",
+    "last_sms": null,
+    "sms_count": 0,
+    "notes": ""
   }
 ]

@@ -1,20 +1,12 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# HUMEX SMS
 
-# Run and deploy your AI Studio app
+Production Node.js + Express + WebSocket + SMPP SMS Panel.
 
-This contains everything you need to run your app locally.
+## Quick Start
 
-View your app in AI Studio: https://ai.studio/apps/c423547c-7d2b-41e7-ad91-495529022d09
+```bash
+npm install --omit=dev
+npm start
+```
 
-## Run Locally
-
-**Prerequisites:**  Node.js
-
-
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+Server runs on `http://0.0.0.0:3000`. See `VPS_DEPLOYMENT_GUIDE.md` for PM2 & Nginx setup.
