@@ -5149,15 +5149,29 @@ table.zy-dt2-table td .monospace,
   display: inline-block;
 }
 
-/* CDR SMS message cell: max ~32 chars per line (~"Your Whop verification code is:") then wrap cleanly */
-.zy-sms-cell {
+/* CDR SMS message cell: max ~32 chars per line (~"Your Whop verification code is:") and right-aligned */
+.zy-sms-cell,
+#dt-cdr table td .zy-sms-cell,
+#dt-reports table td .zy-sms-cell,
+table.zy-dt2-table td .zy-sms-cell,
+table.zy-dt td .zy-sms-cell,
+table.apx-table td .zy-sms-cell,
+table.data-table td .zy-sms-cell {
   display: block;
   min-width: 215px;
   max-width: 255px;
-  white-space: normal;
-  line-height: 1.45;
+  margin-left: auto !important;
+  margin-right: 0 !important;
+  white-space: normal !important;
+  line-height: 1.45 !important;
   overflow-wrap: anywhere;
-  word-break: break-word;
+  word-break: break-word !important;
+  text-align: right !important;
+  direction: ltr !important;
+}
+
+table td:has(> .zy-sms-cell) {
+  text-align: right !important;
 }
 
 /* Money / Payout / Rate: right align, weight 600 */
