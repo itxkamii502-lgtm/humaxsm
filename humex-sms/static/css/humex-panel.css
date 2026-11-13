@@ -5149,7 +5149,7 @@ table.zy-dt2-table td .monospace,
   display: inline-block;
 }
 
-/* CDR SMS message cell: max ~32 chars per line (~"Your Whop verification code is:") and right-aligned */
+/* CDR SMS message cell: max ~32 chars per line (~"Your Whop verification code is:") and left-aligned */
 .zy-sms-cell,
 #dt-cdr table td .zy-sms-cell,
 #dt-reports table td .zy-sms-cell,
@@ -5160,18 +5160,18 @@ table.data-table td .zy-sms-cell {
   display: block;
   min-width: 215px;
   max-width: 255px;
-  margin-left: auto !important;
-  margin-right: 0 !important;
+  margin-left: 0 !important;
+  margin-right: auto !important;
   white-space: normal !important;
   line-height: 1.45 !important;
   overflow-wrap: anywhere;
   word-break: break-word !important;
-  text-align: right !important;
+  text-align: left !important;
   direction: ltr !important;
 }
 
 table td:has(> .zy-sms-cell) {
-  text-align: right !important;
+  text-align: left !important;
 }
 
 /* Money / Payout / Rate: right align, weight 600 */
