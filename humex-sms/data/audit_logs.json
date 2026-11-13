@@ -1,5 +1,59 @@
 [
   {
+    "id": 95,
+    "actor": "Admin",
+    "action": "Import Numbers",
+    "details": "Imported 1 numbers to range \"United States Mobile (1202)\" (skipped 1 duplicate(s))",
+    "module": "Numbers",
+    "ip": "127.0.0.1",
+    "timestamp": "2026-11-13T08:36:57.614Z"
+  },
+  {
+    "id": 94,
+    "actor": "Admin",
+    "action": "Add CR API Connection",
+    "details": "Connected 'OctoPanel_1794559017593' (Provider registered)",
+    "module": "CR API",
+    "ip": "127.0.0.1",
+    "timestamp": "2026-11-13T08:36:57.600Z"
+  },
+  {
+    "id": 93,
+    "actor": "Kamran_Bhatti",
+    "action": "Login Success",
+    "details": "Logged in as Owner",
+    "module": "Auth",
+    "ip": "127.0.0.1",
+    "timestamp": "2026-11-13T08:36:57.584Z"
+  },
+  {
+    "id": 92,
+    "actor": "Admin",
+    "action": "Import Numbers",
+    "details": "Imported 1 numbers to range \"United States Mobile (1202)\" (skipped 1 duplicate(s))",
+    "module": "Numbers",
+    "ip": "127.0.0.1",
+    "timestamp": "2026-11-13T08:23:55.751Z"
+  },
+  {
+    "id": 91,
+    "actor": "Admin",
+    "action": "Add CR API Connection",
+    "details": "Connected 'OctoPanel_1794558235735' (Provider registered)",
+    "module": "CR API",
+    "ip": "127.0.0.1",
+    "timestamp": "2026-11-13T08:23:55.738Z"
+  },
+  {
+    "id": 90,
+    "actor": "Kamran_Bhatti",
+    "action": "Login Success",
+    "details": "Logged in as Owner",
+    "module": "Auth",
+    "ip": "127.0.0.1",
+    "timestamp": "2026-11-13T08:23:55.729Z"
+  },
+  {
     "id": 89,
     "actor": "Admin",
     "action": "Import Numbers",

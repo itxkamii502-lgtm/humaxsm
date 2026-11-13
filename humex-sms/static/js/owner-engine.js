@@ -5115,18 +5115,18 @@ async function renderMySmsLoad(isSummary = false) {
         if (!s) return '';
         return ['—', '-', 'direct', 'general', 'unallocated', 'unassigned', 'test panel', 'unknown', 'none', 'null'].includes(s.toLowerCase()) ? '' : s;
       };
-      const cols = ['Date', 'Provider', 'Range', 'Type', 'Number', 'CLI', 'SMS', 'Manager', 'Agent', 'Client', 'Currency', 'Carrier Cost', 'Payout Given', 'Owner Profit', 'Status', 'IP'];
+      const cols = ['Date', 'Provider', 'Range', 'Type', 'Number', 'CLI', 'SMS', 'Agent', 'Manager', 'Currency', 'My Payout', 'Agent Payout', 'Profit', 'Status', 'IP'];
       const rows = data.map(s => {
         const dtCell = typeof zyFormatDateTimeStacked === 'function'
           ? zyFormatDateTimeStacked(s.timestamp || s.date)
           : { v: (s.timestamp || s.date || '').replace('T', ' ').slice(0, 19), h: (s.timestamp || s.date || '').replace('T', ' ').slice(0, 19) };
-        const carrierCost = parseFloat(s.carrier_rate != null ? s.carrier_rate : (s.payout || 0)) || 0;
-        const payoutGiven = parseFloat(s.payout_rate != null ? s.payout_rate : (s.client_payout != null ? s.client_payout : (s.client_rate || 0))) || 0;
-        const prof = Math.max(0, carrierCost - payoutGiven);
+        const carrierCost = parseFloat(s.company_rate != null ? s.company_rate : (s.company_payout != null ? s.company_payout : (s.carrier_rate != null ? s.carrier_rate : (s.my_payout || 0)))) || 0;
+        const payoutGiven = parseFloat(s.agent_payout != null ? s.agent_payout : (s.agent_rate || 0)) || 0;
+        const prof = parseFloat(s.owner_amount != null ? s.owner_amount : (s.profit != null ? s.profit : Math.max(0, carrierCost - payoutGiven))) || 0;
         const causeVal = (s.status === 'delivered' || s.status === 'success' ? 'Success' : (s.cause || s.status || '—'));
         const statusBadge = (causeVal === 'Success' || s.status === 'delivered')
           ? `<span class="badge badge-green" style="font-size:11px;">Success</span>`
-          : `<span class="badge badge-yellow" style="font-size:11px;">${causeVal}</span>`;
+          : `<span class="badge badge-yellow" style="font-size:11px;">${escapeHtml(causeVal)}</span>`;
 
         return [
           dtCell,
@@ -5136,28 +5136,27 @@ async function renderMySmsLoad(isSummary = false) {
           `<span class="monospace" style="font-weight:600;">${escapeHtml(s.number || '—')}</span>`,
           `<span class="monospace" style="color:#2563eb;font-weight:600;">${escapeHtml(s.cli || s.app || '—')}</span>`,
           `<div style="max-width:300px;white-space:normal;line-height:1.4;word-break:break-word;">${zyHighlightOtp(s.message)}</div>`,
-          escapeHtml(cleanOrg(s.manager || s.manager_username)),
           escapeHtml(cleanOrg(s.agent || s.agent_username)),
-          escapeHtml(cleanOrg(s.client || s.client_username)),
-          s.currency || '$',
+          escapeHtml(cleanOrg(s.manager || s.manager_username)),
+          escapeHtml(s.currency || '$'),
           carrierCost.toFixed(4),
           payoutGiven.toFixed(4),
           prof.toFixed(4),
           { v: causeVal, h: statusBadge },
-          s.ip || '—'
+          escapeHtml(s.ip || '—')
         ];
       });
 
       const totalSms = rows.length;
-      let sumCost = 0, sumPayout = 0;
+      let sumCost = 0, sumPayout = 0, sumProfit = 0;
       rows.forEach(r => {
-        sumCost += parseFloat(r[11]) || 0;
-        sumPayout += parseFloat(r[12]) || 0;
+        sumCost += parseFloat(r[10]) || 0;
+        sumPayout += parseFloat(r[11]) || 0;
+        sumProfit += parseFloat(r[12]) || 0;
       });
-      const sumProfit = Math.max(0, sumCost - sumPayout);
 
       const footRow = `<td><b>Total SMS: ${totalSms}</b></td>` +
-        '<td></td>'.repeat(9) +
+        '<td></td>'.repeat(8) +
         `<td><b>$</b></td>` +
         `<td><b>${sumCost.toFixed(4)}</b></td>` +
         `<td><b>${sumPayout.toFixed(4)}</b></td>` +
@@ -5753,15 +5752,17 @@ async function doSearchSms() {
     }
 
     el.innerHTML = `<div class="card">${buildTable(
-      ['Number', 'CLI', 'Message', 'Status', 'Provider', 'Profit', 'Time'],
+      ['Date', 'Provider', 'Range', 'Type', 'Number', 'CLI', 'SMS', 'Profit', 'Status'],
       data.data.slice(0, 20).map(s => [
+        typeof zyFormatDateTimeStacked === 'function' ? zyFormatDateTimeStacked(s.timestamp || s.date).h : fmtShort(s.timestamp),
+        escapeHtml(s.provider || '—'),
+        escapeHtml(s.range_name || s.range_label || s.range || s.country || '—'),
+        s.type === 'Test Panel' ? 'Test Panel' : 'General',
         `<span class="monospace">${escapeHtml(s.number || '—')}</span>`,
         `<span style="font-weight:600">${escapeHtml(s.cli || '—')}</span>`,
         escapeHtml(s.message || '—'),
-        statusBadge(s.status),
-        s.provider || '—',
         `<span class="text-success">$${s.profit || 0}</span>`,
-        fmtShort(s.timestamp)
+        statusBadge(s.status)
       ])
     )}</div>`;
     toast(`Found ${data.data.length} results`, 'info');
@@ -5871,14 +5872,16 @@ async function renderDeliveryLogs(page = 1) {
           [adminCdrGroupBy.charAt(0).toUpperCase()+adminCdrGroupBy.slice(1), 'SMS Count', 'Payout'],
           logs.map(g => [g.key || '—', g.sms_count || 0, `$${Number(g.payout || 0).toFixed(4)}`])
         ) : buildTable(
-          ['DATE', 'RANGE', 'NUMBER', 'CLI', 'SMS', 'CURRENCY', 'PAYOUT'],
+          ['Date', 'Provider', 'Range', 'Type', 'Number', 'CLI', 'SMS', 'Currency', 'Payout'],
           logs.map(s => [
-            fmtShort(s.timestamp),
+            typeof zyFormatDateTimeStacked === 'function' ? zyFormatDateTimeStacked(s.timestamp || s.date).h : fmtShort(s.timestamp),
+            escapeHtml(s.provider || '—'),
             escapeHtml(s.range_name || s.range_label || s.range || s.country || '—'),
+            s.type === 'Test Panel' ? 'Test Panel' : 'General',
             `<span class="monospace">${escapeHtml(s.number || '—')}</span>`,
             escapeHtml(s.cli || '—'),
             `<span class="text-muted">${escapeHtml(s.message || '—')}</span>`,
-            'USD',
+            escapeHtml(s.currency || 'USD'),
             `<span class="text-success">$${s.profit || 0}</span>`
           ])
         )}

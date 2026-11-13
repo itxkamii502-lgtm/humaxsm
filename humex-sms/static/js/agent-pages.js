@@ -1510,9 +1510,9 @@ async function zyCdrLoad(pageOrSummary = 1) {
         const dtCell = typeof zyFormatDateTimeStacked === 'function'
           ? zyFormatDateTimeStacked(s.timestamp || s.date)
           : { v: (s.timestamp || s.date || '').replace('T', ' ').slice(0, 19), h: (s.timestamp || s.date || '').replace('T', ' ').slice(0, 19) };
-        const myP = parseFloat(s.agent_payout != null ? s.agent_payout : (s.payout || 0)) || 0;
+        const myP = parseFloat(s.agent_payout != null ? s.agent_payout : (s.agent_rate != null ? s.agent_rate : (s.my_payout || 0))) || 0;
         const clP = parseFloat(s.client_payout != null ? s.client_payout : (s.client_rate || 0)) || 0;
-        const prof = Math.max(0, myP - clP);
+        const prof = parseFloat(s.agent_amount != null ? s.agent_amount : Math.max(0, myP - clP)) || 0;
         const maskedCli = zyMaskCli(s.cli || s.app || '—');
         const smsHtml = typeof zyHighlightOtp === 'function' ? zyHighlightOtp(s.message || '') : zyEsc(s.message || '');
         const clName = cleanOrg(s.client || s.client_username || s.client_name || s.user);
@@ -1527,7 +1527,7 @@ async function zyCdrLoad(pageOrSummary = 1) {
           { v: s.cli || '—', h: `<span class="monospace">${zyEsc(maskedCli)}</span>` },
           { v: s.message || '', h: `<div style="max-width:300px;white-space:normal;line-height:1.4;word-break:break-word;">${smsHtml}</div>` },
           { v: clName, h: clName ? zyEsc(clName) : '' },
-          s.currency || '$',
+          zyEsc(s.currency || '$'),
           Number(myP).toFixed(4),
           Number(clP).toFixed(4),
           Number(prof).toFixed(4)
@@ -1536,7 +1536,7 @@ async function zyCdrLoad(pageOrSummary = 1) {
 
       const sum = logs.summary || {};
       const totalSms = (sum.total_sms != null) ? sum.total_sms : (logs.total != null ? logs.total : rows.length);
-      const totalPayout = (sum.payout != null) ? sum.payout : (data.reduce((acc, s) => acc + (parseFloat(s.agent_payout != null ? s.agent_payout : (s.payout || 0)) || 0), 0));
+      const totalPayout = (sum.payout != null) ? sum.payout : (data.reduce((acc, s) => acc + (parseFloat(s.agent_payout != null ? s.agent_payout : (s.agent_rate != null ? s.agent_rate : (s.my_payout || 0))) || 0), 0));
       const totalClientPayout = (sum.client_payout != null) ? sum.client_payout : (data.reduce((acc, s) => acc + (parseFloat(s.client_payout != null ? s.client_payout : (s.client_rate || 0)) || 0), 0));
       const totalProfit = (sum.profit != null) ? sum.profit : Math.max(0, totalPayout - totalClientPayout);
 

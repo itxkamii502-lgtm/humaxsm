@@ -5118,7 +5118,16 @@ table.zy-dt td div[style*="max-width"] {
   color: #64748b !important;
 }
 
-/* Monospace Numbers, CLIs, OTPs, Tokens, IPs: Bold & Clean */
+table.zy-dt td,
+table.zy-dt2-table td,
+#dt-cdr table td,
+#dt-reports table td,
+table.zy-cdr-table td,
+table.apx-table td {
+  display: table-cell !important;
+}
+
+/* Monospace Numbers, CLIs, OTPs, Tokens, IPs: Bold & Clean (never override td display!) */
 #dt-cdr table td .monospace,
 #dt-reports table td .monospace,
 table.zy-dt td .monospace,
@@ -5131,6 +5140,12 @@ table.zy-dt2-table td.col-mono,
   font-weight: 600 !important;
   letter-spacing: 0.3px !important;
   color: #0f172a !important;
+}
+#dt-cdr table td .monospace,
+#dt-reports table td .monospace,
+table.zy-dt td .monospace,
+table.zy-dt2-table td .monospace,
+.monospace:not(td):not(th) {
   display: inline-block;
 }
 

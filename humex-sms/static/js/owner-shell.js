@@ -914,7 +914,10 @@ window.zyExportCdrAdminStream = function() {
   zyExportCdrStream({
     date_from: val('rp-from'),
     date_to: val('rp-to'),
+    provider: val('rp-provider'),
     range: val('rp-range'),
+    agent_id: val('rp-agent'),
+    manager_id: val('rp-manager'),
     client_id: val('rp-client'),
     search: val('rp-num'),
     cli: val('rp-cli'),
@@ -1003,15 +1006,15 @@ async function renderMySmsLoad(pageOrSummary = 1) {
         g.sms_count || 0,
         g.currency || '$',
         Number(g.payout || 0).toFixed(4),
-        Number(g.agent_payout != null ? g.agent_payout : (g.client_payout || 0)).toFixed(4),
-        Number(g.profit != null ? g.profit : ((g.payout || 0) - (g.client_payout || 0))).toFixed(4)
+        Number(g.agent_payout != null ? g.agent_payout : 0).toFixed(4),
+        Number(g.profit != null ? g.profit : Math.max(0, (g.payout || 0) - (g.agent_payout || 0))).toFixed(4)
       ]);
 
       const sumTotals = typeof zyBuildCdrTotalRow === 'function' ? zyBuildCdrTotalRow(data, true, { summary: logs.summary }) : null;
       const totalGroups = sumTotals ? sumTotals.count : data.length;
       const totalSms = sumTotals ? sumTotals.totalSms : (logs.summary && logs.summary.total_sms != null ? logs.summary.total_sms : data.reduce((s, g) => s + (g.sms_count || 0), 0));
       const totalPayout = sumTotals ? sumTotals.totalPayout : (logs.summary && logs.summary.payout != null ? logs.summary.payout : data.reduce((s, g) => s + (parseFloat(g.payout) || 0), 0));
-      const totalAgentPayout = sumTotals ? sumTotals.totalClientPayout : (logs.summary && logs.summary.client_payout != null ? logs.summary.client_payout : data.reduce((s, g) => s + (parseFloat(g.agent_payout != null ? g.agent_payout : g.client_payout) || 0), 0));
+      const totalAgentPayout = (logs.summary && logs.summary.agent_payout != null) ? Number(logs.summary.agent_payout) : data.reduce((s, g) => s + (parseFloat(g.agent_payout) || 0), 0);
       const totalProfit = sumTotals ? sumTotals.totalProfit : (logs.summary && logs.summary.profit != null ? logs.summary.profit : Math.max(0, totalPayout - totalAgentPayout));
 
       const footRow = `<td><b>Total Groups: ${totalGroups}</b><br><small>Total SMS: ${totalSms.toLocaleString()}</small></td>` +
@@ -1042,7 +1045,6 @@ async function renderMySmsLoad(pageOrSummary = 1) {
         'Number',
         'CLI',
         'SMS',
-        'Client',
         'Agent',
         'Manager',
         'Currency',
@@ -1063,9 +1065,9 @@ async function renderMySmsLoad(pageOrSummary = 1) {
         const dtCell = typeof zyFormatDateTimeStacked === 'function'
           ? zyFormatDateTimeStacked(s.timestamp || s.date)
           : { v: (s.timestamp || s.date || '').replace('T', ' ').slice(0, 19), h: (s.timestamp || s.date || '').replace('T', ' ').slice(0, 19) };
-        const myPayoutVal = parseFloat(s.my_payout != null ? s.my_payout : (s.company_rate != null ? s.company_rate : (s.payout || 0))) || 0;
-        const agentPayoutVal = parseFloat(s.agent_payout != null ? s.agent_payout : (s.agent_rate != null ? s.agent_rate : 0)) || 0;
-        const profitVal = Math.max(0, myPayoutVal - agentPayoutVal);
+        const myPayoutVal = parseFloat(s.company_rate != null ? s.company_rate : (s.company_payout != null ? s.company_payout : (s.carrier_revenue != null ? s.carrier_revenue : (s.my_payout || 0)))) || 0;
+        const agentPayoutVal = parseFloat(s.agent_payout != null ? s.agent_payout : (s.agent_rate || 0)) || 0;
+        const profitVal = parseFloat(s.owner_amount != null ? s.owner_amount : (s.profit != null ? s.profit : Math.max(0, myPayoutVal - agentPayoutVal))) || 0;
         const causeVal = (s.cause || (s.status === 'delivered' || s.status === 'success' ? 'Success' : (s.status || '—')));
 
         const numStr = String(s.number || '').trim();
@@ -1075,7 +1077,6 @@ async function renderMySmsLoad(pageOrSummary = 1) {
         const msgRaw = String(s.message || '');
         const msgHtml = typeof zyHighlightOtp === 'function' ? zyHighlightOtp(msgRaw) : zyEsc(msgRaw);
 
-        const clientVal = cleanOrg(s.client || s.client_username || s.client_name || s.user);
         const agentVal = cleanOrg(s.agent || s.agent_username || s.agent_name);
         const managerVal = cleanOrg(s.manager || s.manager_username);
         const typeVal = s.type === 'Test Panel' ? 'Test Panel' : 'General';
@@ -1088,15 +1089,14 @@ async function renderMySmsLoad(pageOrSummary = 1) {
           { v: numStr, h: numberHtml },
           { v: cliStr, h: cliHtml },
           { v: msgRaw, h: `<div style="max-width:300px;white-space:normal;line-height:1.4;word-break:break-word;">${msgHtml}</div>` },
-          { v: clientVal, h: clientVal ? zyEsc(clientVal) : '' },
           { v: agentVal, h: agentVal ? zyEsc(agentVal) : '' },
           { v: managerVal, h: managerVal ? zyEsc(managerVal) : '' },
-          s.currency || '$',
+          zyEsc(s.currency || '$'),
           myPayoutVal ? zyFmtMoney(myPayoutVal, 4) : '0',
           agentPayoutVal ? zyFmtMoney(agentPayoutVal, 4) : '0',
           profitVal ? zyFmtMoney(profitVal, 4) : '0',
-          causeVal,
-          s.ip || '—'
+          zyEsc(causeVal),
+          zyEsc(s.ip || '—')
         ];
       });
 
@@ -1105,18 +1105,19 @@ async function renderMySmsLoad(pageOrSummary = 1) {
 
       let sumMyPayout = 0;
       let sumAgentPayout = 0;
+      let sumProfit = 0;
       rows.forEach(r => {
-        sumMyPayout += parseFloat(zyCell2(r[11]).v) || 0;
-        sumAgentPayout += parseFloat(zyCell2(r[12]).v) || 0;
+        sumMyPayout += parseFloat(zyCell2(r[10]).v) || 0;
+        sumAgentPayout += parseFloat(zyCell2(r[11]).v) || 0;
+        sumProfit += parseFloat(zyCell2(r[12]).v) || 0;
       });
-      const sumProfit = Math.max(0, sumMyPayout - sumAgentPayout);
 
       const usdIn = (sum.payout != null ? sum.payout : sumMyPayout);
-      const usdOut = (sum.client_payout != null ? sum.client_payout : sumAgentPayout);
+      const usdOut = (sum.agent_payout != null ? sum.agent_payout : sumAgentPayout);
       const usdPr = (sum.profit != null ? sum.profit : sumProfit);
 
       const footRow = `<td><b>Total SMS<br>${totalSms.toLocaleString()}</b></td>` +
-        '<td></td>'.repeat(9) +
+        '<td></td>'.repeat(8) +
         `<td><b>USD</b></td>` +
         `<td><b>My Payout<br>$${zyFmtMoney(usdIn, 4)}</b></td>` +
         `<td><b>Agent Payout<br>$${zyFmtMoney(usdOut, 4)}</b></td>` +

@@ -610,7 +610,7 @@ async function pgMySmsLoad(pageOrSummary = 1) {
         const dtCell = typeof zyFormatDateTimeStacked === 'function'
           ? zyFormatDateTimeStacked(s.timestamp || s.date)
           : { v: (s.timestamp || s.date || '').replace('T', ' ').slice(0, 19), h: (s.timestamp || s.date || '').replace('T', ' ').slice(0, 19) };
-        const myP = parseFloat(s.client_payout != null ? s.client_payout : (s.client_rate != null ? s.client_rate : (s.payout || 0))) || 0;
+        const myP = parseFloat(s.client_payout != null ? s.client_payout : (s.client_amount != null ? s.client_amount : (s.client_rate != null ? s.client_rate : (s.my_payout || 0)))) || 0;
         const causeVal = (s.cause || (s.status === 'delivered' || s.status === 'success' ? 'Success' : (s.status || '—')));
 
         const maskedCli = typeof zyMaskCli === 'function' ? zyMaskCli(s.cli || s.app || '—') : (s.cli || s.app || '—');
@@ -625,10 +625,10 @@ async function pgMySmsLoad(pageOrSummary = 1) {
           { v: numStr, h: numStr ? `<span class="monospace" style="font-weight:600;">${zyEsc(numStr)}</span>` : '—' },
           { v: s.cli || '—', h: `<span class="monospace">${zyEsc(maskedCli)}</span>` },
           { v: s.message || '', h: `<div style="max-width:300px;white-space:normal;line-height:1.4;word-break:break-word;">${smsHtml}</div>` },
-          s.currency || '$',
+          zyEsc(s.currency || '$'),
           zyFmtMoney(myP, 4),
-          causeVal,
-          s.ip || '—'
+          zyEsc(causeVal),
+          zyEsc(s.ip || '—')
         ];
       });
 

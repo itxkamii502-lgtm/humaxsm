@@ -830,5 +830,39 @@
     "last_sms": null,
     "sms_count": 0,
     "notes": ""
+  },
+  {
+    "id": 145,
+    "number": "447700917725",
+    "range_id": 1,
+    "range_name": "United States Mobile (1202)",
+    "prefix": "+1202",
+    "app": "Unassigned",
+    "status": "active",
+    "user": "unallocated",
+    "country": "United States",
+    "provider": "Bandwidth Direct",
+    "otp_limit": 5,
+    "allocated_at": "2026-11-13T08:23:55.750Z",
+    "last_sms": null,
+    "sms_count": 0,
+    "notes": ""
+  },
+  {
+    "id": 146,
+    "number": "447700962987",
+    "range_id": 1,
+    "range_name": "United States Mobile (1202)",
+    "prefix": "+1202",
+    "app": "Unassigned",
+    "status": "active",
+    "user": "unallocated",
+    "country": "United States",
+    "provider": "Bandwidth Direct",
+    "otp_limit": 5,
+    "allocated_at": "2026-11-13T08:36:57.614Z",
+    "last_sms": null,
+    "sms_count": 0,
+    "notes": ""
   }
 ]

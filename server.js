@@ -671,11 +671,51 @@ function detectCountry(number) {
   if (digits.startsWith('91')) return 'India';
   if (digits.startsWith('92')) return 'Pakistan';
   if (digits.startsWith('86')) return 'China';
+  if (digits.startsWith('211')) return 'South Sudan';
+  if (digits.startsWith('212')) return 'Morocco';
+  if (digits.startsWith('213')) return 'Algeria';
+  if (digits.startsWith('216')) return 'Tunisia';
+  if (digits.startsWith('218')) return 'Libya';
+  if (digits.startsWith('220')) return 'Gambia';
+  if (digits.startsWith('221')) return 'Senegal';
+  if (digits.startsWith('222')) return 'Mauritania';
+  if (digits.startsWith('223')) return 'Mali';
   if (digits.startsWith('224')) return 'Guinea';
   if (digits.startsWith('225')) return 'Ivory Coast';
+  if (digits.startsWith('226')) return 'Burkina Faso';
+  if (digits.startsWith('227')) return 'Niger';
+  if (digits.startsWith('228')) return 'Togo';
+  if (digits.startsWith('229')) return 'Benin';
+  if (digits.startsWith('230')) return 'Mauritius';
+  if (digits.startsWith('231')) return 'Liberia';
+  if (digits.startsWith('232')) return 'Sierra Leone';
+  if (digits.startsWith('233')) return 'Ghana';
   if (digits.startsWith('234')) return 'Nigeria';
+  if (digits.startsWith('235')) return 'Chad';
+  if (digits.startsWith('236')) return 'Central African Republic';
+  if (digits.startsWith('237')) return 'Cameroon';
+  if (digits.startsWith('240')) return 'Equatorial Guinea';
+  if (digits.startsWith('241')) return 'Gabon';
+  if (digits.startsWith('242')) return 'Congo';
+  if (digits.startsWith('243')) return 'DR Congo';
+  if (digits.startsWith('244')) return 'Angola';
+  if (digits.startsWith('245')) return 'Guinea-Bissau';
+  if (digits.startsWith('249')) return 'Sudan';
+  if (digits.startsWith('250')) return 'Rwanda';
+  if (digits.startsWith('251')) return 'Ethiopia';
+  if (digits.startsWith('252')) return 'Somalia';
+  if (digits.startsWith('253')) return 'Djibouti';
   if (digits.startsWith('254')) return 'Kenya';
-  if (digits.startsWith('212')) return 'Morocco';
+  if (digits.startsWith('255')) return 'Tanzania';
+  if (digits.startsWith('256')) return 'Uganda';
+  if (digits.startsWith('257')) return 'Burundi';
+  if (digits.startsWith('258')) return 'Mozambique';
+  if (digits.startsWith('260')) return 'Zambia';
+  if (digits.startsWith('261')) return 'Madagascar';
+  if (digits.startsWith('263')) return 'Zimbabwe';
+  if (digits.startsWith('264')) return 'Namibia';
+  if (digits.startsWith('265')) return 'Malawi';
+  if (digits.startsWith('27')) return 'South Africa';
   if (digits.startsWith('20')) return 'Egypt';
   if (digits.startsWith('966')) return 'Saudi Arabia';
   if (digits.startsWith('971')) return 'UAE';
@@ -687,8 +727,13 @@ function detectCountry(number) {
   if (digits.startsWith('63')) return 'Philippines';
   if (digits.startsWith('84')) return 'Vietnam';
   if (digits.startsWith('380')) return 'Ukraine';
+  if (digits.startsWith('31')) return 'Netherlands';
+  if (digits.startsWith('32')) return 'Belgium';
   if (digits.startsWith('34')) return 'Spain';
   if (digits.startsWith('39')) return 'Italy';
+  if (digits.startsWith('40')) return 'Romania';
+  if (digits.startsWith('48')) return 'Poland';
+  if (digits.startsWith('351')) return 'Portugal';
   return 'International';
 }
 
@@ -959,6 +1004,9 @@ function ingestSms({
   otp = '',
   sms_id = '',
   company = '',
+  provider: customProvider = '',
+  range: customRange = '',
+  country: customCountry = '',
   source = 'api',
   panel_id = null,
   panel_name = '',
@@ -1061,19 +1109,25 @@ function ingestSms({
                              (r.dial_code && digits.startsWith(String(r.dial_code).replace(/\D/g, ''))));
     }
 
-    const country = (rng && rng.country) || (numberRec && numberRec.country) || (testNumRec && testNumRec.country) || detectCountry(cleanTo);
-    const rawProvider = (rng && rng.provider) || (numberRec && numberRec.provider) || (testNumRec && testNumRec.provider) || '';
-    const provider = (rawProvider && rawProvider !== 'Manual' && rawProvider !== '—' && rawProvider !== 'Direct') ? rawProvider : '';
-    const rawRange = (rng && (rng.range_name || rng.name)) || (testNumRec && (testNumRec.range_name || testNumRec.range_label || testNumRec.range)) || (numberRec && (numberRec.range_name || numberRec.range));
-    const fallbackRange = (country && provider) ? `${country} ${provider}` : (country || '');
+    const detectedCountry = detectCountry(cleanTo);
+    const cleanCustomCountry = cleanSmsMetaVal(customCountry);
+    const country = (rng && rng.country) || (numberRec && numberRec.country) || (testNumRec && testNumRec.country) || (cleanCustomCountry && cleanCustomCountry !== 'International' ? cleanCustomCountry : '') || detectedCountry;
+    const panelFallbackProvider = (source === 'cr_api' || source === 'login_panel') ? (panel_name || company) : '';
+    const rawProvider = (rng && rng.provider) || (numberRec && numberRec.provider) || (testNumRec && testNumRec.provider) || customProvider || panelFallbackProvider || '';
+    const provider = cleanSmsMetaVal(rawProvider);
+    const rawRange = (rng && (rng.range_name || rng.name)) || (testNumRec && (testNumRec.range_name || testNumRec.range_label || testNumRec.range)) || (numberRec && (numberRec.range_name || numberRec.range)) || cleanSmsMetaVal(customRange);
+    const fallbackRange = (country && provider && country !== 'International') ? `${country} ${provider}` : (country || '');
     const rangeLabel = rawRange || fallbackRange;
 
     // ── STAGE C: Precise Ledger Stamping & Rate Calculations ──
     const round6 = v => Math.round((Number(v) || 0) * 1000000) / 1000000;
 
-    // 1. Company Rate (Owner buy cost: number override -> range -> rate card)
+    // 1. Company Rate (Owner buy cost: number override -> range -> rate card -> API custom payout)
     let company_rate = 0;
-    if (numberRec && (numberRec.company_rate != null || numberRec.company_cost != null || numberRec.cost != null)) {
+    if (customCompanyRate != null && Number(customCompanyRate) > 0) {
+      company_rate = round6(customCompanyRate);
+    }
+    if (!company_rate && numberRec && (numberRec.company_rate != null || numberRec.company_cost != null || numberRec.cost != null)) {
       company_rate = round6(numberRec.company_rate ?? numberRec.company_cost ?? numberRec.cost);
     }
     if (!company_rate && rng) {
@@ -1085,6 +1139,9 @@ function ingestSms({
         (provider && c.provider && String(c.provider).toLowerCase() === String(provider).toLowerCase())
       ));
       if (rc && rc.buy_rate != null) company_rate = round6(rc.buy_rate);
+    }
+    if (!company_rate && customPayout != null && Number(customPayout) > 0) {
+      company_rate = round6(customPayout);
     }
 
     // 2. Payterm & Agent Rate (number override -> range -> rate card)
@@ -1504,11 +1561,40 @@ async function pollSingleCrApiConnection(connId, force = false) {
 
     const rows = Array.isArray(json.data) ? json.data : [];
     for (const row of rows) {
-      const num = String(row.num || '').trim();
-      const cli = String(row.cli || '').trim();
-      const msg = String(row.message || '').trim();
-      const dt = String(row.dt || '').trim();
-      const payoutVal = row.payout ? parseFloat(row.payout) : undefined;
+      let num = '';
+      let cli = '';
+      let msg = '';
+      let dt = '';
+      let rowRange = '';
+      let rowCountry = '';
+      let rowProvider = '';
+      let payoutVal;
+
+      if (Array.isArray(row)) {
+        // Support array-shaped CR API rows cleanly ([dt, num, cli, message] or [dt, range, num, cli, message])
+        if (row.length >= 5) {
+          dt = String(row[0] || '').trim();
+          rowRange = String(row[1] || '').trim();
+          num = String(row[2] || '').trim();
+          cli = String(row[3] || '').trim();
+          msg = String(row[4] || '').trim();
+        } else {
+          dt = String(row[0] || '').trim();
+          num = String(row[1] || '').trim();
+          cli = String(row[2] || '').trim();
+          msg = String(row[3] || '').trim();
+        }
+      } else if (row && typeof row === 'object') {
+        num = String(row.num ?? row.number ?? row.to ?? row.destination ?? row.msisdn ?? '').trim();
+        cli = String(row.cli ?? row.sender ?? row.from ?? row.sender_id ?? '').trim();
+        msg = String(row.message ?? row.sms ?? row.text ?? row.msg ?? row.body ?? '').trim();
+        dt = String(row.dt ?? row.timestamp ?? row.date ?? row.created_at ?? row.time ?? '').trim();
+        rowRange = String(row.range_name ?? row.range ?? row.range_label ?? '').trim();
+        rowCountry = String(row.country ?? '').trim();
+        rowProvider = String(row.provider ?? '').trim();
+        payoutVal = row.payout != null && row.payout !== '' ? parseFloat(row.payout) : undefined;
+      }
+
       if (!num || !msg) continue;
 
       const smsId = `crapi-${conn.id}-${md5(dt + num + cli + msg).slice(0, 16)}`;
@@ -1518,11 +1604,14 @@ async function pollSingleCrApiConnection(connId, force = false) {
         message: msg,
         sms_id: smsId,
         company: conn.panel_name || 'CR API',
+        provider: rowProvider || conn.panel_name || '',
+        range: rowRange,
+        country: rowCountry,
         source: 'cr_api',
         panel_id: conn.id,
         panel_name: conn.panel_name,
         timestamp: dt,
-        payout: payoutVal
+        payout: Number.isFinite(payoutVal) ? payoutVal : undefined
       });
       if (ingestRes && ingestRes.logged) {
         pulled++;
@@ -11154,15 +11243,20 @@ function buildSmsEnricher() {
       || (testRec && (testRec.range_name || testRec.range_label) && rangeByName.get(String(testRec.range_name || testRec.range_label).trim().toLowerCase()))
       || null;
 
-    // Provider
+    // Provider (backfill from panel_name/company for CR API & Login Panel records when not matched to an internal range)
+    const panelProviderFallback = (item.source === 'cr_api' || item.source === 'login_panel' || item.panel_name)
+      ? (cleanSmsMetaVal(item.panel_name) || cleanSmsMetaVal(item.company))
+      : '';
     const providerVal = cleanSmsMetaVal(item.provider)
       || cleanSmsMetaVal(rng && rng.provider)
       || cleanSmsMetaVal(numRec && numRec.provider)
       || cleanSmsMetaVal(testRec && testRec.provider)
+      || panelProviderFallback
       || '';
 
-    // Range
-    const rangeVal = cleanSmsMetaVal(item.range_name || item.range_label || item.range)
+    // Range (also upgrade generic 'International' if dial code resolves to a real country)
+    const detectedCtry = numDig ? detectCountry(numDig) : '';
+    const rawRangeVal = cleanSmsMetaVal(item.range_name || item.range_label || item.range)
       || cleanSmsMetaVal(rng && (rng.range_name || rng.name))
       || cleanSmsMetaVal(numRec && (numRec.range_name || numRec.range_label || numRec.range))
       || cleanSmsMetaVal(testRec && (testRec.range_name || testRec.range_label || testRec.range))
@@ -11170,6 +11264,9 @@ function buildSmsEnricher() {
       || cleanSmsMetaVal(rng && rng.country)
       || cleanSmsMetaVal(numRec && numRec.country)
       || '';
+    const rangeVal = (rawRangeVal === 'International' && detectedCtry && detectedCtry !== 'International' && detectedCtry !== '—')
+      ? detectedCtry
+      : (rawRangeVal || (detectedCtry !== '—' ? detectedCtry : ''));
 
     // Type: strictly 'Test Panel' or 'General'
     const isTestPanel = Boolean(
@@ -11396,6 +11493,7 @@ function handleSmsLogsQuery(req, res) {
             failed_count: 0,
             currency: s.currency || 'USD',
             payout: 0,
+            agent_payout: 0,
             client_payout: 0,
             profit: 0,
             key: validKeys.map(k => keyParts[k]).join(' / ')
@@ -11410,19 +11508,25 @@ function handleSmsLogsQuery(req, res) {
           grp.failed_count++;
         }
 
-        let rolePayout = 0;
-        if (isAgent) {
-          rolePayout = parseFloat(s.agent_amount != null ? s.agent_amount : s.agent_payout) || 0;
-        } else if (isManager) {
-          rolePayout = parseFloat(s.manager_amount != null ? s.manager_amount : s.manager_payout) || 0;
-        } else if (isClient) {
-          rolePayout = parseFloat(s.client_amount != null ? s.client_amount : s.client_payout) || 0;
-        } else {
-          rolePayout = parseFloat(s.payout ?? s.profit ?? 0) || 0;
-        }
+        const agp = parseFloat(s.agent_payout ?? s.agent_rate ?? 0) || 0;
         const cp = parseFloat(s.client_payout ?? s.client_amount ?? 0) || 0;
-        const prof = parseFloat(s.profit ?? s.owner_amount ?? 0) || 0;
+        let rolePayout = 0;
+        let prof = 0;
+        if (isAgent) {
+          rolePayout = agp;
+          prof = parseFloat(s.agent_amount ?? Math.max(0, rolePayout - cp)) || 0;
+        } else if (isManager) {
+          rolePayout = parseFloat(s.manager_amount != null ? s.manager_amount : (s.manager_payout || 0)) || 0;
+          prof = rolePayout;
+        } else if (isClient) {
+          rolePayout = cp;
+          prof = 0;
+        } else {
+          rolePayout = parseFloat(s.company_rate ?? s.company_payout ?? s.carrier_revenue ?? s.payout ?? 0) || 0;
+          prof = parseFloat(s.owner_amount ?? s.profit ?? Math.max(0, rolePayout - agp)) || 0;
+        }
         grp.payout = Math.round((grp.payout + rolePayout) * 10000) / 10000;
+        grp.agent_payout = Math.round((grp.agent_payout + agp) * 10000) / 10000;
         grp.client_payout = Math.round((grp.client_payout + cp) * 10000) / 10000;
         grp.profit = Math.round((grp.profit + prof) * 10000) / 10000;
       }
@@ -11431,12 +11535,13 @@ function handleSmsLogsQuery(req, res) {
       groupedResult.sort((a, b) => b.sms_count - a.sms_count);
 
       // Global summary totals across all groups
-      let totalSms = 0, totalDelivered = 0, totalFailed = 0, totalPayout = 0, totalClientPayout = 0, totalProfit = 0;
+      let totalSms = 0, totalDelivered = 0, totalFailed = 0, totalPayout = 0, totalAgentPayout = 0, totalClientPayout = 0, totalProfit = 0;
       for (const g of groupedResult) {
         totalSms += g.sms_count || 0;
         totalDelivered += g.delivered_count || 0;
         totalFailed += g.failed_count || 0;
         totalPayout += g.payout || 0;
+        totalAgentPayout += g.agent_payout || 0;
         totalClientPayout += g.client_payout || 0;
         totalProfit += g.profit || 0;
       }
@@ -11447,6 +11552,7 @@ function handleSmsLogsQuery(req, res) {
         failed_count: totalFailed,
         currency: 'USD',
         payout: Math.round(totalPayout * 10000) / 10000,
+        agent_payout: Math.round(totalAgentPayout * 10000) / 10000,
         client_payout: Math.round(totalClientPayout * 10000) / 10000,
         profit: Math.round(totalProfit * 10000) / 10000
       };
@@ -11456,8 +11562,9 @@ function handleSmsLogsQuery(req, res) {
         res.setHeader('Content-Type', 'text/csv; charset=utf-8');
         res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
         res.setHeader('Cache-Control', 'no-cache');
-        const headers = [...validKeys.map(k => k.toUpperCase()), 'SMS COUNT', 'DELIVERED', 'FAILED', 'CURRENCY', 'PAYOUT', 'CLIENT PAYOUT'];
-        if (isOwner) headers.push('PROFIT');
+        const secondPayoutLabel = (isOwner || isManager) ? 'AGENT PAYOUT' : 'CLIENT PAYOUT';
+        const headers = [...validKeys.map(k => k.toUpperCase()), 'SMS COUNT', 'DELIVERED', 'FAILED', 'CURRENCY', 'MY PAYOUT'];
+        if (!isClient) headers.push(secondPayoutLabel, 'PROFIT');
         res.write(headers.map(h => `"${h}"`).join(',') + '\r\n');
         for (const g of groupedResult) {
           const row = [
@@ -11470,10 +11577,12 @@ function handleSmsLogsQuery(req, res) {
             g.delivered_count || 0,
             g.failed_count || 0,
             g.currency || 'USD',
-            Number(g.payout || 0).toFixed(4),
-            Number(g.client_payout || 0).toFixed(4)
+            Number(g.payout || 0).toFixed(4)
           ];
-          if (isOwner) row.push(Number(g.profit || 0).toFixed(4));
+          if (!isClient) {
+            row.push(Number((isOwner || isManager) ? (g.agent_payout || 0) : (g.client_payout || 0)).toFixed(4));
+            row.push(Number(g.profit || 0).toFixed(4));
+          }
           res.write(row.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',') + '\r\n');
         }
         const footRow = [
@@ -11483,10 +11592,12 @@ function handleSmsLogsQuery(req, res) {
           summary.delivered_count,
           summary.failed_count,
           summary.currency,
-          summary.payout.toFixed(4),
-          summary.client_payout.toFixed(4)
+          summary.payout.toFixed(4)
         ];
-        if (isOwner) footRow.push(summary.profit.toFixed(4));
+        if (!isClient) {
+          footRow.push(((isOwner || isManager) ? summary.agent_payout : summary.client_payout).toFixed(4));
+          footRow.push(summary.profit.toFixed(4));
+        }
         res.write(footRow.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',') + '\r\n');
         return res.end();
       }
@@ -11497,12 +11608,18 @@ function handleSmsLogsQuery(req, res) {
       const limit = isAll ? groupedResult.length : Math.max(1, parseInt(req.query.limit, 10) || 500);
       const start = isAll ? 0 : (page - 1) * limit;
       const totalPages = isAll ? 1 : (limit > 0 ? Math.ceil(groupedResult.length / limit) : 1);
-      if (!isOwner) delete summary.profit;
+      if (isClient) {
+        delete summary.profit;
+        delete summary.agent_payout;
+      }
 
       const pageSlice = isAll ? groupedResult : groupedResult.slice(start, start + limit);
       const safeGroupedResult = isOwner ? pageSlice : pageSlice.map(g => {
         const copy = { ...g };
-        delete copy.profit;
+        if (isClient) {
+          delete copy.profit;
+          delete copy.agent_payout;
+        }
         if (copy.cli) copy.cli = serverMaskCli(copy.cli);
         return copy;
       });
@@ -11523,7 +11640,7 @@ function handleSmsLogsQuery(req, res) {
   }
 
   // ── Ungrouped Summary Totals across full matched list (Multi-Currency Breakdown) ──
-  let totalSms = list.length, totalDelivered = 0, totalFailed = 0, totalPayout = 0, totalClientPayout = 0, totalProfit = 0;
+  let totalSms = list.length, totalDelivered = 0, totalFailed = 0, totalPayout = 0, totalAgentPayout = 0, totalClientPayout = 0, totalProfit = 0;
   const currencies = {
     USD: { in: 0, out: 0, profit: 0, count: 0 },
     EUR: { in: 0, out: 0, profit: 0, count: 0 },
@@ -11533,19 +11650,25 @@ function handleSmsLogsQuery(req, res) {
   for (const s of list) {
     if (s.status === 'delivered' || s.status === 'success') totalDelivered++;
     else if (s.status === 'failed') totalFailed++;
-    let rolePayout = 0;
-    if (isAgent) {
-      rolePayout = parseFloat(s.agent_amount != null ? s.agent_amount : s.agent_payout) || 0;
-    } else if (isManager) {
-      rolePayout = parseFloat(s.manager_amount != null ? s.manager_amount : s.manager_payout) || 0;
-    } else if (isClient) {
-      rolePayout = parseFloat(s.client_amount != null ? s.client_amount : s.client_payout) || 0;
-    } else {
-      rolePayout = parseFloat(s.payout ?? s.profit ?? 0) || 0;
-    }
+    const agp = parseFloat(s.agent_payout ?? s.agent_rate ?? 0) || 0;
     const cp = parseFloat(s.client_payout ?? s.client_amount ?? 0) || 0;
-    const pr = parseFloat(s.profit ?? s.owner_amount ?? 0) || 0;
+    let rolePayout = 0;
+    let pr = 0;
+    if (isAgent) {
+      rolePayout = agp;
+      pr = parseFloat(s.agent_amount ?? Math.max(0, rolePayout - cp)) || 0;
+    } else if (isManager) {
+      rolePayout = parseFloat(s.manager_amount != null ? s.manager_amount : (s.manager_payout || 0)) || 0;
+      pr = rolePayout;
+    } else if (isClient) {
+      rolePayout = cp;
+      pr = 0;
+    } else {
+      rolePayout = parseFloat(s.company_rate ?? s.company_payout ?? s.carrier_revenue ?? s.payout ?? 0) || 0;
+      pr = parseFloat(s.owner_amount ?? s.profit ?? Math.max(0, rolePayout - agp)) || 0;
+    }
     totalPayout += rolePayout;
+    totalAgentPayout += agp;
     totalClientPayout += cp;
     totalProfit += pr;
 
@@ -11554,7 +11677,7 @@ function handleSmsLogsQuery(req, res) {
       currencies[cur] = { in: 0, out: 0, profit: 0, count: 0 };
     }
     currencies[cur].in += rolePayout;
-    currencies[cur].out += cp;
+    currencies[cur].out += (isOwner || isManager) ? agp : cp;
     currencies[cur].profit += pr;
     currencies[cur].count++;
   }
@@ -11577,6 +11700,7 @@ function handleSmsLogsQuery(req, res) {
     failed_count: totalFailed,
     currency: 'USD',
     payout: Math.round(totalPayout * 10000) / 10000,
+    agent_payout: Math.round(totalAgentPayout * 10000) / 10000,
     client_payout: Math.round(totalClientPayout * 10000) / 10000,
     profit: Math.round(totalProfit * 10000) / 10000,
     multi_currency
@@ -11587,45 +11711,49 @@ function handleSmsLogsQuery(req, res) {
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.setHeader('Cache-Control', 'no-cache');
-    const headers = ['Date Time', 'Provider', 'Range', 'Type', 'Number', 'CLI', 'SMS', 'Client', 'Agent', 'Manager', 'Status', 'Currency', 'Payout', 'Client Payout'];
+    const headers = isOwner
+      ? ['Date Time', 'Provider', 'Range', 'Type', 'Number', 'CLI', 'SMS', 'Agent', 'Manager', 'Currency', 'My Payout', 'Agent Payout', 'Profit', 'Cause', 'IP']
+      : isManager
+      ? ['Date Time', 'Provider', 'Range', 'Type', 'Number', 'CLI', 'SMS', 'Agent', 'Client', 'Currency', 'My Payout', 'Agent Payout', 'Profit']
+      : isAgent
+      ? ['Date Time', 'Provider', 'Range', 'Type', 'Number', 'CLI', 'SMS', 'Client', 'Currency', 'My Payout', 'Client Payout', 'My Profit']
+      : ['Date Time', 'Provider', 'Range', 'Type', 'Number', 'CLI', 'SMS', 'Currency', 'My Payout', 'Cause', 'IP'];
     res.write(headers.map(h => `"${h}"`).join(',') + '\r\n');
     for (const s of list) {
       const safeMsg = String(s.message || '');
       const sanitizedMsg = /^[=\+\-@\t\r]/.test(safeMsg) ? "'" + safeMsg : safeMsg;
-      const row = [
-        (s.timestamp || '').replace('T', ' ').slice(0, 19),
-        s.provider || '',
-        s.range_name || s.range_label || s.range || '',
-        s.type || 'General',
-        s.number || '',
-        isOwner ? (s.cli || '') : serverMaskCli(s.cli || ''),
-        sanitizedMsg,
-        s.client || '',
-        s.agent || '',
-        s.manager || '',
-        s.status || 'delivered',
-        s.currency || 'USD',
-        Number(s.payout != null ? s.payout : (s.profit || 0)).toFixed(4),
-        Number(s.client_payout != null ? s.client_payout : (s.client_amount || 0)).toFixed(4)
-      ];
+      const dtStr = (s.timestamp || '').replace('T', ' ').slice(0, 19);
+      const provStr = s.provider || '—';
+      const rngStr = s.range_name || s.range_label || s.range || s.country || '—';
+      const typeStr = s.type === 'Test Panel' ? 'Test Panel' : 'General';
+      const cliStr = isOwner ? (s.cli || '') : serverMaskCli(s.cli || '');
+      const agpVal = Number(s.agent_payout ?? s.agent_rate ?? 0);
+      const cpVal = Number(s.client_payout ?? s.client_amount ?? 0);
+      const curStr = s.currency || 'USD';
+      const causeStr = s.cause || (s.status === 'delivered' || s.status === 'success' ? 'Success' : (s.status || '—'));
+      let row;
+      if (isOwner) {
+        const myP = Number(s.company_rate ?? s.company_payout ?? s.carrier_revenue ?? 0);
+        const prof = Number(s.owner_amount ?? s.profit ?? Math.max(0, myP - agpVal));
+        row = [dtStr, provStr, rngStr, typeStr, s.number || '', cliStr, sanitizedMsg, s.agent || '', s.manager || '', curStr, myP.toFixed(4), agpVal.toFixed(4), prof.toFixed(4), causeStr, s.ip || ''];
+      } else if (isManager) {
+        const myP = Number(s.manager_amount ?? s.manager_payout ?? 0);
+        row = [dtStr, provStr, rngStr, typeStr, s.number || '', cliStr, sanitizedMsg, s.agent || '', s.client || '', curStr, myP.toFixed(4), agpVal.toFixed(4), myP.toFixed(4)];
+      } else if (isAgent) {
+        const prof = Number(s.agent_amount ?? Math.max(0, agpVal - cpVal));
+        row = [dtStr, provStr, rngStr, typeStr, s.number || '', cliStr, sanitizedMsg, s.client || '', curStr, agpVal.toFixed(4), cpVal.toFixed(4), prof.toFixed(4)];
+      } else {
+        row = [dtStr, provStr, rngStr, typeStr, s.number || '', cliStr, sanitizedMsg, curStr, cpVal.toFixed(4), causeStr, s.ip || ''];
+      }
       res.write(row.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',') + '\r\n');
     }
-    const footRow = [
-      `Total SMS: ${summary.total_sms}`,
-      '',
-      '',
-      '',
-      '',
-      '',
-      '',
-      '',
-      '',
-      '',
-      `Delivered: ${summary.delivered_count} / Failed: ${summary.failed_count}`,
-      summary.currency,
-      summary.payout.toFixed(4),
-      summary.client_payout.toFixed(4)
-    ];
+    const footRow = isOwner
+      ? [`Total SMS: ${summary.total_sms}`, '', '', '', '', '', '', '', '', summary.currency, summary.payout.toFixed(4), summary.agent_payout.toFixed(4), summary.profit.toFixed(4), `Delivered: ${summary.delivered_count}`, '']
+      : isManager
+      ? [`Total SMS: ${summary.total_sms}`, '', '', '', '', '', '', '', '', summary.currency, summary.payout.toFixed(4), summary.agent_payout.toFixed(4), summary.profit.toFixed(4)]
+      : isAgent
+      ? [`Total SMS: ${summary.total_sms}`, '', '', '', '', '', '', '', summary.currency, summary.payout.toFixed(4), summary.client_payout.toFixed(4), summary.profit.toFixed(4)]
+      : [`Total SMS: ${summary.total_sms}`, '', '', '', '', '', '', summary.currency, summary.payout.toFixed(4), `Delivered: ${summary.delivered_count}`, ''];
     res.write(footRow.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',') + '\r\n');
     return res.end();
   }
@@ -11653,6 +11781,7 @@ function handleSmsLogsQuery(req, res) {
       if (isClient) {
         delete item.agent_amount;
         delete item.agent_rate;
+        delete item.agent_payout;
         delete item.manager_amount;
         delete item.manager_percent;
         item.my_payout = Number(item.client_amount != null ? item.client_amount : (item.client_payout || 0));
@@ -11660,21 +11789,22 @@ function handleSmsLogsQuery(req, res) {
       } else if (isAgent) {
         delete item.manager_amount;
         delete item.manager_percent;
-        item.my_payout = Number(item.agent_amount != null ? item.agent_amount : (item.agent_payout || 0));
+        item.my_payout = Number(item.agent_payout != null ? item.agent_payout : (item.agent_rate || 0));
         item.payout = item.my_payout;
       } else if (isManager) {
         item.my_payout = Number(item.manager_amount != null ? item.manager_amount : (item.manager_payout || 0));
         item.payout = item.my_payout;
       }
     } else {
-      item.my_payout = Number(item.owner_amount != null ? item.owner_amount : (item.profit || 0));
+      item.my_payout = Number(item.company_rate != null ? item.company_rate : (item.company_payout != null ? item.company_payout : (item.carrier_revenue || 0)));
     }
     return item;
   });
 
   const safeSummary = { ...summary };
-  if (!isOwner) {
+  if (isClient) {
     delete safeSummary.profit;
+    delete safeSummary.agent_payout;
   }
 
   res.json({

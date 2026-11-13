@@ -1685,9 +1685,9 @@ function zyRecentSmsCard(logs = [], options = {}) {
 
   const rowsHtml = list.length > 0 ? list.map(sms => {
     const ts = String(sms.timestamp || sms.created || sms.time || '').replace('T', ' ').slice(0, 19) || 'Just now';
-    const cli = sms.cli || sms.app || sms.sender || '—';
-    const num = sms.number || sms.destination || '—';
-    const msg = sms.message || sms.otp || sms.text || sms.content || '—';
+    const cli = String(sms.cli || sms.app || sms.sender || '—');
+    const num = String(sms.number || sms.destination || '—');
+    const msg = String(sms.message || sms.otp || sms.text || sms.content || '—');
     const st = String(sms.status || 'DELIVRD').toUpperCase();
     const pillClass = (st === 'DELIVRD' || st === 'DELIVERED' || st === 'ACTIVE')
       ? 'zy-status-delivrd'
@@ -1698,14 +1698,14 @@ function zyRecentSmsCard(logs = [], options = {}) {
 
     return `
       <tr>
-        <td style="font-family:monospace;font-size:11px;color:var(--sp-text-muted);white-space:nowrap;">${ts}</td>
-        <td><span class="badge" style="background:var(--sp-bg-subtle);color:var(--sp-text-primary);border:1px solid var(--sp-border);font-family:monospace;font-weight:600;">${cli}</span></td>
-        <td style="font-family:monospace;font-weight:600;">${num}</td>
-        <td style="max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${msg}">${msg}</td>
+        <td style="font-family:monospace;font-size:11px;color:var(--sp-text-muted);white-space:nowrap;">${zyEsc(ts)}</td>
+        <td><span class="badge" style="background:var(--sp-bg-subtle);color:var(--sp-text-primary);border:1px solid var(--sp-border);font-family:monospace;font-weight:600;">${zyEsc(cli)}</span></td>
+        <td style="font-family:monospace;font-weight:600;">${zyEsc(num)}</td>
+        <td style="max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${zyEsc(msg)}">${zyEsc(msg)}</td>
         <td>
           <span class="zy-status-pill ${pillClass}">
             <span style="width:6px;height:6px;border-radius:50%;background:${dotColor};display:inline-block;"></span>
-            ${st}
+            ${zyEsc(st)}
           </span>
         </td>
       </tr>
