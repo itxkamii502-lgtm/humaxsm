@@ -847,11 +847,84 @@ function getDateRangeBuckets() {
   return { todaySet, yesterdaySet, weekStartStr, monthStartStr, yearStartStr, now, todayStr: utcToday, yesterdayStr: yestUtc };
 }
 
+function parseRateValue(val) {
+  if (val === undefined || val === null || val === '' || typeof val === 'boolean') return undefined;
+  if (typeof val === 'number') return Number.isFinite(val) && val >= 0 ? val : undefined;
+  let s = String(val).trim();
+  if (!s || /^(-|—|n\/?a|null|undefined)$/i.test(s)) return undefined;
+  if (!s.includes('.') && /^[+-]?[$€£¥₹]?\s*\d+,\d+(?:\s*[A-Za-z]{0,5})?$/.test(s)) {
+    s = s.replace(',', '.');
+  } else {
+    s = s.replace(/,/g, '');
+  }
+  const m = s.match(/[-+]?\d+(?:\.\d+)?/);
+  if (!m) return undefined;
+  const num = parseFloat(m[0]);
+  return Number.isFinite(num) && num >= 0 ? num : undefined;
+}
+
+function isLikelyRateToken(raw) {
+  if (typeof raw === 'number') return Number.isFinite(raw) && raw >= 0 && raw <= 50;
+  const s = String(raw ?? '').trim();
+  if (!s || s.length > 24) return false;
+  if (/\d{4}-\d{2}-\d{2}|:\d{2}|\d+\.\d+\.\d+\.\d+/.test(s)) return false;
+  if (/^\+?\d{6,}$/.test(s.replace(/[\s()-]/g, ''))) return false;
+  const num = parseRateValue(s);
+  return num !== undefined && num >= 0 && num <= 50;
+}
+
+function extractCrApiRate(row) {
+  if (!row) return undefined;
+  if (Array.isArray(row)) {
+    if (row.length === 5 && /^\+?\d{6,16}$/.test(String(row[1] || '').trim().replace(/[\s()-]/g, '')) && isLikelyRateToken(row[4])) {
+      return parseRateValue(row[4]);
+    }
+    for (let i = 5; i < row.length; i++) {
+      if (isLikelyRateToken(row[i])) {
+        const val = parseRateValue(row[i]);
+        if (val !== undefined && val > 0) return val;
+      }
+    }
+    for (let i = 5; i < row.length; i++) {
+      if (isLikelyRateToken(row[i])) {
+        const val = parseRateValue(row[i]);
+        if (val !== undefined) return val;
+      }
+    }
+    return undefined;
+  }
+  if (typeof row === 'object') {
+    const keys = [
+      'company_rate', 'company_payout', 'my_payout', 'payout', 'payout_rate',
+      'rate', 'price', 'cost', 'amount', 'sms_rate', 'carrier_rate',
+      'buy_rate', 'sell_rate', 'client_payout', 'agent_payout',
+      'earning', 'revenue', 'usd', 'fee', 'value'
+    ];
+    let zeroFallback;
+    const lowerMap = new Map();
+    for (const k of Object.keys(row)) {
+      lowerMap.set(k.toLowerCase(), row[k]);
+    }
+    for (const k of keys) {
+      const rawVal = row[k] !== undefined ? row[k] : lowerMap.get(k);
+      const parsed = parseRateValue(rawVal);
+      if (parsed !== undefined) {
+        if (parsed > 0) return parsed;
+        if (zeroFallback === undefined) zeroFallback = parsed;
+      }
+    }
+    return zeroFallback;
+  }
+  return undefined;
+}
+
 function getRangeCompanyCost(rng) {
   if (!rng) return 0;
-  if (rng.company_cost !== undefined && rng.company_cost !== null && !isNaN(Number(rng.company_cost))) return Number(rng.company_cost);
-  if (rng.cost !== undefined && rng.cost !== null && !isNaN(Number(rng.cost))) return Number(rng.cost);
-  if (rng.buy_rate !== undefined && rng.buy_rate !== null && !isNaN(Number(rng.buy_rate))) return Number(rng.buy_rate);
+  const candidates = [rng.company_cost, rng.cost, rng.buy_rate, rng.carrier_rate, rng.company_rate];
+  for (const c of candidates) {
+    const v = parseRateValue(c);
+    if (v !== undefined && v > 0) return v;
+  }
   return 0;
 }
 
@@ -1012,6 +1085,7 @@ function ingestSms({
   panel_name = '',
   ext_key = '',
   timestamp = null,
+  currency: customCurrency = '',
   payout: customPayout = undefined,
   company_rate: customCompanyRate = undefined,
   agent_rate: customAgentRate = undefined,
@@ -1122,13 +1196,21 @@ function ingestSms({
     // ── STAGE C: Precise Ledger Stamping & Rate Calculations ──
     const round6 = v => Math.round((Number(v) || 0) * 1000000) / 1000000;
 
-    // 1. Company Rate (Owner buy cost: number override -> range -> rate card -> API custom payout)
+    // 1. Company Rate (Owner buy cost: custom override -> live CR API/panel rate -> number override -> range -> rate card -> custom payout fallback)
     let company_rate = 0;
-    if (customCompanyRate != null && Number(customCompanyRate) > 0) {
-      company_rate = round6(customCompanyRate);
+    const parsedCustomCompanyRate = parseRateValue(customCompanyRate);
+    const parsedCustomPayout = parseRateValue(customPayout);
+    if (parsedCustomCompanyRate != null && parsedCustomCompanyRate > 0) {
+      company_rate = round6(parsedCustomCompanyRate);
     }
-    if (!company_rate && numberRec && (numberRec.company_rate != null || numberRec.company_cost != null || numberRec.cost != null)) {
-      company_rate = round6(numberRec.company_rate ?? numberRec.company_cost ?? numberRec.cost);
+    if (!company_rate && (source === 'cr_api' || source === 'login_panel') && parsedCustomPayout != null && parsedCustomPayout > 0) {
+      company_rate = round6(parsedCustomPayout);
+    }
+    if (!company_rate && numberRec) {
+      const numCost = parseRateValue(numberRec.company_rate) ?? parseRateValue(numberRec.company_cost) ?? parseRateValue(numberRec.cost) ?? parseRateValue(numberRec.carrier_rate);
+      if (numCost != null && numCost > 0) {
+        company_rate = round6(numCost);
+      }
     }
     if (!company_rate && rng) {
       company_rate = round6(getRangeCompanyCost(rng));
@@ -1138,10 +1220,10 @@ function ingestSms({
         (country && c.country && String(c.country).toLowerCase() === String(country).toLowerCase()) ||
         (provider && c.provider && String(c.provider).toLowerCase() === String(provider).toLowerCase())
       ));
-      if (rc && rc.buy_rate != null) company_rate = round6(rc.buy_rate);
+      if (rc && rc.buy_rate != null) company_rate = round6(parseRateValue(rc.buy_rate) || 0);
     }
-    if (!company_rate && customPayout != null && Number(customPayout) > 0) {
-      company_rate = round6(customPayout);
+    if (!company_rate && parsedCustomPayout != null && parsedCustomPayout > 0) {
+      company_rate = round6(parsedCustomPayout);
     }
 
     // 2. Payterm & Agent Rate (number override -> range -> rate card)
@@ -1317,7 +1399,7 @@ function ingestSms({
       type: smsType,
       status: 'delivered',
       cause: 'Success',
-      currency: (rng && rng.currency) || 'USD',
+      currency: (rng && rng.currency) || cleanSmsMetaVal(customCurrency) || 'USD',
       company_rate: company_rate,
       agent_rate: agent_rate,
       client_rate: client_rate,
@@ -1483,12 +1565,17 @@ async function pollSingleLoginPanel(panelId, force = false) {
       for (const row of rowsToProcess) {
         if (!row.number || !row.message) continue;
         const key = md5(`${panel.id}|${row.number}|${row.date || ''}|${row.message}`);
+        const panelRate = extractCrApiRate(row);
         const ingestRes = ingestSms({
           sender: row.cli,
           to_number: row.number,
           message: row.message,
           otp: row.otp || '',
           timestamp: row.date,
+          range: row.range || row.range_name || '',
+          country: row.country || '',
+          provider: row.provider || panel.name || '',
+          payout: panelRate,
           source: 'login_panel',
           panel_id: panel.id,
           panel_name: panel.name,
@@ -1532,7 +1619,11 @@ async function pollSingleCrApiConnection(connId, force = false) {
     const base = conn.panel_url.trim();
     const sep = base.includes('?') ? '&' : '?';
     // Use records=100 for reliable fast polling, deduplicating locally via ingestSms
-    const pollUrl = `${base}${sep}token=${encodeURIComponent(conn.token)}&records=100`;
+    const hasTokenParam = /[?&]token=/i.test(base);
+    const hasRecordsParam = /[?&]records=/i.test(base);
+    const pollUrl = hasTokenParam
+      ? (hasRecordsParam ? base : `${base}${sep}records=100`)
+      : `${base}${sep}token=${encodeURIComponent(conn.token)}${hasRecordsParam ? '' : '&records=100'}`;
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 20000);
@@ -1544,8 +1635,20 @@ async function pollSingleCrApiConnection(connId, force = false) {
     }
 
     const json = await resp.json();
-    if (json.status !== 'success') {
-      if (json.msg && /no records found/i.test(json.msg)) {
+    const rowsCandidate = Array.isArray(json)
+      ? json
+      : (json && (json.data || json.aaData || json.rows || json.records || json.messages || json.list || json.result));
+    const statusStr = json && json.status != null ? String(json.status).trim().toLowerCase() : '';
+    const isOkStatus = Array.isArray(json)
+      || statusStr === 'success'
+      || statusStr === 'ok'
+      || json?.status === true
+      || json?.status === 1
+      || (!statusStr && Array.isArray(rowsCandidate) && !json?.error);
+
+    if (!isOkStatus) {
+      const errTxt = (json && (json.msg || json.message || json.error)) || '';
+      if (errTxt && /no records found|no data|empty/i.test(errTxt)) {
         conn.last_pulled_at = new Date().toISOString();
         conn.last_status = 'Active — Waiting for new SMS';
         const allConns = readDb('cr_api_connections') || [];
@@ -1556,10 +1659,10 @@ async function pollSingleCrApiConnection(connId, force = false) {
         }
         return 0;
       }
-      throw new Error(json.msg || json.error || 'Panel returned non-success status');
+      throw new Error(errTxt || 'Panel returned non-success status');
     }
 
-    const rows = Array.isArray(json.data) ? json.data : [];
+    const rows = Array.isArray(rowsCandidate) ? rowsCandidate : [];
     for (const row of rows) {
       let num = '';
       let cli = '';
@@ -1568,16 +1671,24 @@ async function pollSingleCrApiConnection(connId, force = false) {
       let rowRange = '';
       let rowCountry = '';
       let rowProvider = '';
+      let rowCurrency = '';
       let payoutVal;
 
       if (Array.isArray(row)) {
-        // Support array-shaped CR API rows cleanly ([dt, num, cli, message] or [dt, range, num, cli, message])
-        if (row.length >= 5) {
+        // Support [dt, num, cli, msg], [dt, num, cli, msg, payout], [dt, range, num, cli, msg, payout?]
+        if (row.length === 5 && /^\+?\d{6,16}$/.test(String(row[1] || '').trim().replace(/[\s()-]/g, '')) && isLikelyRateToken(row[4])) {
+          dt = String(row[0] || '').trim();
+          num = String(row[1] || '').trim();
+          cli = String(row[2] || '').trim();
+          msg = String(row[3] || '').trim();
+          payoutVal = extractCrApiRate(row);
+        } else if (row.length >= 5) {
           dt = String(row[0] || '').trim();
           rowRange = String(row[1] || '').trim();
           num = String(row[2] || '').trim();
           cli = String(row[3] || '').trim();
           msg = String(row[4] || '').trim();
+          payoutVal = extractCrApiRate(row);
         } else {
           dt = String(row[0] || '').trim();
           num = String(row[1] || '').trim();
@@ -1585,14 +1696,15 @@ async function pollSingleCrApiConnection(connId, force = false) {
           msg = String(row[3] || '').trim();
         }
       } else if (row && typeof row === 'object') {
-        num = String(row.num ?? row.number ?? row.to ?? row.destination ?? row.msisdn ?? '').trim();
-        cli = String(row.cli ?? row.sender ?? row.from ?? row.sender_id ?? '').trim();
-        msg = String(row.message ?? row.sms ?? row.text ?? row.msg ?? row.body ?? '').trim();
-        dt = String(row.dt ?? row.timestamp ?? row.date ?? row.created_at ?? row.time ?? '').trim();
-        rowRange = String(row.range_name ?? row.range ?? row.range_label ?? '').trim();
-        rowCountry = String(row.country ?? '').trim();
-        rowProvider = String(row.provider ?? '').trim();
-        payoutVal = row.payout != null && row.payout !== '' ? parseFloat(row.payout) : undefined;
+        num = String(row.num ?? row.number ?? row.to ?? row.destination ?? row.msisdn ?? row.phone ?? '').trim();
+        cli = String(row.cli ?? row.sender ?? row.from ?? row.sender_id ?? row.sid ?? '').trim();
+        msg = String(row.message ?? row.sms ?? row.text ?? row.msg ?? row.body ?? row.content ?? '').trim();
+        dt = String(row.dt ?? row.timestamp ?? row.date ?? row.created_at ?? row.time ?? row.datetime ?? '').trim();
+        rowRange = String(row.range_name ?? row.range ?? row.range_label ?? row.termination ?? '').trim();
+        rowCountry = String(row.country ?? row.country_name ?? '').trim();
+        rowProvider = String(row.provider ?? row.carrier ?? row.route ?? '').trim();
+        rowCurrency = String(row.currency ?? row.curr ?? row.cur ?? '').trim().toUpperCase();
+        payoutVal = extractCrApiRate(row);
       }
 
       if (!num || !msg) continue;
@@ -1607,6 +1719,7 @@ async function pollSingleCrApiConnection(connId, force = false) {
         provider: rowProvider || conn.panel_name || '',
         range: rowRange,
         country: rowCountry,
+        currency: rowCurrency,
         source: 'cr_api',
         panel_id: conn.id,
         panel_name: conn.panel_name,
@@ -11320,6 +11433,10 @@ function buildSmsEnricher() {
       managerName = cleanSmsHierarchyName(managerRec.username || managerRec.name);
     }
 
+    if (!(Number(item.company_rate) > 0)) {
+      const fallbackCoRate = parseRateValue(item.company_payout) || parseRateValue(item.carrier_revenue) || 0;
+      if (fallbackCoRate > 0) item.company_rate = fallbackCoRate;
+    }
     item.provider = providerVal;
     item.range = rangeVal;
     item.range_name = rangeVal;
@@ -13076,6 +13193,8 @@ app.all(['/api/sms/inbound', '/api/inbound', '/api/sms/receive'], (req, res) => 
 
   const sms_id = p.sms_id || p.uuid || p.id || '';
   const company = p.company || p.system_id || p.provider || '';
+  const inboundRate = extractCrApiRate(p);
+  const inboundCompanyRate = parseRateValue(p.company_rate ?? p.company_cost ?? p.cost ?? p.carrier_rate);
 
   if (!to_number) {
     return res.status(400).json({ status: 'error', error: 'Missing destination number (to)' });
@@ -13090,6 +13209,12 @@ app.all(['/api/sms/inbound', '/api/inbound', '/api/sms/receive'], (req, res) => 
     message: String(message).slice(0, 2000),
     sms_id,
     company,
+    provider: p.provider || company || '',
+    range: p.range || p.range_name || p.range_label || '',
+    country: p.country || '',
+    currency: p.currency || '',
+    payout: Number.isFinite(inboundRate) ? inboundRate : undefined,
+    company_rate: Number.isFinite(inboundCompanyRate) ? inboundCompanyRate : undefined,
     source: 'inbound_http'
   });
 

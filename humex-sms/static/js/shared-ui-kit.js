@@ -2862,12 +2862,12 @@ window.setupUsernameAvailabilityCheck = function(inputId, feedbackId, submitBtnI
   }
 };
 
-// ── Highlight OTP codes in SMS messages ──────────────────────────────────
+// ── Format SMS message text plainly without OTP highlight boxes ─────────────
 window.zyHighlightOtp = function(msg) {
   if (!msg) return '';
-  const escaped = (typeof zyEsc === 'function' ? zyEsc(msg) : String(msg).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'));
-  // Match 4 to 8 digit numbers, or standalone codes
-  return escaped.replace(/\b(\d{4,8})\b/g, '<span class="zy-otp-badge" style="background:#eff6ff;color:#1d4ed8;font-weight:700;border:1px solid #bfdbfe;padding:1px 6px;border-radius:4px;letter-spacing:0.5px;font-family:monospace;display:inline-block;margin:0 2px;">$1</span>');
+  return typeof zyEsc === 'function'
+    ? zyEsc(msg)
+    : String(msg).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 };
 
 // ── Floating Action Button (FAB) (Hidden as requested) ──

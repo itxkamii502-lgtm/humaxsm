@@ -1,5 +1,32 @@
 [
   {
+    "id": 98,
+    "actor": "Admin",
+    "action": "Import Numbers",
+    "details": "Imported 1 numbers to range \"United States Mobile (1202)\" (skipped 1 duplicate(s))",
+    "module": "Numbers",
+    "ip": "127.0.0.1",
+    "timestamp": "2026-11-13T10:17:10.612Z"
+  },
+  {
+    "id": 97,
+    "actor": "Admin",
+    "action": "Add CR API Connection",
+    "details": "Connected 'OctoPanel_1794565030593' (Provider registered)",
+    "module": "CR API",
+    "ip": "127.0.0.1",
+    "timestamp": "2026-11-13T10:17:10.597Z"
+  },
+  {
+    "id": 96,
+    "actor": "Kamran_Bhatti",
+    "action": "Login Success",
+    "details": "Logged in as Owner",
+    "module": "Auth",
+    "ip": "127.0.0.1",
+    "timestamp": "2026-11-13T10:17:10.585Z"
+  },
+  {
     "id": 95,
     "actor": "Admin",
     "action": "Import Numbers",

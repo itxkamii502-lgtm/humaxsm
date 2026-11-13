@@ -4510,8 +4510,9 @@ let ZY_AD_TESTNUMS = [], ZY_AD_TESTLOGS = [];
 
 function zyHighlightOtp(msg) {
   if (!msg) return '—';
-  const escaped = (typeof zyEsc === 'function') ? zyEsc(msg) : String(msg).replace(/[<>&"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c]));
-  return escaped.replace(/\b([A-Z0-9]{1,3}-)?(\d{4,8})\b/g, '<span style="background:#fef3c7;color:#92400e;padding:2px 6px;border-radius:4px;font-weight:700;font-family:monospace;border:1px solid #fde68a;">$1$2</span>');
+  return (typeof zyEsc === 'function')
+    ? zyEsc(msg)
+    : String(msg).replace(/[<>&"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c]));
 }
 
 function zyToolbarFilterTable(tableId, val) {
