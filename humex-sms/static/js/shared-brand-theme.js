@@ -1079,19 +1079,28 @@
           margin-bottom: 16px !important;
         }
         .page-actions {
-          width: 100% !important;
           display: flex !important;
           flex-wrap: wrap !important;
           gap: 8px !important;
+          align-items: center !important;
           justify-content: flex-start !important;
+          width: auto !important;
         }
         .page-actions .btn {
-          flex: 1 1 auto !important;
-          min-width: 120px !important;
+          flex: 0 0 auto !important;
+          width: auto !important;
+          height: 34px !important;
+          padding: 6px 14px !important;
+          font-size: 12.5px !important;
+          font-weight: 600 !important;
+          border-radius: 8px !important;
+          display: inline-flex !important;
+          align-items: center !important;
           justify-content: center !important;
+          gap: 6px !important;
         }
       }
-      @media (max-width: 640px) {
+      @media (max-width: 768px) {
         .stats-grid, body.rmsui .stats-grid,
         .stat-grid, .kpi-grid, .sp-kpi-grid,
         div[style*="grid-template-columns: repeat(2, 1fr)"],
@@ -1114,11 +1123,12 @@
           min-width: 0 !important;
           max-width: 100% !important;
           box-sizing: border-box !important;
-          padding: 10px 12px !important;
-          min-height: auto !important;
+          padding: 8px 10px !important;
+          min-height: 56px !important;
           border-radius: 8px !important;
           overflow: hidden !important;
           position: relative !important;
+          box-shadow: 0 1px 2px rgba(0,0,0,0.06) !important;
         }
         .stat-card .stat-label, body.rmsui .stat-card .stat-label, body.rmsui .stat-label {
           font-size: 10.5px !important;

@@ -6,15 +6,22 @@ let TP_RANGES = [];
 async function pgTestNumbers() {
   const c = document.getElementById('page-content');
   zyCrumb(['SMS Test Numbers']);
-  c.innerHTML = `<div class="zy-intro">Here you can see all test numbers.. you can make call on them and see test reports.</div>
-    <div class="zy-panel">
-      <div class="zy-panel-head">SMS Test Numbers
-        <div class="zy-head-acts">
+  c.innerHTML = `
+    <div class="page-header">
+      <div>
+        <div class="page-title"><i class="fas fa-vial" style="color:#2563eb;"></i> SMS Test Numbers</div>
+        <div class="page-subtitle">Here you can see all test numbers, test them and view test reports.</div>
+      </div>
+    </div>
+    <div class="card zy-panel">
+      <div class="card-header zy-panel-head">
+        <span class="card-title">SMS Test Numbers</span>
+        <div class="zy-head-acts" style="display:flex;align-items:center;gap:8px;">
           ${zyS2('tn-range', 'Select Range', [])}
-          <button class="zy-act zy-act-red zy-act-wide" onclick="tpTnFilter()">Filter</button>
+          <button class="btn btn-primary btn-sm" onclick="tpTnFilter()">Filter</button>
         </div>
       </div>
-      <div class="zy-panel-body"><div class="zy-loading">Loading…</div></div>
+      <div class="card-body zy-panel-body"><div class="zy-loading">Loading…</div></div>
     </div>`;
 
   const [nums, ranges] = await Promise.all([
@@ -49,7 +56,13 @@ async function pgTestCdrStats() {
   const c = document.getElementById('page-content');
   zyCrumb(['Test SMS CDR Stats']);
   const today = new Date().toISOString().slice(0, 10);
-  c.innerHTML = `<div class="zy-intro">Here You can view all the sms stats.</div>
+  c.innerHTML = `
+    <div class="page-header">
+      <div>
+        <div class="page-title"><i class="fas fa-chart-line" style="color:#2563eb;"></i> Test SMS CDR Stats</div>
+        <div class="page-subtitle">Here You can view all the sms stats.</div>
+      </div>
+    </div>
     <div class="zy-filterbox">
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
         <label style="font-size:12px;font-weight:700;color:var(--text-secondary,#64748b);">From Date:</label>
@@ -69,8 +82,10 @@ async function pgTestCdrStats() {
         <button class="zy-btn-blue" onclick="pgTestCdrStatsLoad()">Show Report</button>
       </div>
     </div>
-    <div class="zy-panel"><div class="zy-panel-head">SMS CDR Reports &amp; Stats</div>
-      <div class="zy-panel-body" id="tc-body"><div class="zy-loading">Loading…</div></div></div>`;
+    <div class="card zy-panel">
+      <div class="card-header zy-panel-head"><span class="card-title">SMS CDR Reports &amp; Stats</span></div>
+      <div class="card-body zy-panel-body" id="tc-body"><div class="zy-loading">Loading…</div></div>
+    </div>`;
 
   const ranges = await apiFetch('/api/numbers/sms-ranges');
   TP_RANGES = Array.isArray(ranges) ? ranges : ((ranges && ranges.data) || []);
@@ -138,7 +153,9 @@ async function pgTestCdrStatsLoad() {
       .filter(s => !cli || String(s.cli || '').toLowerCase().includes(cli))
       .filter(s => !rangeName || String(s.range_label || s.range || '').includes(rangeName))
       .map(s => [
-        String(s.timestamp || s.date || '').replace('T', ' ').slice(0, 19),
+        typeof zyFormatDateTimeStacked === 'function'
+          ? zyFormatDateTimeStacked(s.timestamp || s.date)
+          : String(s.timestamp || s.date || '').replace('T', ' ').slice(0, 19),
         s.range_label || s.range || `${s.country || ''} ${s.provider || ''}`.trim(),
         s.number || '',
         zyMaskCli(s.cli),

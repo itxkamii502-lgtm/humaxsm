@@ -84,6 +84,7 @@ const ZY_MENU = {
     sub: [
       ['My Numbers', 'my-sms-numbers'],
       ['Bulk Allocation', 'bulk-add'],
+      ['Number Requests', 'client-requests'],
       ['Ranges & Rate Card', 'sms-ranges']
     ]
   },
@@ -122,6 +123,7 @@ const ZY_LABELS = {
   'payout-rates-view': 'Ranges & Rate Card',
   'my-sms-numbers': 'My Numbers',
   'bulk-add': 'Bulk Allocation',
+  'client-requests': 'Number Requests',
   'sms-test-panel': 'SMS Test Panel',
   'my-clients': 'Clients',
   'notifications': 'Notifications',
@@ -370,7 +372,7 @@ pgDashboard = async function () {
     ];
 
     const kpiCardsHtml = (typeof zyKpiCard === 'function') ? `
-      <div class="zy-kpi-grid">
+      <div class="zy-kpi-grid stats-grid">
         ${zyKpiCard({
           title: "Today SMS",
           value: Number(todaySmsVal).toLocaleString(),
@@ -411,7 +413,9 @@ pgDashboard = async function () {
     ` : '';
 
     const newsRows = newsList.slice(0, 25).map(n => [
-      { v: n.created || n.date || '', h: String(n.created || n.date || '').replace('T', ' ').slice(0, 19) },
+      typeof zyFormatDateTimeStacked === 'function'
+        ? zyFormatDateTimeStacked(n.created || n.date)
+        : { v: n.created || n.date || '', h: String(n.created || n.date || '').replace('T', ' ').slice(0, 19) },
       { v: n.title || '', h: n.title || '' },
       { v: n.message || n.body || '', h: n.message || n.body || '' }
     ]);

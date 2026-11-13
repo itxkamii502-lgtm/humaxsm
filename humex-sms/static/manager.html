@@ -82,7 +82,11 @@
     <div class="zy-header-row">
       <div class="zy-head-left">
         <button class="zy-side-toggle" onclick="zyToggleSidebar()" title="Toggle Sidebar" aria-label="Toggle Sidebar"><i class="fas fa-bars"></i></button>
-        <div class="zy-head-title" id="zy-logo"><span class="zy-panel-badge"><img class="zy-badge-logo" src="/static/img/humex-sms-logo.png" alt="HUMEX SMS" onerror="this.style.display='none';"> <span class="zy-badge-name">HUMEX SMS</span></span></div>
+        <div class="zy-head-title" id="zy-logo" style="display:none;"><span class="zy-panel-badge"><img class="zy-badge-logo" src="/static/img/humex-sms-logo.png" alt="HUMEX SMS" onerror="this.style.display='none';"> <span class="zy-badge-name">HUMEX SMS</span></span></div>
+        <div class="zy-crumb">
+          <div class="zy-crumb-left"><a onclick="loadPage('dashboard')">Home</a><span class="zy-sep">&raquo;</span><span id="breadcrumb">SMS Dashboard</span></div>
+          <div class="zy-crumb-clock" style="display:none;"><i class="far fa-clock"></i> <span id="zy-utc-time">—</span> UTC</div>
+        </div>
       </div>
       <div class="zy-head-right">
         <button class="zy-bell-btn" onclick="loadPage('news')" title="Notifications" aria-label="Notifications">
@@ -107,10 +111,6 @@
   </header>
 
   <div class="zy-body">
-    <div class="zy-crumb">
-      <div class="zy-crumb-left"><a onclick="loadPage('dashboard')">Home</a><span class="zy-sep">&raquo;</span><span id="breadcrumb">SMS Dashboard</span></div>
-      <div class="zy-crumb-clock"><i class="far fa-clock"></i> <span id="zy-utc-time">—</span> UTC</div>
-    </div>
     <main class="page-content" id="page-content"></main>
   </div>
 </div>

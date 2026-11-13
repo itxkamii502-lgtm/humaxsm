@@ -1727,6 +1727,8 @@ app.get(['/static/:file(*.html)', '/:file(*.html)'], (req, res, next) => {
 const ASSET_RENAME_MAP = {
   // Brand Images
   'humax-sms-logo.png': 'humex-sms-logo.png',
+  'custom-logo.png': 'humex-sms-logo.png',
+  'humex-sms-dp.jpg': 'humex-sms-logo.png',
   'alphasms-logo.svg': 'humex-sms-logo.svg',
   'alphasms-circle-logo.svg': 'humex-sms-circle-logo.svg',
   'alphasms-icon.svg': 'humex-sms-icon.svg',
@@ -1774,6 +1776,12 @@ app.use((req, res, next) => {
     const sub = m[1].toLowerCase();
     const oldBase = m[2];
     if (ASSET_RENAME_MAP[oldBase]) {
+      if (sub === 'img' && fs.existsSync(path.join(uploadsDir, oldBase))) {
+        return next();
+      }
+      if (fs.existsSync(path.join(STATIC_DIR, sub, oldBase))) {
+        return next();
+      }
       const newBase = ASSET_RENAME_MAP[oldBase];
       const targetPath = path.join(STATIC_DIR, sub, newBase);
       if (fs.existsSync(targetPath)) return res.sendFile(targetPath);
@@ -3064,7 +3072,11 @@ const CLIENT_ALLOW = [
   { m: new Set(['GET']), p: /^\/numbers$/ },
   { m: new Set(['GET']), p: /^\/numbers\/sms-ranges$/ },
   { m: new Set(['GET']), p: /^\/numbers\/rate-card$/ },
+  { m: new Set(['GET']), p: /^\/numbers\/allocation-policy$/ },
+  { m: new Set(['POST']), p: /^\/numbers\/(agent-allocate|request)$/ },
   { m: new Set(['POST']), p: /^\/numbers\/(\d+\/)?return$/ },
+  { m: new Set(['GET']), p: /^\/agent-requests(\/\d+)?$/ },
+  { m: new Set(['GET', 'POST']), p: /^\/client-requests(\/\d+)?$/ },
   { m: new Set(['GET']), p: /^\/sms\/(logs|export|client-logs|daily-stats|period-stats|client-stats|stats|test-logs|test-numbers|test-stats)$/ },
   { m: new Set(['GET', 'PATCH']), p: /^\/clients(\/\d+)?$/ },
   { m: new Set(['GET']), p: /^\/client\/\d+\// },
@@ -3561,6 +3573,9 @@ app.get('/api/auth/me', (req, res) => {
     role: sessionUser.role,
     manager_id: sessionUser.manager_id || null,
     agent_id: sessionUser.agent_id || null,
+    alloc_mode: sessionUser.alloc_mode || null,
+    alloc_daily_limit: sessionUser.alloc_daily_limit ?? null,
+    alloc_total_limit: sessionUser.alloc_total_limit ?? null,
     permissions: sessionUser.role === 'Owner' ? ['all'] : [sessionUser.role.toLowerCase()]
   });
 });
@@ -7300,7 +7315,7 @@ function registerPaginatedCrud(routePath, tableName) {
 
   app.get(`/api/${routePath}/:id`, requireAuth, (req, res, next) => {
     const rawId = req.params.id;
-    if (['sms-ranges', 'rate-card', 'blacklist', 'bulk', 'download', 'stats', 'earnings', 'adjust-balance', 'test-stats'].includes(rawId)) {
+    if (['sms-ranges', 'rate-card', 'blacklist', 'bulk', 'download', 'stats', 'earnings', 'adjust-balance', 'test-stats', 'allocation-policy', 'no-rate-ranges', 'allocation-history'].includes(rawId)) {
       return next();
     }
     let data = readDb(tableName);
@@ -7396,6 +7411,37 @@ function registerPaginatedCrud(routePath, tableName) {
       const hasForbiddenField = FORBIDDEN_NON_OWNER_PATCH_FIELDS.some(k => (k in req.body) || req.body[k] !== undefined);
       if (hasForbiddenField) {
         return res.status(403).json({ error: 'Forbidden. Non-owner cannot modify financial, rate, role, or hierarchy fields.' });
+      }
+      const touchesAllocPolicy = ['alloc_mode', 'alloc_daily_limit', 'alloc_total_limit'].some(k => req.body[k] !== undefined);
+      if (touchesAllocPolicy) {
+        const cfg = readDb('settings') || {};
+        const allowMgr = cfg.allow_manager_alloc_config !== false;
+        const allowAgt = cfg.allow_agent_alloc_config !== false;
+        const canConfigDownline = (sRole === 'manager' && (tableName === 'agents' || tableName === 'clients') && allowMgr)
+                               || (sRole === 'agent' && tableName === 'clients' && allowAgt);
+        if (!canConfigDownline) {
+          return res.status(403).json({ error: 'Forbidden. Your account does not have authority to change number allocation mode or limits.' });
+        }
+      }
+    }
+
+    if (req.body && typeof req.body === 'object' && ['users', 'agents', 'clients'].includes(tableName)) {
+      if (req.body.alloc_mode !== undefined && req.body.alloc_mode !== '' && req.body.alloc_mode !== null) {
+        const cleanMode = String(req.body.alloc_mode).trim().toLowerCase();
+        if (cleanMode !== 'request' && cleanMode !== 'self_allocate') {
+          return res.status(400).json({ error: 'alloc_mode must be either "request" or "self_allocate".' });
+        }
+        req.body.alloc_mode = cleanMode;
+      }
+      if (req.body.alloc_daily_limit !== undefined && req.body.alloc_daily_limit !== '' && req.body.alloc_daily_limit !== null) {
+        const dl = Number(req.body.alloc_daily_limit);
+        if (isNaN(dl) || dl < 0) return res.status(400).json({ error: 'alloc_daily_limit must be 0 or a positive integer.' });
+        req.body.alloc_daily_limit = Math.floor(dl);
+      }
+      if (req.body.alloc_total_limit !== undefined && req.body.alloc_total_limit !== '' && req.body.alloc_total_limit !== null) {
+        const tl = Number(req.body.alloc_total_limit);
+        if (isNaN(tl) || tl < 0) return res.status(400).json({ error: 'alloc_total_limit must be 0 or a positive integer.' });
+        req.body.alloc_total_limit = Math.floor(tl);
       }
     }
 
@@ -8611,7 +8657,121 @@ app.post('/api/numbers/bulk-assign-many', requireAuth, (req, res) => {
   }
 });
 
-// Agent / Manager Self Range Allocation Endpoint (Lamix flow)
+// Resolve effective number acquisition mode ("request" vs "self_allocate") & quota limits for any user
+function resolveAllocationPolicy(sessionUser) {
+  const sRole = String(sessionUser?.role || '').toLowerCase();
+  const isOwner = sRole === 'owner' || sRole === 'admin';
+  const settings = readDb('settings') || {};
+  const allowMgrConfig = settings.allow_manager_alloc_config !== false;
+  const allowAgtConfig = settings.allow_agent_alloc_config !== false;
+
+  if (isOwner) {
+    return {
+      mode: 'self_allocate',
+      daily_limit: 0,
+      total_limit: 0,
+      used_today: 0,
+      daily_remaining: null,
+      total_held: 0,
+      pending_requested: 0,
+      total_remaining: null,
+      can_configure_downline: true,
+      allow_manager_alloc_config: allowMgrConfig,
+      allow_agent_alloc_config: allowAgtConfig
+    };
+  }
+
+  let dbTable = 'users';
+  if (sRole === 'agent') dbTable = 'agents';
+  else if (sRole === 'client' || sRole === 'reseller') dbTable = 'clients';
+
+  const records = readDb(dbTable) || [];
+  const acct = (Array.isArray(records) ? records.find(x => Number(x.id) === Number(sessionUser.id)) : null) || sessionUser;
+
+  const roleKey = sRole === 'manager' ? 'manager' : (sRole === 'agent' ? 'agent' : 'client');
+  const defaultMode = settings[`${roleKey}_alloc_mode`] === 'self_allocate' ? 'self_allocate' : 'request';
+  const defaultDaily = Math.max(0, parseInt(settings[`${roleKey}_alloc_daily_limit`], 10) || 0);
+  const defaultTotal = Math.max(0, parseInt(settings[`${roleKey}_alloc_total_limit`], 10) || 0);
+
+  const acctMode = acct.alloc_mode === 'self_allocate' || acct.alloc_mode === 'request' ? acct.alloc_mode : null;
+  const mode = acctMode || defaultMode;
+
+  const daily_limit = (acct.alloc_daily_limit !== undefined && acct.alloc_daily_limit !== null && acct.alloc_daily_limit !== '')
+    ? Math.max(0, parseInt(acct.alloc_daily_limit, 10) || 0)
+    : defaultDaily;
+  const total_limit = (acct.alloc_total_limit !== undefined && acct.alloc_total_limit !== null && acct.alloc_total_limit !== '')
+    ? Math.max(0, parseInt(acct.alloc_total_limit, 10) || 0)
+    : defaultTotal;
+
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const numbers = readDb('numbers') || [];
+  const total_held = Array.isArray(numbers) ? numbers.filter(n => {
+    if (!n) return false;
+    if (sRole === 'manager') return Number(n.manager_id) === Number(sessionUser.id);
+    if (sRole === 'agent') return Number(n.agent_id) === Number(sessionUser.id);
+    return Number(n.client_id) === Number(sessionUser.id);
+  }).length : 0;
+
+  const requests = readDb('number_requests') || [];
+  const myRequests = Array.isArray(requests) ? requests.filter(r => {
+    if (!r) return false;
+    if (r.requester_role) {
+      return String(r.requester_role).toLowerCase() === roleKey && Number(r.requester_id) === Number(sessionUser.id);
+    }
+    if (sRole === 'client') return Number(r.client_id) === Number(sessionUser.id);
+    if (sRole === 'agent') return Number(r.agent_id) === Number(sessionUser.id) && !r.client_id;
+    return Number(r.manager_id) === Number(sessionUser.id) && !r.agent_id && !r.client_id;
+  }) : [];
+
+  const pending_requested = myRequests
+    .filter(r => String(r.status || '').toLowerCase() === 'pending')
+    .reduce((sum, r) => sum + (parseInt(r.quantity, 10) || 0), 0);
+
+  let used_today = 0;
+  if (mode === 'request') {
+    used_today = myRequests
+      .filter(r => String(r.status || '').toLowerCase() !== 'rejected' && String(r.created || r.timestamp || '').slice(0, 10) === todayIso)
+      .reduce((sum, r) => sum + (parseInt(r.quantity, 10) || 0), 0);
+  } else {
+    const history = readDb('allocation_history') || [];
+    used_today = Array.isArray(history) ? history.filter(h => {
+      if (!h) return false;
+      const d = String(h.timestamp || h.created || '').slice(0, 10);
+      if (d !== todayIso) return false;
+      if (h.to_user_id != null && Number(h.to_user_id) === Number(sessionUser.id) && String(h.to_role || '').toLowerCase() === sRole) return true;
+      return String(h.to_user || '').toLowerCase() === String(sessionUser.username || '').toLowerCase()
+          && String(h.to_role || '').toLowerCase() === sRole;
+    }).reduce((sum, h) => sum + (parseInt(h.count, 10) || 0), 0) : 0;
+  }
+
+  const daily_remaining = daily_limit > 0 ? Math.max(0, daily_limit - used_today) : null;
+  const total_remaining = total_limit > 0 ? Math.max(0, total_limit - total_held - (mode === 'request' ? pending_requested : 0)) : null;
+
+  return {
+    mode,
+    daily_limit,
+    total_limit,
+    used_today,
+    daily_remaining,
+    total_held,
+    pending_requested,
+    total_remaining,
+    can_configure_downline: (sRole === 'manager' && allowMgrConfig) || (sRole === 'agent' && allowAgtConfig),
+    allow_manager_alloc_config: allowMgrConfig,
+    allow_agent_alloc_config: allowAgtConfig
+  };
+}
+
+app.get('/api/numbers/allocation-policy', requireAuth, (req, res) => {
+  try {
+    const policy = resolveAllocationPolicy(req.sessionUser);
+    res.json({ success: true, ...policy });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Self Range Allocation Endpoint (Manager / Agent / Client when mode === 'self_allocate')
 app.post('/api/numbers/agent-allocate', requireAuth, (req, res) => {
   try {
     const sessionUser = req.sessionUser;
@@ -8619,14 +8779,27 @@ app.post('/api/numbers/agent-allocate', requireAuth, (req, res) => {
     const isOwner = sRole === 'owner' || sRole === 'admin';
     const isManager = sRole === 'manager';
     const isAgent = sRole === 'agent';
+    const isClient = sRole === 'client' || sRole === 'reseller';
 
-    if (!isOwner && !isManager && !isAgent) {
+    if (!isOwner && !isManager && !isAgent && !isClient) {
       return res.status(403).json({ error: 'Access denied.' });
     }
 
-    const { range_name, range_id, count, payterm } = req.body || {};
-    const qty = parseInt(count, 10) || 1;
+    const policy = resolveAllocationPolicy(sessionUser);
+    if (!isOwner && policy.mode !== 'self_allocate') {
+      return res.status(403).json({ error: 'Self-allocate is disabled for your account. Please use Number Request instead.' });
+    }
+
+    const { range_name, range_id, count, quantity, payterm } = req.body || {};
+    const qty = parseInt(count ?? quantity, 10) || 1;
     if (qty <= 0) return res.status(400).json({ error: 'Quantity must be at least 1' });
+
+    if (!isOwner && policy.daily_remaining !== null && qty > policy.daily_remaining) {
+      return res.status(400).json({ error: `Daily self-allocate limit exceeded. Remaining today: ${policy.daily_remaining}` });
+    }
+    if (!isOwner && policy.total_remaining !== null && qty > policy.total_remaining) {
+      return res.status(400).json({ error: `Overall allocation limit exceeded. Remaining allowed: ${policy.total_remaining}` });
+    }
 
     let numbers = readDb('numbers') || [];
     const rId = range_id ? Number(range_id) : null;
@@ -8636,13 +8809,21 @@ app.post('/api/numbers/agent-allocate', requireAuth, (req, res) => {
     const available = numbers.filter(n => {
       if (!n || n.client_id) return false;
       if (n.fixed_for_test || n.is_test_panel || isTestNumber(n.number)) return false;
-      
+
       const nRange = String(n.range_name || n.name || '').trim().toLowerCase();
       const nRid = n.range_id ? Number(n.range_id) : null;
       const matchesRange = (rId && nRid === rId) || (cleanRangeName && (nRange === cleanRangeName || nRange.includes(cleanRangeName)));
       if (!matchesRange) return false;
 
-      if (isAgent) {
+      if (isClient) {
+        if (sessionUser.agent_id) {
+          return Number(n.agent_id) === Number(sessionUser.agent_id) && !n.client_id;
+        }
+        if (sessionUser.manager_id) {
+          return Number(n.manager_id) === Number(sessionUser.manager_id) && !n.agent_id && !n.client_id;
+        }
+        return !n.manager_id && !n.agent_id && !n.client_id;
+      } else if (isAgent) {
         if (sessionUser.manager_id) {
           return (Number(n.manager_id) === Number(sessionUser.manager_id) && !n.agent_id) || (!n.manager_id && !n.agent_id);
         }
@@ -8662,7 +8843,14 @@ app.post('/api/numbers/agent-allocate', requireAuth, (req, res) => {
     const targetPayterm = payterm || '7/1';
 
     toAllocate.forEach(n => {
-      if (isAgent) {
+      if (isClient) {
+        n.client_id = sessionUser.id;
+        n.client_username = sessionUser.username;
+        n.client_name = sessionUser.full_name || sessionUser.username;
+        n.user = sessionUser.username;
+        n.agent_id = sessionUser.agent_id || n.agent_id || null;
+        n.manager_id = sessionUser.manager_id || n.manager_id || null;
+      } else if (isAgent) {
         n.agent_id = sessionUser.id;
         n.agent_username = sessionUser.username;
         n.manager_id = sessionUser.manager_id || n.manager_id || null;
@@ -8683,7 +8871,8 @@ app.post('/api/numbers/agent-allocate', requireAuth, (req, res) => {
     const history = readDb('allocation_history') || [];
     const historyEntry = {
       id: nextId(history),
-      from_user: isAgent ? (sessionUser.manager_id ? 'Manager' : 'Owner') : 'Owner',
+      from_user: isClient ? (sessionUser.agent_id ? 'Agent' : (sessionUser.manager_id ? 'Manager' : 'Owner')) : (isAgent ? (sessionUser.manager_id ? 'Manager' : 'Owner') : 'Owner'),
+      to_user_id: sessionUser.id,
       to_user: sessionUser.username,
       to_role: sessionUser.role,
       range_name: range_name || toAllocate[0]?.range_name || 'General Range',
@@ -8696,7 +8885,7 @@ app.post('/api/numbers/agent-allocate', requireAuth, (req, res) => {
     history.unshift(historyEntry);
     writeDb('allocation_history', history);
 
-    logAudit(sessionUser.username, 'Range Allocation', `Allocated ${toAllocate.length} numbers from ${historyEntry.range_name}`, 'Numbers');
+    logAudit(sessionUser.username, 'Range Self-Allocation', `Self-allocated ${toAllocate.length} numbers from ${historyEntry.range_name}`, 'Numbers');
 
     res.json({ success: true, allocated: toAllocate.length, range_name: historyEntry.range_name });
   } catch (err) {
@@ -9535,7 +9724,7 @@ app.delete('/api/notifications/:id', (req, res) => {
   }
 });
 
-// ── Agent Live Number Requests & Dispatch Control ─────────────
+// ── Live Number Requests & Hierarchy Dispatch Control ─────────────
 app.get('/api/agent-requests', requireAuth, (req, res) => {
   try {
     const sessionUser = req.sessionUser;
@@ -9543,21 +9732,38 @@ app.get('/api/agent-requests', requireAuth, (req, res) => {
     const isOwner = sRole === 'owner' || sRole === 'admin';
     const isManager = sRole === 'manager';
     const isAgent = sRole === 'agent';
+    const isClient = sRole === 'client' || sRole === 'reseller';
 
-    if (!isOwner && !isManager && !isAgent) {
+    if (!isOwner && !isManager && !isAgent && !isClient) {
       return res.status(403).json({ error: 'Access denied.' });
     }
 
     const requests = readDb('number_requests') || [];
     let list = Array.isArray(requests) ? [...requests] : [];
 
-    if (isManager) {
+    if (isClient) {
+      list = list.filter(r => Number(r.client_id) === Number(sessionUser.id));
+    } else if (isManager) {
       list = list.filter(r => Number(r.manager_id) === Number(sessionUser.id));
     } else if (isAgent) {
       list = list.filter(r => Number(r.agent_id) === Number(sessionUser.id));
     }
 
-    const { status } = req.query;
+    const { status, scope } = req.query;
+    if (scope === 'downline') {
+      if (isManager) {
+        list = list.filter(r => (r.requester_role ? String(r.requester_role).toLowerCase() !== 'manager' : !!(r.agent_id || r.client_id)));
+      } else if (isAgent) {
+        list = list.filter(r => String(r.requester_role || '').toLowerCase() === 'client' || !!r.client_id);
+      }
+    } else if (scope === 'mine') {
+      if (isManager) {
+        list = list.filter(r => String(r.requester_role || '').toLowerCase() === 'manager' && Number(r.requester_id || r.manager_id) === Number(sessionUser.id));
+      } else if (isAgent) {
+        list = list.filter(r => (!r.requester_role || String(r.requester_role).toLowerCase() === 'agent') && !r.client_id);
+      }
+    }
+
     if (status) {
       list = list.filter(r => (r.status || '').toLowerCase() === String(status).toLowerCase());
     }
@@ -9568,43 +9774,65 @@ app.get('/api/agent-requests', requireAuth, (req, res) => {
   }
 });
 
-app.post('/api/agent-requests', requireAuth, (req, res) => {
+function handleCreateNumberRequest(req, res) {
   try {
     const sessionUser = req.sessionUser;
     const sRole = (sessionUser.role || '').toLowerCase();
     const isOwner = sRole === 'owner' || sRole === 'admin';
     const isAgent = sRole === 'agent';
     const isManager = sRole === 'manager';
+    const isClient = sRole === 'client' || sRole === 'reseller';
 
-    if (!isOwner && !isAgent && !isManager) {
-      return res.status(403).json({ error: 'Only Agents and Managers can submit number requests.' });
+    if (!isOwner && !isAgent && !isManager && !isClient) {
+      return res.status(403).json({ error: 'Access denied.' });
     }
 
-    const { range_id, range_name, country, app_name, service_name, quantity, urgency, notes } = req.body || {};
+    const policy = resolveAllocationPolicy(sessionUser);
+    if (!isOwner && policy.mode !== 'request') {
+      return res.status(403).json({ error: 'Number Request mode is disabled for your account. Use Self-Allocate instead.' });
+    }
+
+    const { range_id, range_name, country, app_name, service_name, quantity, urgency, notes, payterm } = req.body || {};
     const qty = parseInt(quantity, 10);
     if (!qty || qty <= 0) {
       return res.status(400).json({ error: 'Please enter a valid quantity of numbers' });
     }
 
-    // Derive agent identity securely from session
-    const effectiveAgentId = isAgent ? sessionUser.id : (isManager ? null : (Number(req.body.agent_id) || null));
-    const effectiveAgentUsername = isAgent ? sessionUser.username : (isManager ? (sessionUser.username + ' (Manager)') : (req.body.agent_username || ''));
-    const effectiveManagerId = isAgent ? (sessionUser.manager_id || null) : (isManager ? sessionUser.id : (Number(req.body.manager_id) || null));
+    if (!isOwner && policy.daily_remaining !== null && qty > policy.daily_remaining) {
+      return res.status(400).json({ error: `Daily request limit exceeded. Remaining today: ${policy.daily_remaining}` });
+    }
+    if (!isOwner && policy.total_remaining !== null && qty > policy.total_remaining) {
+      return res.status(400).json({ error: `Overall number limit exceeded. Remaining allowed: ${policy.total_remaining}` });
+    }
+
+    // Derive requester identity securely from session
+    const requesterRole = isClient ? 'Client' : (isAgent ? 'Agent' : (isManager ? 'Manager' : 'Owner'));
+    const effectiveClientId = isClient ? sessionUser.id : null;
+    const effectiveClientUsername = isClient ? sessionUser.username : '';
+    const effectiveAgentId = isClient ? (sessionUser.agent_id || null) : (isAgent ? sessionUser.id : (isManager ? null : (Number(req.body.agent_id) || null)));
+    const effectiveAgentUsername = isClient ? (sessionUser.agent_username || (sessionUser.agent_id ? `Agent #${sessionUser.agent_id}` : '')) : (isAgent ? sessionUser.username : (isManager ? (sessionUser.username + ' (Manager)') : (req.body.agent_username || '')));
+    const effectiveManagerId = (isClient || isAgent) ? (sessionUser.manager_id || null) : (isManager ? sessionUser.id : (Number(req.body.manager_id) || null));
 
     const requests = readDb('number_requests') || [];
     const now = new Date().toISOString();
     const cleanApp = (app_name || service_name || 'General Application').trim();
-    const cleanAgent = String(effectiveAgentUsername || 'Agent').trim();
+    const cleanDisplayActor = isClient ? sessionUser.username : String(effectiveAgentUsername || sessionUser.username || 'User').trim();
     const entry = {
       id: nextId(requests),
+      requester_role: requesterRole,
+      requester_id: sessionUser.id,
+      requester_username: sessionUser.username,
+      client_id: effectiveClientId,
+      client_username: effectiveClientUsername,
       agent_id: effectiveAgentId,
-      agent_username: cleanAgent,
+      agent_username: cleanDisplayActor,
       manager_id: effectiveManagerId,
       manager_username: isManager ? sessionUser.username : (sessionUser.manager_username || ''),
       range_id: range_id ? Number(range_id) : null,
       range_name: (range_name || country || 'General SMS Range').trim(),
       country: (country || '').trim(),
       app_name: cleanApp,
+      payterm: payterm || '7/1',
       quantity: qty,
       urgency: urgency || 'normal',
       notes: (notes || '').trim(),
@@ -9616,14 +9844,14 @@ app.post('/api/agent-requests', requireAuth, (req, res) => {
     requests.unshift(entry);
     writeDb('number_requests', requests);
 
-    // Instant WebSocket broadcast for Manager / Owner Live Requests Queue
+    // Instant WebSocket broadcast for Live Requests Queue
     broadcastWs({
       type: 'agent_number_request',
       data: entry,
-      message: `New Number Request: ${entry.agent_username} requested ${entry.quantity} numbers in range "${entry.range_name}" for "${cleanApp}"`
+      message: `New Number Request: ${requesterRole} ${sessionUser.username} requested ${entry.quantity} numbers in range "${entry.range_name}"`
     });
 
-    // Send instant notification
+    // Send instant notification up the chain
     if (isManager) {
       sendInstantNotification({
         recipient_role: 'owner',
@@ -9636,6 +9864,19 @@ app.post('/api/agent-requests', requireAuth, (req, res) => {
         actor_role: 'Manager',
         actor_name: sessionUser.username,
         metadata: { request_id: entry.id, manager_id: sessionUser.id }
+      });
+    } else if (isClient) {
+      sendInstantNotification({
+        recipient_role: effectiveAgentId ? 'agent' : (effectiveManagerId ? 'manager' : 'owner'),
+        recipient_id: effectiveAgentId || effectiveManagerId || null,
+        title: `New Client Number Request: ${entry.quantity} Numbers`,
+        message: `Client ${sessionUser.username} requested ${entry.quantity} number(s) in range "${entry.range_name}".`,
+        type: 'request',
+        count: entry.quantity,
+        range_name: entry.range_name,
+        actor_role: 'Client',
+        actor_name: sessionUser.username,
+        metadata: { request_id: entry.id, client_id: sessionUser.id }
       });
     } else {
       sendInstantNotification({
@@ -9655,26 +9896,42 @@ app.post('/api/agent-requests', requireAuth, (req, res) => {
 
     res.json({ success: true, request: entry });
   } catch (err) {
-    console.error('POST /api/agent-requests error:', err);
+    console.error('POST /api/numbers/request error:', err);
     res.status(500).json({ error: err.message });
   }
+}
+
+app.post('/api/agent-requests', requireAuth, (req, res) => {
+  const sRole = (req.sessionUser?.role || '').toLowerCase();
+  if (sRole === 'client' || sRole === 'reseller') {
+    return res.status(403).json({ error: 'Access denied.' });
+  }
+  return handleCreateNumberRequest(req, res);
 });
 
-// Fulfill / Accept Request & Dispatch Numbers to Agent with stamped file
+app.post(['/api/numbers/request', '/api/client-requests'], requireAuth, handleCreateNumberRequest);
+
+// Fulfill / Accept Request & Dispatch Numbers downline
 app.post('/api/agent-requests/:id/fulfill', requireAuth, (req, res) => {
   try {
     const sessionUser = req.sessionUser;
     const sRole = (sessionUser.role || '').toLowerCase();
     const isOwner = sRole === 'owner' || sRole === 'admin';
     const isManager = sRole === 'manager';
+    const isAgent = sRole === 'agent';
 
     const id = Number(req.params.id);
     const requests = readDb('number_requests') || [];
     const reqItem = requests.find(r => r.id === id);
     if (!reqItem) return res.status(404).json({ error: 'Request not found' });
 
-    if (!isOwner && (!isManager || Number(reqItem.manager_id) !== Number(sessionUser.id))) {
-      return res.status(403).json({ error: 'Forbidden. You can only fulfill requests submitted to your manager account.' });
+    const reqRoleLower = String(reqItem.requester_role || (reqItem.client_id ? 'client' : (reqItem.agent_id ? 'agent' : 'manager'))).toLowerCase();
+    const canFulfill = isOwner
+      || (isManager && Number(reqItem.manager_id) === Number(sessionUser.id) && reqRoleLower !== 'manager')
+      || (isAgent && Number(reqItem.agent_id) === Number(sessionUser.id) && reqRoleLower === 'client');
+
+    if (!canFulfill) {
+      return res.status(403).json({ error: 'Forbidden. You can only fulfill requests submitted by your downline.' });
     }
 
     const payload = req.body || {};
@@ -9690,85 +9947,79 @@ app.post('/api/agent-requests/:id/fulfill', requireAuth, (req, res) => {
     let numbers = readDb('numbers') || [];
     let allocatedNumbers = [];
 
-    // Derive target manager_id to preserve on every allocation path (Fix 3)
     const targetManagerId = reqItem.manager_id ? Number(reqItem.manager_id) : (isManager ? Number(sessionUser.id) : null);
+    const isClientReq = reqRoleLower === 'client' && !!reqItem.client_id;
+    const isManagerReq = reqRoleLower === 'manager';
+    const targetPayterm = reqItem.payterm || payload.payterm || '7/1';
+    const targetRecipientName = isClientReq ? reqItem.client_username : (isManagerReq ? (reqItem.requester_username || reqItem.manager_username) : reqItem.agent_username);
 
-    // Explicitly selected specific unallocated number IDs
+    const applyAssignment = (n) => ({
+      ...n,
+      manager_id: targetManagerId !== null ? targetManagerId : (n.manager_id || null),
+      agent_id: isManagerReq ? null : (reqItem.agent_id || (isAgent ? sessionUser.id : null)),
+      agent_name: isManagerReq ? '' : (reqItem.agent_username || (isAgent ? sessionUser.username : '')),
+      client_id: isClientReq ? reqItem.client_id : null,
+      client_name: isClientReq ? (reqItem.client_username || '') : '',
+      client_username: isClientReq ? (reqItem.client_username || '') : '',
+      user: targetRecipientName,
+      payterm: targetPayterm,
+      status: 'assigned',
+      allocated_at: new Date().toISOString(),
+      notes: `Allocated via Request #${reqItem.id}`
+    });
+
     if (Array.isArray(payload.selected_number_ids) && payload.selected_number_ids.length > 0) {
       const selectedIdSet = new Set(payload.selected_number_ids.map(Number));
-      // STRICT SAFETY: Verify all selected numbers are UNALLOCATED and NOT fixed for Test Panel
       for (const n of numbers) {
         if (selectedIdSet.has(Number(n.id))) {
-          if (n.agent_id || n.client_id || n.fixed_for_test || n.is_test_panel || isTestNumber(n.number)) {
+          if (n.client_id || (!isClientReq && n.agent_id) || n.fixed_for_test || n.is_test_panel || isTestNumber(n.number)) {
             return res.status(400).json({ error: `Number ${n.number} is already allocated or fixed for Test Panel.` });
           }
           if (isManager && Number(n.manager_id) !== Number(sessionUser.id)) {
             return res.status(403).json({ error: `Number ${n.number} does not belong to your manager pool.` });
           }
+          if (isAgent && Number(n.agent_id) !== Number(sessionUser.id)) {
+            return res.status(403).json({ error: `Number ${n.number} does not belong to your agent pool.` });
+          }
         }
       }
       numbers = numbers.map(n => {
         if (selectedIdSet.has(Number(n.id))) {
-          const updated = {
-            ...n,
-            manager_id: targetManagerId !== null ? targetManagerId : (n.manager_id || null),
-            agent_id: reqItem.agent_id,
-            agent_name: reqItem.agent_username,
-            client_id: null,
-            client_name: '',
-            client_username: '',
-            user: reqItem.agent_username,
-            status: 'assigned',
-            allocated_at: new Date().toISOString(),
-            notes: `Allocated via Agent Request #${reqItem.id}`
-          };
+          const updated = applyAssignment(n);
           allocatedNumbers.push(updated);
           return updated;
         }
         return n;
       });
     } else if (payload.numbers_text && String(payload.numbers_text).trim()) {
-      // Check if explicit lines passed
       const rawLines = String(payload.numbers_text).split(/\r?\n/).map(l => l.trim()).filter(Boolean);
       const validLines = rawLines.filter(l => !/^(number|phone|msisdn|mobile)$/i.test(l));
       const baseNumId = nextId(numbers);
       validLines.forEach((num, idx) => {
-        const item = {
+        const item = applyAssignment({
           id: baseNumId + idx,
           number: num,
           range_id: rangeId || null,
           range_name: rangeLabel,
           prefix: prefix,
           app: 'Unassigned',
-          status: 'assigned',
-          user: reqItem.agent_username,
           country: country,
           provider: provider,
           otp_limit: (rng && rng.otp_limit) || 0,
-          manager_id: targetManagerId,
-          agent_id: reqItem.agent_id,
-          agent_name: reqItem.agent_username,
-          client_id: null,
-          client_name: '',
-          client_username: '',
-          allocated_at: new Date().toISOString(),
           last_sms: null,
-          sms_count: 0,
-          notes: `Allocated via Agent Request #${reqItem.id}`
-        };
+          sms_count: 0
+        });
         numbers.push(item);
         allocatedNumbers.push(item);
       });
     } else {
-      // Allocate from pool:
-      // Manager takes strictly from their own pool (manager_id = that manager).
-      // Owner takes from unallocated stock (or manager pool if manager_id specified).
       let pool = [];
-      if (isManager) {
+      if (isAgent) {
+        pool = numbers.filter(n => Number(n.agent_id) === Number(sessionUser.id) && !n.client_id && !n.fixed_for_test && !n.is_test_panel && !isTestNumber(n.number));
+      } else if (isManager) {
         pool = numbers.filter(n => Number(n.manager_id) === Number(sessionUser.id) && !n.agent_id && !n.client_id && !n.fixed_for_test && !n.is_test_panel && !isTestNumber(n.number));
       } else {
-        // Owner
-        if (targetManagerId) {
+        if (targetManagerId && !isManagerReq) {
           pool = numbers.filter(n => Number(n.manager_id) === Number(targetManagerId) && !n.agent_id && !n.client_id && !n.fixed_for_test && !n.is_test_panel && !isTestNumber(n.number));
         }
         if (pool.length < allocCount) {
@@ -9781,6 +10032,11 @@ app.post('/api/agent-requests/:id/fulfill', requireAuth, (req, res) => {
         if (rangePool.length >= allocCount) {
           pool = rangePool;
         }
+      } else if (rangeLabel) {
+        const namePool = pool.filter(n => String(n.range_name || n.name || '').trim().toLowerCase() === rangeLabel.toLowerCase());
+        if (namePool.length >= allocCount) {
+          pool = namePool;
+        }
       }
 
       if (pool.length < allocCount) {
@@ -9791,19 +10047,7 @@ app.post('/api/agent-requests/:id/fulfill', requireAuth, (req, res) => {
       const selectedIds = new Set(selected.map(n => n.id));
       numbers = numbers.map(n => {
         if (selectedIds.has(n.id)) {
-          const updated = {
-            ...n,
-            manager_id: targetManagerId !== null ? targetManagerId : (n.manager_id || null),
-            agent_id: reqItem.agent_id,
-            agent_name: reqItem.agent_username,
-            client_id: null,
-            client_name: '',
-            client_username: '',
-            user: reqItem.agent_username,
-            status: 'assigned',
-            allocated_at: new Date().toISOString(),
-            notes: `Allocated via Agent Request #${reqItem.id}`
-          };
+          const updated = applyAssignment(n);
           allocatedNumbers.push(updated);
           return updated;
         }
@@ -9813,25 +10057,23 @@ app.post('/api/agent-requests/:id/fulfill', requireAuth, (req, res) => {
 
     writeDb('numbers', numbers);
 
-    // Generate Stamped File with Agent Name printed clearly on top
-    const cleanAgent = String(reqItem.agent_username || 'Agent').replace(/[^a-zA-Z0-9_-]/g, '_');
+    // Generate Stamped File
+    const cleanActor = String(targetRecipientName || 'Account').replace(/[^a-zA-Z0-9_-]/g, '_');
     const cleanRange = String(rangeLabel || 'Range').replace(/[^a-zA-Z0-9_-]/g, '_');
-    const filename = `Batch_Agent_${cleanAgent}_${cleanRange}_${Date.now()}.txt`;
+    const filename = `Batch_${cleanActor}_${cleanRange}_${Date.now()}.txt`;
     const filePath = path.join(AGENT_FILES_DIR, filename);
 
     const fileContent = [
       '================================================================================',
-      'HUMEX SMS GATEWAY — OFFICIAL AGENT NUMBER ALLOCATION FILE',
+      'HUMEX SMS GATEWAY — OFFICIAL NUMBER ALLOCATION FILE',
       '================================================================================',
-      `AGENT NAME      : ${reqItem.agent_username}`,
-      `AGENT ID        : ${reqItem.agent_id || 'N/A'}`,
+      `RECIPIENT       : ${targetRecipientName} (${reqItem.requester_role || 'Agent'})`,
       `REQUEST ID      : #${reqItem.id}`,
       `RANGE NAME      : ${rangeLabel}`,
       `COUNTRY / PREFIX: ${country} (${prefix || 'Standard'})`,
       `TOTAL ALLOCATED : ${allocatedNumbers.length}`,
       `DISPATCHED DATE : ${new Date().toISOString()}`,
-      `DISPATCHED BY   : Manager / Owner Panel`,
-      `STATUS          : ACTIVE & READY FOR CLIENT ALLOCATION`,
+      `DISPATCHED BY   : ${sessionUser.username} (${sessionUser.role})`,
       '================================================================================',
       '',
       '--- NUMBERS LIST ---',
@@ -9847,7 +10089,7 @@ app.post('/api/agent-requests/:id/fulfill', requireAuth, (req, res) => {
     // Update request state
     reqItem.status = 'approved';
     reqItem.fulfilled_at = new Date().toISOString();
-    reqItem.fulfilled_by = payload.fulfilled_by || 'Manager';
+    reqItem.fulfilled_by = payload.fulfilled_by || sessionUser.username;
     reqItem.fulfilled_count = allocatedNumbers.length;
     reqItem.fulfilled_range = rangeLabel;
     reqItem.batch_filename = filename;
@@ -9857,16 +10099,16 @@ app.post('/api/agent-requests/:id/fulfill', requireAuth, (req, res) => {
     const transfers = readDb('number_transfers') || [];
     transfers.unshift({
       id: nextId(transfers),
-      from_user_id: null,
-      from_username: 'Manager',
-      from_role: 'Manager',
-      to_user_id: reqItem.agent_id,
-      to_username: reqItem.agent_username,
-      to_role: 'Agent',
+      from_user_id: sessionUser.id,
+      from_username: sessionUser.username,
+      from_role: sessionUser.role,
+      to_user_id: isClientReq ? reqItem.client_id : (isManagerReq ? reqItem.manager_id : reqItem.agent_id),
+      to_username: targetRecipientName,
+      to_role: reqItem.requester_role || 'Agent',
       count: allocatedNumbers.length,
       number_ids: allocatedNumbers.map(n => n.id),
       batch_filename: filename,
-      notes: `Fulfillment of Agent Request #${reqItem.id} (${rangeLabel})`,
+      notes: `Fulfillment of Request #${reqItem.id} (${rangeLabel})`,
       timestamp: new Date().toISOString(),
       status: 'completed'
     });
@@ -9876,9 +10118,10 @@ app.post('/api/agent-requests/:id/fulfill', requireAuth, (req, res) => {
     const history = readDb('allocation_history') || [];
     history.unshift({
       id: nextId(history),
-      from_user: 'Manager',
-      to_user: reqItem.agent_username,
-      to_role: 'Agent',
+      from_user: sessionUser.username,
+      to_user_id: isClientReq ? reqItem.client_id : (isManagerReq ? reqItem.manager_id : reqItem.agent_id),
+      to_user: targetRecipientName,
+      to_role: reqItem.requester_role || 'Agent',
       range_id: rangeId,
       range_name: rangeLabel,
       count: allocatedNumbers.length,
@@ -9889,27 +10132,28 @@ app.post('/api/agent-requests/:id/fulfill', requireAuth, (req, res) => {
     });
     writeDb('allocation_history', history);
 
-    // Send INSTANT Real-Time Notification to Agent (delivered within 1 second)
+    // Send instant notification to requester
+    const notifyRole = isClientReq ? 'client' : (isManagerReq ? 'manager' : 'agent');
+    const notifyId = isClientReq ? reqItem.client_id : (isManagerReq ? reqItem.manager_id : reqItem.agent_id);
     sendInstantNotification({
-      recipient_role: 'agent',
-      recipient_id: reqItem.agent_id,
-      recipient_username: reqItem.agent_username,
+      recipient_role: notifyRole,
+      recipient_id: notifyId,
+      recipient_username: targetRecipientName,
       title: `Number Request Approved (${allocatedNumbers.length})`,
-      message: `Your number request for range "${rangeLabel}" has been approved! ${allocatedNumbers.length} number(s) have been dispatched to your panel (File: ${filename}).`,
+      message: `Your number request for range "${rangeLabel}" has been approved! ${allocatedNumbers.length} number(s) have been dispatched to your account.`,
       type: 'allocation',
       count: allocatedNumbers.length,
       range_id: rangeId,
       range_name: rangeLabel,
-      actor_role: 'Manager',
-      actor_name: 'Manager',
+      actor_role: sessionUser.role,
+      actor_name: sessionUser.username,
       metadata: { request_id: reqItem.id, filename: filename }
     });
 
-    // Broadcast WebSocket update
     broadcastWs({
       type: 'agent_request_updated',
       data: reqItem,
-      message: `Request #${reqItem.id} fulfilled: ${allocatedNumbers.length} numbers dispatched to Agent ${reqItem.agent_username}`
+      message: `Request #${reqItem.id} fulfilled: ${allocatedNumbers.length} numbers dispatched to ${targetRecipientName}`
     });
 
     res.json({
@@ -9924,21 +10168,27 @@ app.post('/api/agent-requests/:id/fulfill', requireAuth, (req, res) => {
   }
 });
 
-// Reject Agent Request
+// Reject Number Request
 app.post('/api/agent-requests/:id/reject', requireAuth, (req, res) => {
   try {
     const sessionUser = req.sessionUser;
     const sRole = (sessionUser.role || '').toLowerCase();
     const isOwner = sRole === 'owner' || sRole === 'admin';
     const isManager = sRole === 'manager';
+    const isAgent = sRole === 'agent';
 
     const id = Number(req.params.id);
     const requests = readDb('number_requests') || [];
     const reqItem = requests.find(r => r.id === id);
     if (!reqItem) return res.status(404).json({ error: 'Request not found' });
 
-    if (!isOwner && (!isManager || Number(reqItem.manager_id) !== Number(sessionUser.id))) {
-      return res.status(403).json({ error: 'Forbidden. You can only reject requests submitted to your manager account.' });
+    const reqRoleLower = String(reqItem.requester_role || (reqItem.client_id ? 'client' : (reqItem.agent_id ? 'agent' : 'manager'))).toLowerCase();
+    const canReject = isOwner
+      || (isManager && Number(reqItem.manager_id) === Number(sessionUser.id) && reqRoleLower !== 'manager')
+      || (isAgent && Number(reqItem.agent_id) === Number(sessionUser.id) && reqRoleLower === 'client');
+
+    if (!canReject) {
+      return res.status(403).json({ error: 'Forbidden. You can only reject requests submitted by your downline.' });
     }
 
     const reason = (req.body && req.body.reason) || 'Capacity unavailable at this time';
@@ -9947,18 +10197,23 @@ app.post('/api/agent-requests/:id/reject', requireAuth, (req, res) => {
     reqItem.rejected_reason = reason;
     writeDb('number_requests', requests);
 
-    // Send instant notification to Agent
+    const isClientReq = reqRoleLower === 'client' && !!reqItem.client_id;
+    const isManagerReq = reqRoleLower === 'manager';
+    const notifyRole = isClientReq ? 'client' : (isManagerReq ? 'manager' : 'agent');
+    const notifyId = isClientReq ? reqItem.client_id : (isManagerReq ? reqItem.manager_id : reqItem.agent_id);
+    const notifyName = isClientReq ? reqItem.client_username : (isManagerReq ? (reqItem.requester_username || reqItem.manager_username) : reqItem.agent_username);
+
     sendInstantNotification({
-      recipient_role: 'agent',
-      recipient_id: reqItem.agent_id,
-      recipient_username: reqItem.agent_username,
+      recipient_role: notifyRole,
+      recipient_id: notifyId,
+      recipient_username: notifyName,
       title: 'Number Request Rejected',
       message: `Your request for ${reqItem.quantity} numbers in range "${reqItem.range_name}" was declined. Reason: ${reason}`,
       type: 'revocation',
       count: reqItem.quantity,
       range_name: reqItem.range_name,
-      actor_role: 'Manager',
-      actor_name: 'Manager'
+      actor_role: sessionUser.role,
+      actor_name: sessionUser.username
     });
 
     broadcastWs({

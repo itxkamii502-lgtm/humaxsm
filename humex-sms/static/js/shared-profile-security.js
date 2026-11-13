@@ -265,9 +265,6 @@
               <div style="font-size: 14px; font-weight: 800; color: #0f172a; text-transform: uppercase; letter-spacing: 0.5px;">ACCOUNT AUDIT LOG</div>
               <div style="font-size: 12px; color: #64748b; margin-top: 3px;">Real-time system audit logs and security events recorded on your account</div>
             </div>
-            <button type="button" class="btn btn-outline btn-sm" onclick="window.SpeedProfile.loadAuditLogs()" style="border-radius:6px; padding:4px 10px; font-size:12px;">
-              <i class="fas fa-rotate"></i> Refresh
-            </button>
           </div>
           <div id="pro-audit-table-wrap">
             <div style="padding:20px; text-align:center; color:#64748b; font-size:13px;">Loading audit logs...</div>

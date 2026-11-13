@@ -58,7 +58,8 @@ const ZY_MENU = {
     sub: [
       ['My Numbers', 'my-numbers'],
       ['Bulk Allocation', 'assign-numbers'],
-      ['Ranges & Rate Card', 'sms-overview']
+      ['Ranges & Rate Card', 'sms-overview'],
+      ['Number Requests', 'number-requests']
     ]
   },
   'smstest':     { t: 'SMS Test Panel',   ic: 'rss',       page: 'sms-test-panel' },
@@ -96,6 +97,7 @@ const ZY_LABELS = {
   'payout-rates-view': 'Ranges & Rate Card',
   'sms-ratecard': 'Ranges & Rate Card',
   'assign-numbers': 'Bulk Allocation',
+  'number-requests': 'Number Requests',
   'agents': 'Agents',
   'clients': 'Clients',
   'news': 'Notifications',
@@ -484,7 +486,7 @@ pgDashboard = async function () {
     const recentSmsCardHtml = (typeof zyRecentSmsCard === 'function' && recentSms.length > 0) ? zyRecentSmsCard(recentSms, { title: 'Recent Team SMS Traffic Live' }) : '';
 
     const kpiCardsHtml = (typeof zyKpiCard === 'function') ? `
-      <div class="zy-kpi-grid">
+      <div class="zy-kpi-grid stats-grid">
         ${zyKpiCard({
           title: "Today SMS",
           value: Number(todaySmsVal).toLocaleString(),

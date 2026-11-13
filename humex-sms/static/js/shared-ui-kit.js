@@ -8,7 +8,7 @@
 
 /* ── breadcrumb with sub levels ─────────────────────────────── */
 function zyCrumb(parts) {
-  const host = document.querySelector('.zy-crumb');
+  const host = document.querySelector('.zy-crumb-left') || document.querySelector('.zy-crumb');
   if (!host) return;
   host.innerHTML = `<a onclick="loadPage('dashboard')">Home</a>` +
     parts.map((p, i) => `<span class="zy-sep">&raquo;</span>` +
@@ -32,6 +32,26 @@ function zyDT2(id, cfg) {
   return `<div class="zy-dt2" id="${id}"></div>`;
 }
 function zyCell2(c) { return (c && typeof c === 'object') ? c : { v: c, h: c }; }
+function zyColClass(colName) {
+  if (!colName || typeof colName !== 'string') return '';
+  const cn = colName.trim().toLowerCase();
+  if (cn.includes('payout') || cn.includes('profit') || cn.includes('rate') || cn.includes('cost') || cn.includes('revenue') || cn.includes('balance') || cn.includes('price')) {
+    return 'col-money text-right';
+  }
+  if (cn === 'date' || cn === 'date time' || cn === 'datetime' || cn === 'timestamp' || cn === 'time') {
+    return 'col-date col-fit text-center';
+  }
+  if (cn === 'number' || cn === 'phone' || cn === 'cli' || cn === 'ip' || cn === 'ip address' || cn.includes('phone') || cn.includes('number')) {
+    return 'col-mono';
+  }
+  if (cn === 'status' || cn === 'cause' || cn === 'state') {
+    return 'col-status text-center';
+  }
+  if (cn === 'currency' || cn === 'curr.' || cn === 'curr') {
+    return 'col-curr text-center';
+  }
+  return '';
+}
 function zy2Data(t) {
   let rows = t.rows;
   if (t.search) {
@@ -121,11 +141,21 @@ function zy2Render(id) {
 
   const head =
     (t.check ? `<th class="zy-cbcol"><input type="checkbox" onclick="zy2All('${id}',this)">${zyImg('ui_sort_asc','zy-cbsort')}</th>` : '') +
-    t.cols.map((c, i) => isColVisible(i) ? `<th class="${i === t.sort ? 'sorted' : ''}" onclick="zy2Sort('${id}',${i})">${c}${zySortIc(i === t.sort, t.dir)}</th>` : '').join('');
+    t.cols.map((c, i) => {
+      if (!isColVisible(i)) return '';
+      const cName = typeof c === 'string' ? c : (c && (c.title || c.name || c.label || '')) || '';
+      const cls = `${i === t.sort ? 'sorted' : ''} ${zyColClass(cName)}`.trim();
+      return `<th class="${cls}" onclick="zy2Sort('${id}',${i})">${c}${zySortIc(i === t.sort, t.dir)}</th>`;
+    }).join('');
 
   const body = slice.length ? slice.map((r, ri) => `<tr>` +
       (t.check ? `<td class="zy-cbcol"><input type="checkbox" class="zy-cb-${id}" value="${r.__id ?? ri}"></td>` : '') +
-      r.map((c, i) => isColVisible(i) ? `<td class="${i === t.sort ? 'sorted' : ''}">${zyCell2(c).h ?? ''}</td>` : '').join('') +
+      r.map((c, i) => {
+        if (!isColVisible(i)) return '';
+        const cName = typeof t.cols[i] === 'string' ? t.cols[i] : (t.cols[i] && (t.cols[i].title || t.cols[i].name || t.cols[i].label || '')) || '';
+        const cls = `${i === t.sort ? 'sorted' : ''} ${zyColClass(cName)}`.trim();
+        return `<td class="${cls}">${zyCell2(c).h ?? ''}</td>`;
+      }).join('') +
       `</tr>`).join('')
     : `<tr><td class="zy-empty zy-empty-cell" colspan="${visibleColsCount + (t.check ? 1 : 0)}">${
         t.search
@@ -139,10 +169,60 @@ function zy2Render(id) {
 
   let footHtml = '';
   if (t.footRow) {
-    const tdMatches = t.footRow.match(/<td[\s\S]*?<\/td>/gi);
-    if (tdMatches && tdMatches.length === t.cols.length) {
-      const visibleTds = (t.check ? ['<td></td>'] : []).concat(tdMatches.filter((_, i) => isColVisible(i)));
+    const tdMatches = t.footRow.match(/<td[\s\S]*?<\/td>/gi) || [];
+    const neededCols = visibleColsCount + (t.check ? 1 : 0);
+    const textOf = (html) => String(html || '').replace(/<[^>]+>/g, '').trim();
+
+    if (tdMatches.length === t.cols.length) {
+      const firstVisColIdx = t.cols.findIndex((_, idx) => isColVisible(idx));
+      let visibleTds = [];
+      t.cols.forEach((col, i) => {
+        if (!isColVisible(i)) return;
+        let td = tdMatches[i];
+        if (!isColVisible(0) && i === firstVisColIdx && textOf(tdMatches[0]).length > 0 && textOf(td).length === 0) {
+          td = tdMatches[0];
+        }
+        const cName = typeof col === 'string' ? col : (col && (col.title || col.name || col.label || '')) || '';
+        const alignCls = zyColClass(cName);
+        if (alignCls) {
+          td = td.replace(/^<td(?:\s+class="([^"]*)")?/i, (m, existing) => {
+            const merged = `${existing || ''} ${alignCls}`.trim();
+            return `<td class="${merged}"`;
+          });
+        }
+        visibleTds.push(td);
+      });
+      if (t.check) visibleTds.unshift('<td class="zy-cbcol"></td>');
       footHtml = `<tfoot><tr>${visibleTds.join('')}</tr></tfoot>`;
+    } else if (tdMatches.length > 0) {
+      const isCellEmpty = (c) => textOf(c).length === 0;
+      const firstEmpty = tdMatches.findIndex(isCellEmpty);
+      let lastEmpty = -1;
+      for (let j = tdMatches.length - 1; j >= 0; j--) {
+        if (isCellEmpty(tdMatches[j])) { lastEmpty = j; break; }
+      }
+      const headCells = firstEmpty > -1 ? tdMatches.slice(0, firstEmpty) : (tdMatches.length ? [tdMatches[0]] : []);
+      const tailCells = (lastEmpty > -1 && lastEmpty < tdMatches.length - 1) ? tdMatches.slice(lastEmpty + 1) : [];
+
+      let dataCells = [];
+      const spacersNeeded = Math.max(0, visibleColsCount - (headCells.length + tailCells.length));
+
+      if (headCells.length + tailCells.length <= visibleColsCount) {
+        dataCells = [...headCells, ...Array(spacersNeeded).fill('<td></td>'), ...tailCells];
+      } else {
+        const availForTail = Math.max(0, visibleColsCount - headCells.length);
+        if (availForTail > 0) {
+          dataCells = [...headCells, ...tailCells.slice(tailCells.length - availForTail)];
+        } else {
+          dataCells = headCells.slice(0, visibleColsCount);
+        }
+      }
+
+      while (dataCells.length < visibleColsCount) dataCells.push('<td></td>');
+      if (dataCells.length > visibleColsCount) dataCells = dataCells.slice(0, visibleColsCount);
+
+      if (t.check) dataCells.unshift('<td class="zy-cbcol"></td>');
+      footHtml = `<tfoot><tr>${dataCells.join('')}</tr></tfoot>`;
     } else {
       footHtml = `<tfoot><tr>${t.footRow}</tr></tfoot>`;
     }
@@ -437,7 +517,7 @@ function zyToggleHtmlCol(id, colIndex, isVisible) {
 function zyApplyHtmlColVisibility(table) {
   if (!table) return;
   table._hiddenCols = table._hiddenCols || {};
-  const rows = Array.from(table.querySelectorAll('tr'));
+  const rows = Array.from(table.querySelectorAll('thead tr, tbody tr'));
   rows.forEach(tr => {
     const cells = Array.from(tr.children);
     cells.forEach((cell, idx) => {
@@ -447,6 +527,26 @@ function zyApplyHtmlColVisibility(table) {
         cell.style.display = '';
       }
     });
+  });
+
+  // Handle tfoot rows: if normal cells, toggle display; if single colspan cell, update colspan dynamically
+  const footRows = Array.from(table.querySelectorAll('tfoot tr'));
+  const ths = Array.from(table.querySelectorAll('thead th, tr:first-child th'));
+  const visibleCount = Math.max(1, ths.length - Object.keys(table._hiddenCols).length);
+
+  footRows.forEach(tr => {
+    const cells = Array.from(tr.children);
+    if (cells.length === 1 && cells[0].hasAttribute('colspan')) {
+      cells[0].colSpan = visibleCount;
+    } else {
+      cells.forEach((cell, idx) => {
+        if (table._hiddenCols[idx]) {
+          cell.style.display = 'none';
+        } else {
+          cell.style.display = '';
+        }
+      });
+    }
   });
 }
 
@@ -649,68 +749,181 @@ function zyModal(title, body, footer) {
 const zyList = v => Array.isArray(v) ? v : ((v && v.data) || []);
 const zyEsc = s => String(s ?? '').replace(/[<>&"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c]));
 
-/* Request Numbers Modal (Matches Reference UI & Available for All Roles) */
-window.zyOpenRequestNumbersModal = function(rangeName) {
+/* Request Numbers & Self-Allocate Modals (Real Backend Policy & Limits) */
+window.zyFetchAllocPolicy = async function() {
+  if (typeof apiFetch !== 'function') return { mode: 'request', daily_limit: 0, total_limit: 0, used_today: 0, total_held: 0, pending_requested: 0 };
+  try {
+    const p = await apiFetch('/api/numbers/allocation-policy');
+    if (p && p.mode) {
+      window.ZY_ALLOC_POLICY = p;
+      return p;
+    }
+  } catch (_) {}
+  return window.ZY_ALLOC_POLICY || { mode: 'request', daily_limit: 0, total_limit: 0, used_today: 0, total_held: 0, pending_requested: 0 };
+};
+
+window.zyFormatAllocLimitHint = function(policy, actionWord) {
+  if (!policy) return '';
+  const parts = [];
+  if (Number(policy.daily_limit) > 0) {
+    parts.push(`Daily limit: <b>${Number(policy.daily_remaining ?? 0).toLocaleString()}</b> of <b>${Number(policy.daily_limit).toLocaleString()}</b> left today (used ${Number(policy.used_today || 0).toLocaleString()})`);
+  } else {
+    parts.push(`Daily limit: <b>Unlimited</b> (used ${Number(policy.used_today || 0).toLocaleString()} today)`);
+  }
+  if (Number(policy.total_limit) > 0) {
+    parts.push(`Overall limit: <b>${Number(policy.total_remaining ?? 0).toLocaleString()}</b> of <b>${Number(policy.total_limit).toLocaleString()}</b> left (held ${Number(policy.total_held || 0).toLocaleString()}, pending ${Number(policy.pending_requested || 0).toLocaleString()})`);
+  }
+  return parts.join('<br>');
+};
+
+window.zyOpenRequestNumbersModal = async function(rangeName, rangeId, passedPolicy, onDone) {
+  const policy = passedPolicy || await window.zyFetchAllocPolicy();
+  window._zyOnAllocModalDone = typeof onDone === 'function' ? onDone : null;
+  if (policy && policy.mode === 'self_allocate') {
+    return window.zyOpenSelfAllocateModal(rangeName, rangeId, policy, onDone);
+  }
+  const maxByDaily = Number(policy.daily_limit) > 0 ? Math.max(0, Number(policy.daily_remaining ?? 0)) : Infinity;
+  const maxByTotal = Number(policy.total_limit) > 0 ? Math.max(0, Number(policy.total_remaining ?? 0)) : Infinity;
+  const maxAllowed = Math.min(maxByDaily, maxByTotal, 5000);
+  const blocked = maxAllowed <= 0 && (Number(policy.daily_limit) > 0 || Number(policy.total_limit) > 0);
+  const limitHint = window.zyFormatAllocLimitHint(policy, 'request');
+
   zyModal('Request Numbers', `
-    <div class="zy-modal-summary-card" style="background:#f8fafc;border-radius:12px;padding:14px 16px;margin-bottom:16px;border:1.5px solid #e2e8f0;">
-      <div style="font-weight:800;color:#0f172a;font-size:14px;letter-spacing:-0.01em;">${zyEsc(rangeName)}</div>
+    <div class="zy-modal-summary-card" style="background:#f8fafc;border-radius:12px;padding:12px 14px;margin-bottom:14px;border:1px solid #e2e8f0;">
+      <div style="font-weight:800;color:#0f172a;font-size:14px;">${zyEsc(rangeName)}</div>
+      <div style="font-size:11.5px;color:#475569;margin-top:4px;">Mode: <b>Request Approval</b></div>
     </div>
-    <div style="margin-bottom:14px;">
+    <div style="margin-bottom:12px;">
       <label style="display:block;font-size:12px;font-weight:700;color:#475569;margin-bottom:6px;">Payment Term</label>
       <select id="req-payterm" class="zy-select-pill">
-        <option value="">Please Select a payterm</option>
-        <option value="7/1" selected>Weekly (7/1)</option>
-        <option value="30/30">Monthly (30/30)</option>
+        <option value="Weekly" selected>Weekly</option>
+        <option value="1/1">1/1</option>
+        <option value="7/1">7/1</option>
+        <option value="7/7">7/7</option>
+        <option value="15/15">15/15</option>
+        <option value="15/30">15/30</option>
+        <option value="Monthly60">Monthly60</option>
       </select>
     </div>
-    <div style="margin-bottom:10px;">
+    <div style="margin-bottom:12px;">
       <label style="display:block;font-size:12px;font-weight:700;color:#475569;margin-bottom:6px;">Quantity</label>
-      <select id="req-qty" class="zy-select-pill">
-        <option value="1">1</option>
-        <option value="5">5</option>
-        <option value="10">10</option>
-        <option value="25">25</option>
-        <option value="50">50</option>
-        <option value="100">100</option>
-        <option value="200">200</option>
-      </select>
-      <div style="font-size:11.5px;color:#64748b;margin-top:6px;">Select any quantity from 1 to 200.</div>
-      <div style="font-size:11.5px;color:#64748b;margin-top:3px;">You have used 0 of 500 allowed request(s) for this range.</div>
+      <input type="number" id="req-qty" class="zy-select-pill" min="1" ${Number.isFinite(maxAllowed) ? `max="${Math.max(1, maxAllowed)}"` : ''} value="${blocked ? 0 : Math.min(10, Number.isFinite(maxAllowed) ? Math.max(1, maxAllowed) : 10)}" ${blocked ? 'disabled' : ''}>
+      <div style="font-size:11.5px;color:${blocked ? '#dc2626' : '#64748b'};margin-top:6px;line-height:1.5;">
+        ${blocked ? '<b>Limit reached:</b> You have 0 remaining numbers available under your assigned limit.' : limitHint}
+      </div>
+    </div>
+    <div style="margin-bottom:8px;">
+      <label style="display:block;font-size:12px;font-weight:700;color:#475569;margin-bottom:6px;">Notes (Optional)</label>
+      <input type="text" id="req-notes" class="zy-select-pill" placeholder="Optional note for approval">
     </div>
   `, `
     <div style="display:flex;justify-content:flex-end;align-items:center;gap:10px;width:100%;">
       <button type="button" class="zy-btn-pill-cancel" onclick="closeModal()">Close</button>
-      <button type="button" class="zy-btn-pill-submit" onclick="zySubmitRangeRequest('${zyEsc(rangeName)}')">Request</button>
+      <button type="button" class="zy-btn-pill-submit" id="zy-req-submit-btn" ${blocked ? 'disabled style="opacity:0.5;cursor:not-allowed;"' : ''} onclick="zySubmitRangeRequest('${zyEsc(rangeName)}','${zyEsc(rangeId || '')}')">Submit Request</button>
     </div>
   `);
 };
 
-window.zySubmitRangeRequest = async function(rangeName) {
-  const pt = document.getElementById('req-payterm')?.value;
-  const qty = parseInt(document.getElementById('req-qty')?.value || '1', 10);
-  if (!pt) {
-    if (typeof toast === 'function') toast('Please select a payment term', 'error');
-    else if (typeof zyFlash === 'function') zyFlash('Please select a payment term');
+window.zySubmitRangeRequest = async function(rangeName, rangeId) {
+  const pt = document.getElementById('req-payterm')?.value || 'Weekly';
+  const qty = parseInt(document.getElementById('req-qty')?.value || '0', 10);
+  const notes = (document.getElementById('req-notes')?.value || '').trim();
+  const btn = document.getElementById('zy-req-submit-btn');
+  if (!qty || qty < 1) {
+    if (typeof toast === 'function') toast('Please enter a valid quantity', 'error');
     return;
   }
+  if (btn) { btn.disabled = true; btn.textContent = 'Submitting...'; }
   try {
-    if (typeof apiFetch === 'function') {
-      await apiFetch('/api/agent-requests', {
-        method: 'POST',
-        body: JSON.stringify({
-          range_name: rangeName,
-          quantity: qty,
-          notes: `Payterm: ${pt}`,
-          urgency: 'normal'
-        }),
-        silent: true
-      }).catch(() => {});
+    const res = await apiFetch('/api/numbers/request', {
+      method: 'POST',
+      body: JSON.stringify({
+        range_id: rangeId ? (Number(rangeId) || rangeId) : undefined,
+        range_name: rangeName,
+        payterm: pt,
+        quantity: qty,
+        notes: notes ? `Payterm: ${pt} | ${notes}` : `Payterm: ${pt}`,
+        urgency: 'normal'
+      })
+    });
+    if (!res || res.error) {
+      throw new Error((res && res.error) || 'Failed to submit number request');
     }
-  } catch (e) {}
-  if (typeof closeModal === 'function') closeModal();
-  const msg = `Requested ${qty} number(s) for ${rangeName} (${pt})`;
-  if (typeof toast === 'function') toast(msg, 'success');
-  else if (typeof zyFlash === 'function') zyFlash(msg);
+    if (typeof closeModal === 'function') closeModal();
+    const msg = res.message || `Requested ${qty} number(s) for ${rangeName} (${pt})`;
+    if (typeof toast === 'function') toast(msg, 'success');
+    else if (typeof zyFlash === 'function') zyFlash(msg);
+    if (typeof window._zyOnAllocModalDone === 'function') window._zyOnAllocModalDone();
+  } catch (e) {
+    if (typeof toast === 'function') toast(e.message || 'Request failed', 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Submit Request'; }
+  }
+};
+
+window.zyOpenSelfAllocateModal = async function(rangeName, rangeId, passedPolicy, onDone) {
+  const policy = passedPolicy || await window.zyFetchAllocPolicy();
+  window._zyOnAllocModalDone = typeof onDone === 'function' ? onDone : null;
+  if (policy && policy.mode === 'request') {
+    return window.zyOpenRequestNumbersModal(rangeName, rangeId, policy, onDone);
+  }
+  const maxByDaily = Number(policy.daily_limit) > 0 ? Math.max(0, Number(policy.daily_remaining ?? 0)) : Infinity;
+  const maxByTotal = Number(policy.total_limit) > 0 ? Math.max(0, Number(policy.total_remaining ?? 0)) : Infinity;
+  const maxAllowed = Math.min(maxByDaily, maxByTotal, 5000);
+  const blocked = maxAllowed <= 0 && (Number(policy.daily_limit) > 0 || Number(policy.total_limit) > 0);
+  const limitHint = window.zyFormatAllocLimitHint(policy, 'allocate');
+
+  zyModal('Self-Allocate Numbers', `
+    <div class="zy-modal-summary-card" style="background:#f8fafc;border-radius:12px;padding:12px 14px;margin-bottom:14px;border:1px solid #e2e8f0;">
+      <div style="font-weight:800;color:#0f172a;font-size:14px;">${zyEsc(rangeName)}</div>
+      <div style="font-size:11.5px;color:#047857;margin-top:4px;">Mode: <b>Self-Allocate (Instant Pool Assignment)</b></div>
+    </div>
+    <div style="margin-bottom:12px;">
+      <label style="display:block;font-size:12px;font-weight:700;color:#475569;margin-bottom:6px;">Quantity</label>
+      <input type="number" id="sa-qty" class="zy-select-pill" min="1" ${Number.isFinite(maxAllowed) ? `max="${Math.max(1, maxAllowed)}"` : ''} value="${blocked ? 0 : Math.min(10, Number.isFinite(maxAllowed) ? Math.max(1, maxAllowed) : 10)}" ${blocked ? 'disabled' : ''}>
+      <div style="font-size:11.5px;color:${blocked ? '#dc2626' : '#64748b'};margin-top:6px;line-height:1.5;">
+        ${blocked ? '<b>Limit reached:</b> You have 0 remaining numbers available under your assigned limit.' : limitHint}
+      </div>
+    </div>
+  `, `
+    <div style="display:flex;justify-content:flex-end;align-items:center;gap:10px;width:100%;">
+      <button type="button" class="zy-btn-pill-cancel" onclick="closeModal()">Close</button>
+      <button type="button" class="zy-btn-pill-submit" id="zy-sa-submit-btn" ${blocked ? 'disabled style="opacity:0.5;cursor:not-allowed;"' : ''} onclick="zySubmitSelfAllocate('${zyEsc(rangeName)}','${zyEsc(rangeId || '')}')">Allocate Now</button>
+    </div>
+  `);
+};
+
+window.zySubmitSelfAllocate = async function(rangeName, rangeId) {
+  const qty = parseInt(document.getElementById('sa-qty')?.value || '0', 10);
+  const btn = document.getElementById('zy-sa-submit-btn');
+  if (!qty || qty < 1) {
+    if (typeof toast === 'function') toast('Please enter a valid quantity', 'error');
+    return;
+  }
+  if (btn) { btn.disabled = true; btn.textContent = 'Allocating...'; }
+  try {
+    const res = await apiFetch('/api/numbers/agent-allocate', {
+      method: 'POST',
+      body: JSON.stringify({
+        range_id: rangeId ? (Number(rangeId) || rangeId) : undefined,
+        range_name: rangeName,
+        count: qty,
+        quantity: qty
+      })
+    });
+    if (!res || res.error) {
+      throw new Error((res && res.error) || 'Self-allocation failed');
+    }
+    if (typeof closeModal === 'function') closeModal();
+    const msg = res.message || `Allocated ${res.allocated_count || qty} number(s) from ${rangeName}`;
+    if (typeof toast === 'function') toast(msg, 'success');
+    else if (typeof zyFlash === 'function') zyFlash(msg);
+    if (typeof window._zyOnAllocModalDone === 'function') window._zyOnAllocModalDone();
+  } catch (e) {
+    if (typeof toast === 'function') toast(e.message || 'Self-allocation failed', 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Allocate Now'; }
+  }
 };
 const zyTick = on => on ? zyImg('ui_tick', 'zy-tick') : '';
 
@@ -878,6 +1091,21 @@ async function zyFillAgents(selectId) {
 }
 const zyAgentName = id => (ZY_AGENTS.find(a => String(a.id) === String(id)) || {}).username || '';
 const zyDateOnly = s => String(s || '').replace('T', ' ').slice(0, 19);
+
+function zyFormatDateTimeStacked(raw) {
+  if (!raw) return { v: '', h: '—' };
+  const str = String(raw).replace('T', ' ').trim().slice(0, 19);
+  const parts = str.split(' ');
+  const datePart = parts[0] || '—';
+  const timePart = parts[1] || '';
+  if (!timePart) return { v: str, h: `<span class="zy-dt-date monospace">${datePart}</span>` };
+  return {
+    v: str,
+    h: `<div class="zy-dt-stacked"><span class="zy-dt-date">${datePart}</span><span class="zy-dt-time">${timePart}</span></div>`
+  };
+}
+window.zyFormatDateTimeStacked = zyFormatDateTimeStacked;
+
 function zyInRange(id, ts) {
   const f = (document.getElementById(id + '-from') || {}).value || '';
   const t = (document.getElementById(id + '-to') || {}).value || '';
@@ -1328,9 +1556,12 @@ function zyUpdateBreadcrumb(page, label) {
     ? `<a onclick="loadPage('dashboard')">Home</a><span class="zy-sep">&raquo;</span><span id="breadcrumb">Dashboard</span>`
     : `<a onclick="loadPage('dashboard')">Home</a><span class="zy-sep">&raquo;</span><span id="breadcrumb">${displayLabel}</span>`;
 
-  crumb.innerHTML = `
-    <div class="zy-crumb-left">${leftHtml}</div>
-  `;
+  const leftContainer = crumb.querySelector('.zy-crumb-left');
+  if (leftContainer) {
+    leftContainer.innerHTML = leftHtml;
+  } else {
+    crumb.innerHTML = `<div class="zy-crumb-left">${leftHtml}</div>`;
+  }
 }
 window.zyUpdateBreadcrumb = zyUpdateBreadcrumb;
 
@@ -1398,19 +1629,19 @@ function zyKpiCard(cfg) {
   const trendIcon = trendDir === 'up' ? 'fa-arrow-trend-up' : trendDir === 'down' ? 'fa-arrow-trend-down' : 'fa-minus';
 
   return `
-    <div class="zy-kpi-card" ${click}>
+    <div class="zy-kpi-card stat-card" ${click}>
       <div class="zy-kpi-head">
-        <span class="zy-kpi-title">${title}</span>
+        <span class="zy-kpi-title stat-label" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${title}</span>
         <span class="zy-kpi-icon" style="background:${bgLight};color:${color};">
           <i class="fas ${icon}"></i>
         </span>
       </div>
       <div class="zy-kpi-body">
-        <div class="zy-kpi-value">${val}</div>
+        <div class="zy-kpi-value stat-value" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${val}</div>
         <div class="zy-kpi-sparkline-wrap">${sparklineHtml}</div>
       </div>
       ${(trend || subtitle) ? `
-      <div class="zy-kpi-foot">
+      <div class="zy-kpi-foot stat-subtext" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
         ${trend ? `<span class="zy-kpi-trend ${trendDir}"><i class="fas ${trendIcon}"></i> ${trend}</span>` : ''}
         ${subtitle ? `<span>${subtitle}</span>` : ''}
       </div>` : ''}
@@ -1494,9 +1725,6 @@ function zyRecentSmsCard(logs = [], options = {}) {
           <span class="badge" style="background:var(--sp-bg-subtle);color:var(--sp-text-secondary);font-size:11px;">Live</span>
         </div>
         <div style="display:flex;gap:8px;align-items:center;">
-          <button class="sp-btn sp-btn-ghost sp-btn-sm" onclick="${onRefresh}" title="Refresh SMS Stream">
-            <i class="fas fa-rotate-right"></i>
-          </button>
           <button class="sp-btn sp-btn-secondary sp-btn-sm" onclick="${onViewAll}">
             View All Reports <i class="fas fa-arrow-right" style="font-size:10px;margin-left:4px;"></i>
           </button>
@@ -2173,7 +2401,7 @@ function zyRenderCdrFilterGrid(options = {}) {
         <div class="zy-toolbar-left">
           <div class="zy-search-wrap">
             <i class="fas fa-search"></i>
-            <input type="text" class="zy-toolbar-search" placeholder="Search..." oninput="${onSearch}">
+            <input type="text" class="zy-toolbar-search" placeholder="Number, CLI, message, range" oninput="${onSearch}">
           </div>
           <div class="zy-toolbar-select-wrap">
             <label class="zy-toolbar-label" for="rp-limit">Show Records</label>

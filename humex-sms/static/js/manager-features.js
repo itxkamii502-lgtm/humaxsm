@@ -84,9 +84,6 @@ async function pgTransferHistory(page = 1) {
           <button class="btn btn-outline btn-sm" onclick="downloadMgrNumbers()">
             <i class="fas fa-file-csv"></i> Download Numbers
           </button>
-          <button class="btn btn-outline btn-sm" onclick="pgTransferHistory(1)">
-            <i class="fas fa-sync"></i> Refresh
-          </button>
         </div>
       </div>
 
@@ -259,11 +256,6 @@ async function pgPayoutRatesView() {
         <div>
           <div class="page-title">My SMS Rate Card</div>
           <div class="page-subtitle">Dynamic commission rates calculated based on your assigned ${mgrPercent}% gross margin share</div>
-        </div>
-        <div class="page-actions">
-          <button class="btn btn-outline btn-sm" onclick="pgPayoutRatesView()">
-            <i class="fas fa-sync"></i> Refresh
-          </button>
         </div>
       </div>
 

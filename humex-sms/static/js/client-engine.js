@@ -807,7 +807,7 @@ async function pgMySms(page = 1) {
       <div class="page-header">
         <div>
           <div class="page-title">SMS CDR Stats</div>
-          <div class="page-subtitle">Home &gt; SMS CDR Stats</div>
+          <div class="page-subtitle">View detailed SMS call records, filter traffic, and export reports.</div>
         </div>
       </div>
 
@@ -909,11 +909,6 @@ async function pgBalance() {
         <div>
           <div class="page-title">My Balance</div>
           <div class="page-subtitle">Your account balance and transactions</div>
-        </div>
-        <div class="page-actions">
-          <button class="btn btn-outline btn-sm" onclick="pgBalance()">
-            <i class="fas fa-sync"></i> Refresh
-          </button>
         </div>
       </div>
 
@@ -1268,11 +1263,6 @@ async function pgEarnings() {
         <div>
           <div class="page-title">My Earnings</div>
           <div class="page-subtitle">Your earnings and usage overview</div>
-        </div>
-        <div class="page-actions">
-          <button class="btn btn-outline btn-sm" onclick="pgEarnings()">
-            <i class="fas fa-sync"></i> Refresh
-          </button>
         </div>
       </div>
       <div class="stats-grid">

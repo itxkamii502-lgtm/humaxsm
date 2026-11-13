@@ -31,14 +31,6 @@ async function pgSmsRanges() {
           Master catalog of available termination ranges, payout rates, and real-time numbers room.
         </div>
       </div>
-      <div class="page-actions" style="display:flex;gap:8px;">
-        <button class="btn btn-outline btn-sm" onclick="pgSmsRanges()">
-          <i class="fas fa-sync"></i> Refresh
-        </button>
-        <button class="btn btn-primary btn-sm" onclick="loadPage('bulk-add')">
-          <i class="fas fa-layer-group"></i> Bulk Allocation
-        </button>
-      </div>
     </div>
     <div id="agt-range-kpis" style="margin-bottom:16px;"><div class="zy-loading">Loading metric summaries…</div></div>
     <div class="apx-card" style="background:#ffffff;border:1.5px solid #cbd5e1;border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.04);">
@@ -47,21 +39,32 @@ async function pgSmsRanges() {
           <i class="fas fa-table-list" style="color:#0ea5e9;margin-right:6px;"></i> Termination Ranges &amp; Payterm Rates
         </span>
         <div style="display:flex;gap:6px;align-items:center;">
-          <span class="badge badge-admin-managed" style="font-size:10.5px;padding:2px 8px;background:#f1f5f9;color:#475569;border:1px solid #cbd5e1;border-radius:4px;">Real-Time Allocation</span>
+          <span id="agt-mode-badge" class="badge badge-admin-managed" style="font-size:10.5px;padding:2px 8px;background:#f1f5f9;color:#475569;border:1px solid #cbd5e1;border-radius:4px;">Loading Policy…</span>
         </div>
       </div>
       <div class="apx-card-body" id="agt-ranges-table-host" style="padding:14px;"><div class="zy-loading">Loading termination ranges…</div></div>
     </div>`;
 
   try {
-    const [rangesRes, myNumsRes] = await Promise.all([
+    const [rangesRes, myNumsRes, policy] = await Promise.all([
       apiFetch('/api/numbers/sms-ranges').catch(() => []),
-      apiFetch(`/api/numbers?agent_id=${AGENT_ID}&limit=1`).catch(() => ({ total: 0, data: [] }))
+      apiFetch(`/api/numbers?agent_id=${AGENT_ID}&limit=100000`).catch(() => ({ total: 0, data: [] })),
+      typeof zyFetchAllocPolicy === 'function' ? zyFetchAllocPolicy() : Promise.resolve({ mode: 'request' })
     ]);
 
     const list = zyList(rangesRes);
-    const heldNumbersCount = (myNumsRes && typeof myNumsRes.total === 'number') ? myNumsRes.total : (zyList(myNumsRes).length);
+    const myNums = zyList(myNumsRes);
+    const heldNumbersCount = myNums.length || ((myNumsRes && typeof myNumsRes.total === 'number') ? myNumsRes.total : 0);
     ZY_AGENT_RANGE_LIST = list;
+    window._zyAgtPolicy = policy || { mode: 'request' };
+    const isSelfAlloc = window._zyAgtPolicy.mode === 'self_allocate';
+    const modeBadge = document.getElementById('agt-mode-badge');
+    if (modeBadge) {
+      modeBadge.textContent = isSelfAlloc ? 'Mode: Self-Allocate Only' : 'Mode: Request Only';
+      modeBadge.style.background = isSelfAlloc ? '#ecfdf5' : '#eff6ff';
+      modeBadge.style.color = isSelfAlloc ? '#047857' : '#1d4ed8';
+      modeBadge.style.borderColor = isSelfAlloc ? '#a7f3d0' : '#bfdbfe';
+    }
 
     // Calculate metrics
     const totalRanges = list.length;
@@ -131,8 +134,9 @@ async function pgSmsRanges() {
         `<span style="font-family:monospace;font-size:11.5px;"><b>${heldCount}</b> / <span style="color:#10b981;font-weight:700;">${roomCount.toLocaleString()}</span></span>`,
         { v: '', h: `<div style="display:inline-flex;align-items:center;gap:4px;">
           <button type="button" class="apx-btn apx-btn-icon apx-btn-small" style="color:#0284c7;border-color:#bae6fd;background:#f0f9ff;" onclick="zyViewAgentRange(${i})" title="View Details"><i class="fas fa-eye"></i></button>
-          <button type="button" class="apx-btn apx-btn-small" style="color:#2563eb;border-color:#bfdbfe;background:#eff6ff;" onclick="zyOpenRequestNumbersModal('${zyEsc(rName)}', ${r.id || 'null'}, ${roomCount})" title="Request Numbers"><i class="fas fa-phone-volume"></i> Request</button>
-          <button type="button" class="apx-btn apx-btn-small" style="color:#059669;border-color:#a7f3d0;background:#ecfdf5;" onclick="loadPage('bulk-add')" title="Allocate to Client"><i class="fas fa-user-plus"></i> Allocate</button>
+          ${isSelfAlloc
+            ? `<button type="button" class="apx-btn apx-btn-small" style="color:#059669;border-color:#a7f3d0;background:#ecfdf5;" onclick="zyOpenSelfAllocateModal('${zyEsc(rName)}', ${r.id || 'null'}, window._zyAgtPolicy, pgSmsRanges)" title="Self-Allocate Numbers"><i class="fas fa-bolt"></i> Self-Allocate</button>`
+            : `<button type="button" class="apx-btn apx-btn-small" style="color:#2563eb;border-color:#bfdbfe;background:#eff6ff;" onclick="zyOpenRequestNumbersModal('${zyEsc(rName)}', ${r.id || 'null'}, window._zyAgtPolicy, pgSmsRanges)" title="Request Numbers"><i class="fas fa-phone-volume"></i> Request</button>`}
         </div>` }
       ];
     });
@@ -224,72 +228,14 @@ function zyViewAgentRange(i) {
       </div>
     </div>`,
     `<button class="zy-btn-grey" onclick="closeModal()">Close</button>
-     <button class="zy-btn-blue" onclick="closeModal();zyOpenRequestNumbersModal('${zyEsc(rName)}', ${r.id || 'null'}, ${roomCount})"><i class="fas fa-phone-volume"></i> Request Numbers</button>`);
+     ${(window._zyAgtPolicy && window._zyAgtPolicy.mode === 'self_allocate')
+       ? `<button class="zy-btn-blue" onclick="closeModal();zyOpenSelfAllocateModal('${zyEsc(rName)}', ${r.id || 'null'}, window._zyAgtPolicy, pgSmsRanges)"><i class="fas fa-bolt"></i> Self-Allocate Numbers</button>`
+       : `<button class="zy-btn-blue" onclick="closeModal();zyOpenRequestNumbersModal('${zyEsc(rName)}', ${r.id || 'null'}, window._zyAgtPolicy, pgSmsRanges)"><i class="fas fa-phone-volume"></i> Request Numbers</button>`}`);
 }
 
 async function pgRateCard() {
   await pgSmsRanges();
 }
-
-window.zyOpenRequestNumbersModal = function(rangeName, rId, room = 1500) {
-  zyModal(`Request numbers for ${zyEsc(rangeName)}`, `
-    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:#475569;display:flex;flex-wrap:wrap;gap:12px;justify-content:space-between;">
-      <span>Your daily limit: <strong style="color:#0f172a;">4,000 left today</strong></span>
-      <span>Your limit on this range: <strong style="color:#10b981;">${room.toLocaleString()} left</strong></span>
-      <span>Your overall limit: <strong style="color:#0f172a;">4,001 left</strong></span>
-    </div>
-    <div style="margin-bottom:12px;">
-      <label style="display:block;font-size:12px;font-weight:700;color:#475569;margin-bottom:5px;">Plan</label>
-      <select id="req-payterm" class="zy-input" style="width:100%;height:38px;">
-        <option value="7/1" selected>Weekly (7/1)</option>
-        <option value="30/30">Monthly (30/30)</option>
-      </select>
-    </div>
-    <div style="margin-bottom:8px;">
-      <label style="display:block;font-size:12px;font-weight:700;color:#475569;margin-bottom:5px;">How many?</label>
-      <input type="number" id="req-qty" class="zy-input" style="width:100%;height:38px;" value="10" min="1" max="${room}">
-      <div style="font-size:11.5px;color:#64748b;margin-top:5px;">Up to ${room.toLocaleString()} right now</div>
-    </div>
-  `, `
-    <button type="button" class="zy-btn-grey" onclick="closeModal()">Cancel</button>
-    <button type="button" class="zy-btn-blue" id="btn-do-allocate" onclick="zySubmitRangeAllocate('${zyEsc(rangeName)}', ${rId || 'null'}, ${room})">Allocate</button>
-  `);
-};
-
-window.zySubmitRangeAllocate = async function(rangeName, rId, room) {
-  const btn = document.getElementById('btn-do-allocate');
-  if (btn) { btn.disabled = true; btn.innerText = 'Allocating...'; }
-  const qty = parseInt(document.getElementById('req-qty')?.value || '1', 10);
-  const pt = document.getElementById('req-payterm')?.value || '7/1';
-  try {
-    const res = await apiFetch('/api/numbers/agent-allocate', {
-      method: 'POST',
-      body: JSON.stringify({ range_name: rangeName, range_id: rId, count: qty, payterm: pt })
-    });
-    closeModal();
-    if (res && res.success) {
-      if (typeof toast === 'function') toast(`${res.allocated || qty} numbers allocated`, 'success');
-      else if (typeof zyFlash === 'function') zyFlash(`${res.allocated || qty} numbers allocated`);
-      loadPage('my-sms-numbers');
-    } else {
-      await apiFetch('/api/agent-requests', {
-        method: 'POST',
-        body: JSON.stringify({ range_name: rangeName, quantity: qty, notes: `Payterm: ${pt}` }),
-        silent: true
-      });
-      if (typeof toast === 'function') toast(`Requested ${qty} numbers for ${rangeName}`, 'success');
-    }
-  } catch (err) {
-    if (typeof toast === 'function') toast(err.message || 'Allocation failed', 'error');
-  }
-};
-
-window.zySubmitRangeRequest = async function(rangeName) {
-  const pt = document.getElementById('req-payterm')?.value || '7/1';
-  const qty = document.getElementById('req-qty')?.value || '1';
-  closeModal();
-  toast(`Requested ${qty} number(s) for ${rangeName} (${pt})`, 'success');
-};
 
 /* ═══ MY SMS NUMBERS ════════════════════════════════════════ */
 let ZY_ALL_NUMS = [];
@@ -298,11 +244,16 @@ let ZY_RANGES_LOOKUP = {};
 async function pgMySmsNumbers() {
   const c = document.getElementById('page-content');
   zyCrumb(['SMS Module', 'My SMS Numbers']);
-  c.innerHTML = `<div class="zy-intro">Here you can see numbers assigned to your account. You can allocate numbers to clients with payterm &amp; rate caps, unallocate back to your pool, return to upstream holder, or move between clients.</div>
-    <div class="zy-intro" style="margin-bottom:12px;">Abbreviations: SD - SMS Daily, SW - SMS Weekly</div>
+  c.innerHTML = `
+    <div class="page-header">
+      <div>
+        <div class="page-title"><i class="fas fa-hashtag" style="color:#2563eb;"></i> My SMS Numbers</div>
+        <div class="page-subtitle">Numbers assigned to your account. Allocate to clients, return to pool or move. (SD: Daily, SW: Weekly)</div>
+      </div>
+    </div>
 
     <!-- Video-Accurate My SMS Numbers Filter & Action Card (Frame 02) -->
-    <div class="zy-num-card zy-filter-grid" style="background:#ffffff;border:1.5px solid #cbd5e1;border-radius:10px;padding:14px;box-shadow:0 1px 3px rgba(0,0,0,0.04);">
+    <div class="zy-num-card zy-filter-grid card" style="background:#ffffff;border:1.5px solid #cbd5e1;border-radius:10px;padding:14px;box-shadow:0 1px 3px rgba(0,0,0,0.04);">
       <div class="zy-filter-grid-fields" style="display:grid;grid-template-columns:repeat(auto-fit, minmax(180px, 1fr));gap:12px;align-items:flex-end;">
         <div class="zy-filter-field">
           <label class="zy-filter-label" for="num-range" style="font-size:11.5px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px;display:block;">Range</label>
@@ -366,7 +317,6 @@ async function pgMySmsNumbers() {
         <span style="font-weight:700;font-size:14px;color:#1e293b;">My SMS Numbers</span>
         <div style="display:flex;align-items:center;gap:6px;">
           <button class="zy-act zy-act-blue zy-act-wide" onclick="zyActionMove()" title="Move number directly from Client A to Client B"><i class="fas fa-right-left" style="margin-right:4px;"></i> Move</button>
-          <button class="zy-act zy-act-red" onclick="loadPage('my-sms-numbers')" title="Refresh">${zyImg('btn_a_refresh')}</button>
         </div>
       </div>
       <div class="zy-panel-body" style="padding:14px;"><div class="zy-loading">Loading numbers…</div></div>
@@ -1017,7 +967,7 @@ window.zyAgentViewCliSms = function(idx) {
     ${samples.length ? buildTable(
       ['Time', 'Number', 'Message Preview', 'Status'],
       samples.map(s => [
-        (s.timestamp || '').replace('T', ' ').slice(0, 19),
+        typeof zyFormatDateTimeStacked === 'function' ? zyFormatDateTimeStacked(s.timestamp).h : (s.timestamp || '').replace('T', ' ').slice(0, 19),
         `<span class="monospace">${escapeHtml(s.number || '—')}</span>`,
         escapeHtml(s.text || '—'),
         `<span class="badge badge-green">${s.status || 'Delivered'}</span>`
@@ -1031,8 +981,14 @@ async function pgNewsClients() {
   const c = document.getElementById('page-content');
   zyCrumb(['System Master', 'Notifications']);
   c.innerHTML = `
-    <div class="zy-panel" style="border:1px solid #cbd5e1;border-radius:12px;background:#ffffff;box-shadow:0 1px 3px rgba(0,0,0,0.05);margin-top:10px;">
-      <div class="zy-panel-body" style="text-align:center;padding:70px 20px;color:var(--sp-text-muted,#64748b);">
+    <div class="page-header">
+      <div>
+        <div class="page-title"><i class="fas fa-bell" style="color:#2563eb;"></i> Notifications</div>
+        <div class="page-subtitle">System notifications and announcements.</div>
+      </div>
+    </div>
+    <div class="card zy-panel" style="margin-top:10px;">
+      <div class="card-body zy-panel-body" style="text-align:center;padding:70px 20px;color:var(--sp-text-muted,#64748b);">
         <div style="width:56px;height:56px;border-radius:50%;background:#f1f5f9;display:inline-flex;align-items:center;justify-content:center;margin-bottom:16px;">
           <i class="fas fa-bell-slash" style="font-size:24px;color:#94a3b8;"></i>
         </div>
@@ -1092,7 +1048,6 @@ async function pgMyClients() {
         <div class="page-subtitle" style="font-size:12.5px;color:#64748b;">Create clients, manage their credentials, control active status, and allocate number pools.</div>
       </div>
       <div class="page-actions" style="display:flex;gap:8px;">
-        <button class="btn btn-outline btn-sm" onclick="pgMyClients()"><i class="fas fa-sync"></i> Refresh</button>
         <button class="btn btn-primary btn-sm" onclick="zyAddClientModal()"><i class="fas fa-user-plus"></i> Add Client</button>
       </div>
     </div>
@@ -1194,9 +1149,25 @@ window.zyToggleClientStatus = async function(id, currentStatus) {
   }
 };
 
-window.zyEditClientModal = function(id) {
+window.zyEditClientModal = async function(id) {
   const c = ZY_CLIENTS.find(x => String(x.id) === String(id));
   if (!c) return;
+  const policy = typeof zyFetchAllocPolicy === 'function' ? await zyFetchAllocPolicy() : {};
+  const canConfig = !!policy?.can_configure_downline;
+  const allocBlock = canConfig ? `
+    <div style="background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;padding:10px 12px;margin-top:10px;">
+      <div style="font-weight:700;font-size:11.5px;color:#475569;text-transform:uppercase;margin-bottom:6px;">Number Acquisition Policy</div>
+      <label class="zy-lbl">Mode</label>
+      <select class="zy-input" id="ec-alloc-mode" style="width:100%;">
+        <option value="" ${!c.alloc_mode ? 'selected' : ''}>Inherit Default</option>
+        <option value="request" ${c.alloc_mode === 'request' ? 'selected' : ''}>Request Only</option>
+        <option value="self_allocate" ${c.alloc_mode === 'self_allocate' ? 'selected' : ''}>Self-Allocate Only</option>
+      </select>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:6px;">
+        <div><label class="zy-lbl">Daily Limit (blank = inherit)</label><input class="zy-input" type="number" min="0" id="ec-alloc-daily" value="${c.alloc_daily_limit ?? ''}" placeholder="Inherit"></div>
+        <div><label class="zy-lbl">Total Limit (blank = inherit)</label><input class="zy-input" type="number" min="0" id="ec-alloc-total" value="${c.alloc_total_limit ?? ''}" placeholder="Inherit"></div>
+      </div>
+    </div>` : '';
   zyModal(`Edit Client — ${zyEsc(c.username)}`, `
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:8px;">
       <div><label class="zy-lbl">Full Name</label><input class="zy-input" id="ec-name" value="${zyEsc(c.full_name || '')}" placeholder="Full Name"></div>
@@ -1208,6 +1179,7 @@ window.zyEditClientModal = function(id) {
     </div>
     <label class="zy-lbl">New Password (leave blank to keep current)</label>
     <input class="zy-input" id="ec-pass" type="password" placeholder="New Password">
+    ${allocBlock}
   `,
   `<button class="zy-btn-grey" onclick="closeModal()">Close</button>
    <button class="zy-btn-blue" onclick="zySaveEditClient(${id})">Save Changes</button>`);
@@ -1224,6 +1196,14 @@ window.zySaveEditClient = async function(id) {
   if (pass) {
     if (pass.length < 6) { toast('Password must be 6+ characters', 'error'); return; }
     p.password = pass;
+  }
+  const modeEl = document.getElementById('ec-alloc-mode');
+  if (modeEl) {
+    const dRaw = document.getElementById('ec-alloc-daily')?.value;
+    const tRaw = document.getElementById('ec-alloc-total')?.value;
+    p.alloc_mode = modeEl.value || null;
+    p.alloc_daily_limit = dRaw !== '' && dRaw !== undefined ? Math.max(0, parseInt(dRaw, 10) || 0) : null;
+    p.alloc_total_limit = tRaw !== '' && tRaw !== undefined ? Math.max(0, parseInt(tRaw, 10) || 0) : null;
   }
   const r = await apiFetch(`/api/clients/${id}`, { method: 'PATCH', body: JSON.stringify(p) });
   if (r && (r.id || r.success)) {
@@ -1350,7 +1330,7 @@ async function zyCdrPage(summary = false) {
       <div class="zy-table-toolbar" style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;">
         <div class="zy-toolbar-left" style="display:flex;align-items:center;gap:12px;">
           <div class="zy-toolbar-search-wrap">
-            <input type="text" id="cdr-client-search" class="zy-toolbar-search" placeholder="Search..." oninput="zyFilterTable('dt-cdr', this.value)" style="height:32px;padding:4px 10px;font-size:12px;border:1px solid #cbd5e1;border-radius:4px;">
+            <input type="text" id="cdr-client-search" class="zy-toolbar-search" placeholder="Number, CLI, message, range" oninput="zyFilterTable('dt-cdr', this.value)" style="height:32px;padding:4px 10px;font-size:12px;border:1px solid #cbd5e1;border-radius:4px;">
           </div>
           <div class="zy-toolbar-limit-wrap" style="display:flex;align-items:center;gap:6px;font-size:12px;color:#64748b;">
             <label for="rp-limit">Show</label>
@@ -1379,14 +1359,9 @@ async function zyCdrPage(summary = false) {
           </div>
         </div>
       </div>
-    </div>
 
-    <!-- Results Panel: SMS REPORTS & STATS -->
-    <div class="zy-panel" style="border:1px solid #cbd5e1;border-radius:4px;background:#ffffff;box-shadow:0 1px 3px rgba(0,0,0,0.05);overflow:hidden;">
-      <div class="zy-panel-head" style="background:#f1f5f9;border-bottom:1px solid #cbd5e1;padding:10px 14px;font-size:13.5px;font-weight:700;color:#1e293b;letter-spacing:0.3px;text-transform:uppercase;">
-        SMS REPORTS &amp; STATS
-      </div>
-      <div class="zy-panel-body" id="rp-body" style="padding:14px;">
+      <!-- Results Table: seamless unified report body inside the single card -->
+      <div class="zy-panel-body" id="rp-body" style="padding:0;margin-top:12px;">
         <div class="zy-loading" style="padding:40px;text-align:center;color:#64748b;">Loading CDR records…</div>
       </div>
     </div>
@@ -1523,7 +1498,9 @@ async function zyCdrLoad(pageOrSummary = 1) {
     } else {
       const cols = ['Date', 'Range', 'Number', 'CLI', 'SMS', 'Curr.', 'My Payout', 'Client Payout', 'My Profit'];
       const rows = data.map(s => {
-        const dtStr = (s.timestamp || s.date || '').replace('T', ' ').slice(0, 19);
+        const dtCell = typeof zyFormatDateTimeStacked === 'function'
+          ? zyFormatDateTimeStacked(s.timestamp || s.date)
+          : { v: (s.timestamp || s.date || '').replace('T', ' ').slice(0, 19), h: (s.timestamp || s.date || '').replace('T', ' ').slice(0, 19) };
         const myP = parseFloat(s.agent_payout != null ? s.agent_payout : (s.payout || 0)) || 0;
         const clP = parseFloat(s.client_payout != null ? s.client_payout : (s.client_rate || 0)) || 0;
         const prof = Math.max(0, myP - clP);
@@ -1531,7 +1508,7 @@ async function zyCdrLoad(pageOrSummary = 1) {
         const smsHtml = typeof zyHighlightOtp === 'function' ? zyHighlightOtp(s.message || '') : zyEsc(s.message || '');
 
         return [
-          dtStr,
+          dtCell,
           s.range_name || s.range_label || s.range || (s.country || '—'),
           { v: s.number || '—', h: `<span class="monospace" style="font-weight:600;">${zyEsc(s.number || '—')}</span>` },
           { v: s.cli || '—', h: `<span class="monospace">${maskedCli}</span>` },
@@ -1641,18 +1618,22 @@ async function pgCreditNotes() {
   const c = document.getElementById('page-content');
   zyCrumb(['My Credit Notes']);
   c.innerHTML = `
-    <div class="zy-intro" style="font-size:13px;color:#475569;margin-bottom:14px;line-height:1.5;">Official wholesale SMS credit notes. You can download print-ready settlement vouchers and track payout maturity dates.</div>
+    <div class="page-header">
+      <div>
+        <div class="page-title"><i class="fas fa-file-invoice" style="color:#2563eb;"></i> My Credit Notes</div>
+        <div class="page-subtitle">Official wholesale SMS credit notes. Download print-ready settlement vouchers and track maturity dates.</div>
+      </div>
+    </div>
     <div class="zy-filterbox">
       <input class="zy-fb-input" id="cn-from" value="${zyMonthStart()} 00:00:00">
       <input class="zy-fb-input" id="cn-to" value="${zyToday()} 23:59:59">
       <div class="zy-fb-btns"><button class="zy-btn-blue" onclick="pgCreditNotesLoad()">Show Report</button></div>
     </div>
-    <div class="zy-panel">
-      <div class="zy-panel-head" style="display:flex;align-items:center;justify-content:space-between;">
-        <span>My Credit Notes</span>
-        <button class="sp-btn-secondary" style="height:28px;padding:0 10px;font-size:11px;" onclick="pgCreditNotesLoad()"><i class="fas fa-sync"></i> Refresh</button>
+    <div class="card zy-panel">
+      <div class="card-header zy-panel-head" style="display:flex;align-items:center;justify-content:space-between;">
+        <span class="card-title">My Credit Notes</span>
       </div>
-      <div class="zy-panel-body" id="cn-body"><div class="zy-loading">Loading…</div></div>
+      <div class="card-body zy-panel-body" id="cn-body"><div class="zy-loading">Loading…</div></div>
     </div>`;
   pgCreditNotesLoad();
 }
@@ -1703,7 +1684,12 @@ async function pgPaymentRequests() {
   } catch (e) {}
 
   c.innerHTML = `
-    <div class="zy-intro" style="font-size:13px;color:#475569;margin-bottom:14px;line-height:1.5;">Here you can review your main balance, weekly accrued traffic, monitor payout request statuses, and request payouts.</div>
+    <div class="page-header">
+      <div>
+        <div class="page-title"><i class="fas fa-wallet" style="color:#2563eb;"></i> Payment Requests</div>
+        <div class="page-subtitle">Review your main balance, weekly accrued traffic, monitor payout statuses, and request payouts.</div>
+      </div>
+    </div>
     
     <!-- Astra SMS 2-Card Metric Row -->
     <div style="display:grid;grid-template-columns:repeat(2, minmax(0, 1fr));gap:12px;margin-bottom:16px;">
@@ -1748,7 +1734,6 @@ async function pgPaymentRequests() {
     <div class="zy-panel">
       <div class="zy-panel-head" style="display:flex;align-items:center;justify-content:space-between;">
         <span>Payment Requests History</span>
-        <button class="sp-btn-secondary" style="height:28px;padding:0 10px;font-size:11px;" onclick="pgPaymentRequestsLoad()"><i class="fas fa-sync"></i> Refresh</button>
       </div>
       <div class="zy-panel-body" id="pr-body"><div class="zy-loading">Loading…</div></div>
     </div>`;
@@ -1806,7 +1791,7 @@ window.zyAgentRequestPayoutModal = async function(currentBal = 0) {
     </div>
     ${bankOptions ? `
       <div class="form-group" style="margin-bottom:12px;">
-        <label class="zy-lbl" style="font-weight:600;">Saved Bank Account (Quick Fill)</label>
+        <label class="zy-lbl" style="font-weight:600;">Saved Bank Account</label>
         <select id="apr-quick-bank" class="zy-input" style="width:100%;height:36px;" onchange="if(this.value)document.getElementById('apr-wallet').value=this.value;">
           <option value="">— Select Saved Bank Account —</option>
           ${bankOptions}
@@ -1962,14 +1947,24 @@ async function zySaveBank() {
 async function pgStatements(cur) {
   const c = document.getElementById('page-content');
   zyCrumb([cur + ' Statements']);
-  c.innerHTML = `<div class="zy-gap"></div>
+  c.innerHTML = `
+    <div class="page-header">
+      <div>
+        <div class="page-title"><i class="fas fa-file-invoice-dollar" style="color:#2563eb;"></i> ${cur} Statements</div>
+        <div class="page-subtitle">Track your credit notes, debits, and running balance ledger in ${cur}.</div>
+      </div>
+    </div>
     <div class="zy-filterbox">
       <input class="zy-fb-input" id="sm-from" value="${zyMonthStart()} 00:00:00">
       <input class="zy-fb-input" id="sm-to" value="${zyToday()} 23:59:59">
       <div class="zy-fb-btns"><button class="zy-btn-blue" onclick="pgStatementsLoad('${cur}')">Show Report</button></div>
     </div>
-    <div class="zy-panel"><div class="zy-panel-head">${cur} Statements</div>
-      <div class="zy-panel-body" id="sm-body"><div class="zy-loading">Loading…</div></div></div>`;
+    <div class="card zy-panel">
+      <div class="card-header zy-panel-head" style="display:flex;align-items:center;justify-content:space-between;">
+        <span class="card-title">${cur} Statements</span>
+      </div>
+      <div class="card-body zy-panel-body" id="sm-body"><div class="zy-loading">Loading…</div></div>
+    </div>`;
   pgStatementsLoad(cur);
 }
 async function pgStatementsLoad(cur) {
@@ -2168,9 +2163,6 @@ async function pgBulkAdd() {
           <i class="fas fa-layer-group" style="color:#00a86b;margin-right:6px;"></i> Bulk Allocation to Client
         </div>
         <div class="page-subtitle" style="font-size:12.5px;color:#64748b;">Queue bulk number allocations to clients with instant pool availability checks and live job progress.</div>
-      </div>
-      <div class="page-actions">
-        <button class="btn btn-outline btn-sm" onclick="pgBulkAdd()"><i class="fas fa-sync"></i> Refresh Pool</button>
       </div>
     </div>
     <div class="apx-card" style="border:1.5px solid #cbd5e1;border-radius:10px;background:#ffffff;box-shadow:0 1px 3px rgba(0,0,0,0.04);overflow:hidden;">
@@ -2420,12 +2412,105 @@ async function pgAuditLogs() {
   zy2Render('dt-auditlogs');
 }
 
+/* ═══ DOWNLINE CLIENT NUMBER REQUESTS ═══════════════════════ */
+async function pgClientRequests() {
+  const c = document.getElementById('page-content');
+  if (typeof zyCrumb === 'function') zyCrumb(['SMS Module', 'Number Requests']);
+  c.innerHTML = `
+    <div class="page-header">
+      <div>
+        <div class="page-title">Number Requests</div>
+        <div class="page-subtitle">Review and fulfill number inventory requests submitted by your downline Clients.</div>
+      </div>
+    </div>
+    <div class="apx-card" style="background:#ffffff;border:1.5px solid #cbd5e1;border-radius:10px;overflow:hidden;">
+      <div class="apx-card-header" style="height:40px;display:flex;align-items:center;justify-content:space-between;padding:0 14px;background:#f8fafc;border-bottom:1px solid #cbd5e1;">
+        <span style="font-weight:700;font-size:13px;color:#1e293b;">
+          <i class="fas fa-inbox" style="color:#2563eb;margin-right:6px;"></i> Downline Number Requests
+        </span>
+      </div>
+      <div class="apx-card-body" id="agt-numreq-host" style="padding:14px;"><div class="zy-loading">Loading requests…</div></div>
+    </div>`;
+  try {
+    const raw = await apiFetch('/api/agent-requests?scope=downline');
+    const data = Array.isArray(raw) ? raw : (raw?.data || []);
+    const host = document.getElementById('agt-numreq-host');
+    if (!host) return;
+    if (!data.length) {
+      host.innerHTML = '<div style="padding:28px;text-align:center;color:#64748b;">No number requests from your clients yet.</div>';
+      return;
+    }
+    const rows = data.map(r => [
+      r.id || '—',
+      `<strong>${zyEsc(r.requester_username || r.agent_username || 'Client')}</strong> <span class="badge badge-blue" style="font-size:10px;">${zyEsc(r.requester_role || r.agent_role || 'Client')}</span>`,
+      zyEsc(r.range_name || ('Range #' + (r.range_id || '—'))),
+      `<span class="badge badge-blue">${r.quantity || 1}</span>`,
+      zyEsc(r.notes || '—'),
+      `<span class="badge badge-${(r.status || 'pending') === 'fulfilled' ? 'green' : ((r.status || 'pending') === 'rejected' ? 'red' : 'yellow')}">${zyEsc(r.status || 'pending')}</span>`,
+      String(r.created_at || r.created || '').replace('T', ' ').slice(0, 16) || '—',
+      {
+        v: '',
+        h: String(r.status || 'pending').toLowerCase() === 'pending'
+          ? `<div style="display:inline-flex;gap:4px;">
+               <button type="button" class="btn btn-success btn-xs" onclick="zyAgtFulfillReq(${r.id}, ${r.quantity || 1})"><i class="fas fa-check"></i> Fulfill</button>
+               <button type="button" class="btn btn-danger btn-xs" onclick="zyAgtRejectReq(${r.id})"><i class="fas fa-times"></i> Reject</button>
+             </div>`
+          : zyEsc(r.reason || '—')
+      }
+    ]);
+    host.innerHTML = zyDT2('dt-agt-reqs', {
+      cols: ['#', 'Requester', 'Range', 'Qty', 'Notes', 'Status', 'Date', 'Actions'],
+      rows
+    });
+    zy2Render('dt-agt-reqs');
+  } catch (err) {
+    const host = document.getElementById('agt-numreq-host');
+    if (host) host.innerHTML = `<div class="text-danger" style="padding:20px;">Failed to load requests: ${zyEsc(err.message)}</div>`;
+  }
+}
+
+window.zyAgtFulfillReq = async function(id, qty) {
+  try {
+    const res = await apiFetch(`/api/agent-requests/${id}/fulfill`, {
+      method: 'POST',
+      body: JSON.stringify({ count: qty })
+    });
+    if (res && (res.success || !res.error)) {
+      if (typeof toast === 'function') toast(res.message || 'Request fulfilled!', 'success');
+      pgClientRequests();
+    } else {
+      if (typeof toast === 'function') toast(res?.error || 'Failed to fulfill request', 'error');
+    }
+  } catch (err) {
+    if (typeof toast === 'function') toast(err.message || 'Failed to fulfill request', 'error');
+  }
+};
+
+window.zyAgtRejectReq = async function(id) {
+  const reason = prompt('Optional rejection reason:') || 'Rejected by Agent';
+  try {
+    const res = await apiFetch(`/api/agent-requests/${id}/reject`, {
+      method: 'POST',
+      body: JSON.stringify({ reason })
+    });
+    if (res && (res.success || !res.error)) {
+      if (typeof toast === 'function') toast('Request rejected', 'info');
+      pgClientRequests();
+    } else {
+      if (typeof toast === 'function') toast(res?.error || 'Failed to reject request', 'error');
+    }
+  } catch (err) {
+    if (typeof toast === 'function') toast(err.message || 'Failed to reject request', 'error');
+  }
+};
+
 /* ── router ─────────────────────────────────────────────────── */
 (function zyHookAgentPages() {
   const map = {
     'dashboard': () => pgDashboard(),
     'sms-ranges': pgSmsRanges, 'sms-overview': pgSmsRanges, 'sms-ratecard': pgSmsRanges, 'payout-rates-view': pgSmsRanges,
     'my-sms-numbers': pgMySmsNumbers,
+    'client-requests': pgClientRequests,
     'access-search': pgAccessSearch,
     'news-clients': pgNewsClients, 'notifications': pgNewsClients,
     'my-clients': pgMyClients,

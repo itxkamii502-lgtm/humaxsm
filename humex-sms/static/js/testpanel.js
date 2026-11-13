@@ -256,26 +256,6 @@ async function pgDashboard() {
     const weekData = stats?.week_data || [0, 0, 0, 0, 0, 0, 0];
 
     document.getElementById('main-content').innerHTML = `
-      <!-- Quick nav -->
-      <div class="quicknav">
-        <div class="qn-box active" onclick="showPage('dashboard')">
-          <div class="qn-icon"><i class="fas fa-th"></i></div>
-          <div class="qn-label">Dashboard</div>
-        </div>
-        <div class="qn-box" onclick="showPage('test-numbers')">
-          <div class="qn-icon"><i class="fas fa-mobile-screen-button"></i></div>
-          <div class="qn-label">Test Numbers</div>
-        </div>
-        <div class="qn-box" onclick="showPage('sms-stats')">
-          <div class="qn-icon"><i class="fas fa-chart-bar"></i></div>
-          <div class="qn-label">Detailed Reports</div>
-        </div>
-        <div class="qn-box" onclick="doLogout()">
-          <div class="qn-icon"><i class="fas fa-user-circle"></i></div>
-          <div class="qn-label">Logout</div>
-        </div>
-      </div>
-
       <!-- Counters -->
       <div class="counters">
         <div class="ctr ctr-blue">

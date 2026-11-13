@@ -640,38 +640,21 @@ async function pgDashboard() {
         </div>
       </div>
 
-      <!-- Quick Actions + Hierarchy -->
-      <div class="two-col">
-        <div class="card">
-          <div class="card-header"><div class="card-title">Quick Actions</div></div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:4px 0;">
-            ${[
-              ['Add Agent', 'fas fa-user-plus', 'add-agent', 'primary'],
-              ['View Reports', 'fas fa-file-lines', 'reports', 'outline'],
-              ['Assign to Agent', 'fas fa-share-from-square', 'assign-numbers', 'outline'],
-              ['Number Pool', 'fas fa-mobile-screen', 'my-numbers', 'outline']
-            ].map(([t, i, p, s]) => `
-              <button class="btn btn-${s}" style="justify-content:flex-start;gap:10px;" onclick="loadPage('${p}')">
-                <i class="${i}"></i>${t}
-              </button>
-            `).join('')}
+      <!-- Hierarchy -->
+      <div class="card">
+        <div class="card-header"><div class="card-title">Hierarchy</div></div>
+        <div style="font-size:13px;line-height:2.2;">
+          <div style="color:var(--accent);font-weight:700;">
+            <i class="fas fa-user-tie" style="margin-right:8px;"></i>${MANAGER_USER.username} (You)
           </div>
-        </div>
-        <div class="card">
-          <div class="card-header"><div class="card-title">Hierarchy</div></div>
-          <div style="font-size:13px;line-height:2.2;">
-            <div style="color:var(--accent);font-weight:700;">
-              <i class="fas fa-user-tie" style="margin-right:8px;"></i>${MANAGER_USER.username} (You)
-            </div>
-            <div style="margin-left:16px;color:var(--text-secondary);">
-              <i class="fas fa-sitemap" style="margin-right:6px;color:var(--text-muted);"></i>${stats.total_agents || 0} Agents under you
-            </div>
-            <div style="margin-left:32px;color:var(--text-muted);">
-              <i class="fas fa-users" style="margin-right:6px;"></i>${stats.total_clients || 0} Clients total
-            </div>
-            <div style="margin-left:32px;color:var(--text-muted);">
-              <i class="fas fa-mobile-screen" style="margin-right:6px;"></i>${stats.numbers_assigned || 0} Numbers assigned
-            </div>
+          <div style="margin-left:16px;color:var(--text-secondary);">
+            <i class="fas fa-sitemap" style="margin-right:6px;color:var(--text-muted);"></i>${stats.total_agents || 0} Agents under you
+          </div>
+          <div style="margin-left:32px;color:var(--text-muted);">
+            <i class="fas fa-users" style="margin-right:6px;"></i>${stats.total_clients || 0} Clients total
+          </div>
+          <div style="margin-left:32px;color:var(--text-muted);">
+            <i class="fas fa-mobile-screen" style="margin-right:6px;"></i>${stats.numbers_assigned || 0} Numbers assigned
           </div>
         </div>
       </div>
@@ -733,7 +716,6 @@ async function pgAgents(page = 1) {
         <div><div class="page-title">My Agents</div><div class="page-subtitle">${data.total || 0} agents under your management</div></div>
         <div class="page-actions">
           <button class="btn btn-primary btn-sm" onclick="loadPage('add-agent')"><i class="fas fa-user-plus"></i> Add Agent</button>
-          <button class="btn btn-outline btn-sm" onclick="pgAgents(1)"><i class="fas fa-sync"></i> Refresh</button>
         </div>
       </div>
       <div class="card">
@@ -973,12 +955,40 @@ async function submitAddAgent(event) {
 
 async function openEditAgentModal(id) {
   try {
-    const data = await apiFetch(`/api/agents?manager_id=${MANAGER_ID}&limit=100`);
+    const [data, policy] = await Promise.all([
+      apiFetch(`/api/agents?manager_id=${MANAGER_ID}&limit=100`),
+      typeof zyFetchAllocPolicy === 'function' ? zyFetchAllocPolicy() : Promise.resolve({})
+    ]);
     const a = data?.data?.find(x => x.id === id);
     if (!a) {
       toast('Agent not found', 'error');
       return;
     }
+
+    const canConfig = !!policy?.can_configure_downline;
+    const allocHtml = canConfig ? `
+      <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px 12px;margin-bottom:12px;">
+        <div style="font-weight:700;font-size:11.5px;color:#475569;text-transform:uppercase;margin-bottom:8px;">Number Acquisition Mode &amp; Limits</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Mode</label>
+            <select id="ea-alloc-mode">
+              <option value="" ${!a.alloc_mode ? 'selected' : ''}>Inherit Default</option>
+              <option value="request" ${a.alloc_mode === 'request' ? 'selected' : ''}>Request Only</option>
+              <option value="self_allocate" ${a.alloc_mode === 'self_allocate' ? 'selected' : ''}>Self-Allocate Only</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Daily Limit</label>
+            <input type="number" id="ea-alloc-daily" min="0" value="${a.alloc_daily_limit ?? ''}" placeholder="Inherit">
+          </div>
+        </div>
+        <div class="form-group" style="margin-bottom:0;">
+          <label class="form-label">Total Holding Limit</label>
+          <input type="number" id="ea-alloc-total" min="0" value="${a.alloc_total_limit ?? ''}" placeholder="Inherit">
+        </div>
+      </div>
+    ` : '';
 
     openModal(`Edit Agent — ${a.username}`, `
       <form id="edit-agent-form" onsubmit="saveAgent(event, ${id})">
@@ -998,6 +1008,7 @@ async function openEditAgentModal(id) {
           <input type="password" id="ea-pass" autocomplete="new-password" placeholder="Leave blank to keep current (min 6 characters)"></div>
         <div class="form-group"><label class="form-label">Notes</label>
           <textarea id="ea-notes" rows="2">${a.notes || ''}</textarea></div>
+        ${allocHtml}
         <div class="form-actions">
           <button type="button" class="btn btn-outline" onclick="closeModal()">Cancel</button>
           <button type="submit" class="btn btn-primary" id="ea-submit-btn">
@@ -1035,6 +1046,14 @@ async function saveAgent(event, id) {
       phone: document.getElementById('ea-phone').value || '',
       notes: document.getElementById('ea-notes').value || ''
     };
+    const modeEl = document.getElementById('ea-alloc-mode');
+    if (modeEl) {
+      const dRaw = document.getElementById('ea-alloc-daily')?.value;
+      const tRaw = document.getElementById('ea-alloc-total')?.value;
+      payload.alloc_mode = modeEl.value || null;
+      payload.alloc_daily_limit = dRaw !== '' && dRaw !== undefined ? Math.max(0, parseInt(dRaw, 10) || 0) : null;
+      payload.alloc_total_limit = tRaw !== '' && tRaw !== undefined ? Math.max(0, parseInt(tRaw, 10) || 0) : null;
+    }
     if (newPass) payload.password = newPass;
 
     const result = await apiFetch(`/api/agents/${id}`, { method: 'PATCH', body: JSON.stringify(payload) });
@@ -1105,7 +1124,6 @@ async function pgAgentPerformance() {
       <div class="page-header">
         <div><div class="page-title">Agent Performance</div><div class="page-subtitle">Compare agent metrics</div></div>
         <div class="page-actions">
-          <button class="btn btn-outline btn-sm" onclick="pgAgentPerformance()"><i class="fas fa-sync"></i> Refresh</button>
           <button class="btn btn-outline btn-sm" onclick="toast('Export started', 'info')"><i class="fas fa-download"></i> Export</button>
         </div>
       </div>
@@ -1158,9 +1176,6 @@ async function pgClients(page = 1, agentFilter = '') {
     c.innerHTML = `
       <div class="page-header">
         <div><div class="page-title">All Clients</div><div class="page-subtitle">${data.total || 0} clients</div></div>
-        <div class="page-actions">
-          <button class="btn btn-outline btn-sm" onclick="pgClients(1)"><i class="fas fa-sync"></i> Refresh</button>
-        </div>
       </div>
       <div class="card">
         <div class="filters-bar">
@@ -1425,14 +1440,41 @@ async function submitAddClient(event) {
 
 async function openEditClientModal(id) {
   try {
-    const data = await apiFetch(`/api/clients?manager_id=${MANAGER_ID}&limit=100`);
+    const [data, agents, policy] = await Promise.all([
+      apiFetch(`/api/clients?manager_id=${MANAGER_ID}&limit=100`),
+      apiFetch(`/api/agents?manager_id=${MANAGER_ID}&limit=50`),
+      typeof zyFetchAllocPolicy === 'function' ? zyFetchAllocPolicy() : Promise.resolve({})
+    ]);
     const c = data?.data?.find(x => x.id === id);
     if (!c) {
       toast('Client not found', 'error');
       return;
     }
 
-    const agents = await apiFetch(`/api/agents?manager_id=${MANAGER_ID}&limit=50`);
+    const canConfig = !!policy?.can_configure_downline;
+    const allocHtml = canConfig ? `
+      <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px 12px;margin-bottom:12px;">
+        <div style="font-weight:700;font-size:11.5px;color:#475569;text-transform:uppercase;margin-bottom:8px;">Number Acquisition Mode &amp; Limits</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Mode</label>
+            <select id="ec-alloc-mode">
+              <option value="" ${!c.alloc_mode ? 'selected' : ''}>Inherit Default</option>
+              <option value="request" ${c.alloc_mode === 'request' ? 'selected' : ''}>Request Only</option>
+              <option value="self_allocate" ${c.alloc_mode === 'self_allocate' ? 'selected' : ''}>Self-Allocate Only</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Daily Limit</label>
+            <input type="number" id="ec-alloc-daily" min="0" value="${c.alloc_daily_limit ?? ''}" placeholder="Inherit">
+          </div>
+        </div>
+        <div class="form-group" style="margin-bottom:0;">
+          <label class="form-label">Total Holding Limit</label>
+          <input type="number" id="ec-alloc-total" min="0" value="${c.alloc_total_limit ?? ''}" placeholder="Inherit">
+        </div>
+      </div>
+    ` : '';
 
     openModal(`Edit Client — ${c.username}`, `
       <form id="edit-client-form" onsubmit="saveClient(event, ${id})">
@@ -1463,6 +1505,7 @@ async function openEditClientModal(id) {
           <input type="password" id="ec-pass" autocomplete="new-password" placeholder="Leave blank to keep current (min 6 characters)"></div>
         <div class="form-group"><label class="form-label">Notes</label>
           <textarea id="ec-notes" rows="2">${c.notes || ''}</textarea></div>
+        ${allocHtml}
         <div class="form-actions">
           <button type="button" class="btn btn-outline" onclick="closeModal()">Cancel</button>
           <button type="submit" class="btn btn-primary" id="ec-submit-btn">
@@ -1503,6 +1546,14 @@ async function saveClient(event, id) {
       agent_id: parseInt(document.getElementById('ec-agent').value),
       notes: document.getElementById('ec-notes').value || ''
     };
+    const cModeEl = document.getElementById('ec-alloc-mode');
+    if (cModeEl) {
+      const dRaw = document.getElementById('ec-alloc-daily')?.value;
+      const tRaw = document.getElementById('ec-alloc-total')?.value;
+      payload.alloc_mode = cModeEl.value || null;
+      payload.alloc_daily_limit = dRaw !== '' && dRaw !== undefined ? Math.max(0, parseInt(dRaw, 10) || 0) : null;
+      payload.alloc_total_limit = tRaw !== '' && tRaw !== undefined ? Math.max(0, parseInt(tRaw, 10) || 0) : null;
+    }
     if (newPass) payload.password = newPass;
 
     const result = await apiFetch(`/api/clients/${id}`, { method: 'PATCH', body: JSON.stringify(payload) });
@@ -1577,9 +1628,6 @@ async function pgClientBalances() {
       <div class="page-header">
         <div><div class="page-title">Client Balances</div>
         <div class="page-subtitle">Total: <strong class="text-success">$${total.toFixed(2)}</strong> — view only, balance adjustments are handled by Owner</div></div>
-        <div class="page-actions">
-          <button class="btn btn-outline btn-sm" onclick="pgClientBalances()"><i class="fas fa-sync"></i> Refresh</button>
-        </div>
       </div>
       <div class="card">
         ${buildTable(
@@ -1612,9 +1660,6 @@ async function pgClientLimits() {
       <div class="page-header">
         <div><div class="page-title">Limits &amp; Quotas</div>
         <div class="page-subtitle">SMS limits per client</div></div>
-        <div class="page-actions">
-          <button class="btn btn-outline btn-sm" onclick="pgClientLimits()"><i class="fas fa-sync"></i> Refresh</button>
-        </div>
       </div>
       <div class="card">
         ${buildTable(['Client', 'Service', 'Daily Limit', 'Monthly Limit', 'Total SMS', 'Used %', 'Action'],
@@ -1675,9 +1720,6 @@ async function pgSmsOverview() {
     c.innerHTML = `
       <div class="page-header">
         <div><div class="page-title">SMS Overview</div></div>
-        <div class="page-actions">
-          <button class="btn btn-outline btn-sm" onclick="pgSmsOverview()"><i class="fas fa-sync"></i> Refresh</button>
-        </div>
       </div>
       <div class="stats-grid" style="grid-template-columns:repeat(4,1fr);">
         ${statCard('Total SMS', 'fas fa-comment-sms', stats?.total_sms || 0, 'blue', 'All clients')}
@@ -1876,7 +1918,6 @@ async function pgReports() {
         <div><div class="page-title">Reports</div></div>
         <div class="page-actions">
           <button class="btn btn-outline btn-sm" onclick="exportReport()"><i class="fas fa-download"></i> Export</button>
-          <button class="btn btn-outline btn-sm" onclick="pgReports()"><i class="fas fa-sync"></i> Refresh</button>
         </div>
       </div>
       <div class="stats-grid">
@@ -2012,9 +2053,6 @@ async function pgPayoutRequests() {
     c.innerHTML = `
       <div class="page-header">
         <div><div class="page-title">Payout Requests</div><div class="page-subtitle">${pending} pending — from your own Agents only</div></div>
-        <div class="page-actions">
-          <button class="btn btn-outline btn-sm" onclick="pgPayoutRequests()"><i class="fas fa-sync"></i> Refresh</button>
-        </div>
       </div>
       <div class="card">
         ${buildTable(
@@ -2378,7 +2416,6 @@ async function pgNumbers(page = 1) {
           <button class="btn btn-outline btn-sm" onclick="window.open('/api/numbers/download?manager_id=${MANAGER_ID}','_blank')">
             <i class="fas fa-download"></i> Download CSV
           </button>
-          <button class="btn btn-outline btn-sm" onclick="pgNumbers(1)"><i class="fas fa-sync"></i> Refresh</button>
         </div>
       </div>
       <div class="card" style="margin-bottom:16px;">
@@ -3044,9 +3081,6 @@ async function pgEarnings() {
       <div class="page-header">
         <div><div class="page-title">My Earnings</div>
         <div class="page-subtitle">Commission and revenue overview</div></div>
-        <div class="page-actions">
-          <button class="btn btn-outline btn-sm" onclick="pgEarnings()"><i class="fas fa-sync"></i> Refresh</button>
-        </div>
       </div>
       <div class="stats-grid" style="grid-template-columns:repeat(4,1fr);">
         ${statCard('Today', 'fas fa-dollar-sign', '$' + (earnings?.today || 0).toFixed(2), 'green', '')}

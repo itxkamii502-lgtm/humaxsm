@@ -684,7 +684,7 @@ async function pgDashboard() {
         </div>
       </div>
 
-      <!-- Two Column: News + Quick Actions/My Account (Bottom) -->
+      <!-- Two Column: News + My Account (Bottom) -->
       <div class="two-col">
         <!-- Left: News & Notifications -->
         <div class="card">
@@ -717,25 +717,8 @@ async function pgDashboard() {
           </div>
         </div>
 
-        <!-- Right: Quick Actions + My Account -->
+        <!-- Right: My Account -->
         <div style="display:flex;flex-direction:column;gap:16px;">
-          <!-- Quick Actions -->
-          <div class="card">
-            <div class="card-header"><div class="card-title">Quick Actions</div></div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-              ${[
-                ['SMS Ranges', 'fas fa-layer-group', 'sms-ranges', 'primary'],
-                ['My Numbers', 'fas fa-mobile-screen', 'my-sms-numbers', 'primary'],
-                ['Detailed Report', 'fas fa-file-lines', 'detailed-sms', 'outline'],
-                ['Payment Request', 'fas fa-dollar-sign', 'payment-requests', 'outline']
-              ].map(([t, i, p, s]) => `
-                <button class="btn btn-${s}" style="justify-content:flex-start;gap:10px;" onclick="loadPage('${p}')">
-                  <i class="${i}"></i>${t}
-                </button>
-              `).join('')}
-            </div>
-          </div>
-
           <!-- My Account -->
           <div class="card">
             <div class="card-header"><div class="card-title">My Account</div></div>
@@ -1958,12 +1941,16 @@ async function submitAddClient(event) {
 // ── EDIT CLIENT ───────────────────────────────────────────────────
 async function openEditClientModal(id) {
   try {
-    const data = await apiFetch(`/api/clients?agent_id=${AGENT_ID}&limit=100`);
+    const [data, policy] = await Promise.all([
+      apiFetch(`/api/clients?agent_id=${AGENT_ID}&limit=100`),
+      typeof zyFetchAllocPolicy === 'function' ? zyFetchAllocPolicy() : Promise.resolve({})
+    ]);
     const c = data?.data?.find(x => x.id === id);
     if (!c) {
       toast('Client not found', 'error');
       return;
     }
+    const canConfig = !!policy?.can_configure_downline;
     
     openModal(`Edit Client — ${c.username || 'Unknown'}`, `
       <form id="edit-client-form" onsubmit="submitEditClient(event, ${id})">
@@ -2048,6 +2035,28 @@ async function openEditClientModal(id) {
             </select>
           </div>
         </div>
+        ${canConfig ? `
+        <div style="background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;padding:10px 12px;margin-bottom:12px;">
+          <div style="font-weight:700;font-size:11.5px;color:#475569;text-transform:uppercase;margin-bottom:8px;">Number Acquisition Policy</div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Mode</label>
+              <select id="ec-alloc-mode">
+                <option value="" ${!c.alloc_mode ? 'selected' : ''}>Inherit Default</option>
+                <option value="request" ${c.alloc_mode === 'request' ? 'selected' : ''}>Request Only</option>
+                <option value="self_allocate" ${c.alloc_mode === 'self_allocate' ? 'selected' : ''}>Self-Allocate Only</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Daily Limit (blank = inherit)</label>
+              <input type="number" min="0" id="ec-alloc-daily" value="${c.alloc_daily_limit ?? ''}" placeholder="Inherit">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Total Holding Limit (blank = inherit)</label>
+              <input type="number" min="0" id="ec-alloc-total" value="${c.alloc_total_limit ?? ''}" placeholder="Inherit">
+            </div>
+          </div>
+        </div>` : ''}
         
         <div class="form-actions">
           <button type="button" class="btn btn-outline" onclick="closeModal()">Close</button>
@@ -2097,6 +2106,14 @@ async function submitEditClient(event, id) {
     const password = document.getElementById('ec-password')?.value;
     if (password && password.length >= 6) {
       payload.password = password;
+    }
+    const modeEl = document.getElementById('ec-alloc-mode');
+    if (modeEl) {
+      const dRaw = document.getElementById('ec-alloc-daily')?.value;
+      const tRaw = document.getElementById('ec-alloc-total')?.value;
+      payload.alloc_mode = modeEl.value || null;
+      payload.alloc_daily_limit = dRaw !== '' && dRaw !== undefined ? Math.max(0, parseInt(dRaw, 10) || 0) : null;
+      payload.alloc_total_limit = tRaw !== '' && tRaw !== undefined ? Math.max(0, parseInt(tRaw, 10) || 0) : null;
     }
     
     const result = await apiFetch(`/api/clients/${id}`, {
@@ -2326,7 +2343,7 @@ async function pgDetailedSms(page = 1) {
     const content = document.getElementById('page-content');
     content.innerHTML = `
       <div class="page-header">
-        <div><div class="page-title">SMS CDR Stats</div><div class="page-subtitle">Home &gt; SMS CDR Stats</div></div>
+        <div><div class="page-title">SMS CDR Stats</div><div class="page-subtitle">View detailed SMS call records, filter traffic, and export reports.</div></div>
       </div>
       <div class="card">
         <div class="filters-bar" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">

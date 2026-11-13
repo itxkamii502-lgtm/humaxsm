@@ -339,7 +339,7 @@ pgDashboard = async function () {
     ];
 
     const kpiCardsHtml = (typeof zyKpiCard === 'function') ? `
-      <div class="zy-kpi-grid">
+      <div class="zy-kpi-grid stats-grid">
         ${zyKpiCard({
           title: "Today SMS",
           value: Number(todaySmsVal).toLocaleString(),
@@ -386,7 +386,9 @@ pgDashboard = async function () {
     ];
 
     const newsRows = newsList.slice(0, 25).map(n => [
-      { v: n.created || n.date || '', h: String(n.created || n.date || '').replace('T', ' ').slice(0, 19) },
+      typeof zyFormatDateTimeStacked === 'function'
+        ? zyFormatDateTimeStacked(n.created || n.date)
+        : { v: n.created || n.date || '', h: String(n.created || n.date || '').replace('T', ' ').slice(0, 19) },
       n.title || '', n.message || n.body || ''
     ]);
     const rangeRows = rangeList.slice(0, 50).map(r => [

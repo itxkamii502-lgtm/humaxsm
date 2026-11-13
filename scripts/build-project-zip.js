@@ -67,7 +67,7 @@ try {
   console.log(`Building production package: dist/humex-sms-vps-${dateStr}.zip...`);
   const zip = new AdmZip();
 
-  // 1. Add whitelisted root files directly from workspace (byte-for-byte SHA matching)
+  // 1. Add whitelisted root files directly from workspace
   for (const rel of ROOT_FILES_WHITELIST) {
     const fullPath = path.join(ROOT_DIR, rel);
     if (fs.existsSync(fullPath)) {
@@ -94,7 +94,6 @@ try {
       if (entry.isDirectory()) {
         addStaticFiles(full, relZipPath);
       } else if (entry.isFile()) {
-        // Exclude any temporary / backup files
         if (entry.name.endsWith('.tmp') || entry.name.endsWith('.bak') || entry.name.endsWith('.zip')) {
           continue;
         }

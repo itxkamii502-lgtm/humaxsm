@@ -21,9 +21,6 @@ async function pgSmsRanges() {
         </div>
       </div>
       <div class="page-actions" style="display:flex;gap:8px;">
-        <button class="btn btn-outline btn-sm" onclick="pgSmsRanges()">
-          <i class="fas fa-sync"></i> Refresh
-        </button>
         <button class="btn btn-primary btn-sm" onclick="loadPage('my-numbers')">
           <i class="fas fa-mobile-screen"></i> My Numbers
         </button>
@@ -36,21 +33,31 @@ async function pgSmsRanges() {
           <i class="fas fa-table-list" style="color:#0ea5e9;margin-right:6px;"></i> Available Termination Ranges &amp; Client Rates
         </span>
         <div style="display:flex;gap:6px;align-items:center;">
-          <span class="badge badge-admin-managed" style="font-size:10.5px;padding:2px 8px;background:#f1f5f9;color:#475569;border:1px solid #cbd5e1;border-radius:4px;">Real-Time Payouts</span>
+          <span id="cl-mode-badge" class="badge badge-admin-managed" style="font-size:10.5px;padding:2px 8px;background:#f1f5f9;color:#475569;border:1px solid #cbd5e1;border-radius:4px;">Loading Policy…</span>
         </div>
       </div>
       <div class="apx-card-body" id="cl-ranges-table-host" style="padding:14px;"><div class="zy-loading">Loading termination ranges…</div></div>
     </div>`;
 
   try {
-    const [rangesRes, myNumsRes] = await Promise.all([
+    const [rangesRes, myNumsRes, policy] = await Promise.all([
       apiFetch('/api/numbers/sms-ranges').catch(() => []),
-      apiFetch(`/api/numbers?client_id=${CLIENT_ID}&limit=1`).catch(() => ({ total: 0, data: [] }))
+      apiFetch(`/api/numbers?client_id=${CLIENT_ID}&limit=1`).catch(() => ({ total: 0, data: [] })),
+      typeof zyFetchAllocPolicy === 'function' ? zyFetchAllocPolicy() : Promise.resolve({ mode: 'request' })
     ]);
 
     const list = zyList(rangesRes);
     const heldNumbersCount = (myNumsRes && typeof myNumsRes.total === 'number') ? myNumsRes.total : (zyList(myNumsRes).length);
     ZY_CLIENT_RANGE_LIST = list;
+    window._zyClPolicy = policy || { mode: 'request' };
+    const isSelfAlloc = window._zyClPolicy.mode === 'self_allocate';
+    const modeBadge = document.getElementById('cl-mode-badge');
+    if (modeBadge) {
+      modeBadge.textContent = isSelfAlloc ? 'Mode: Self-Allocate Only' : 'Mode: Request Only';
+      modeBadge.style.background = isSelfAlloc ? '#ecfdf5' : '#eff6ff';
+      modeBadge.style.color = isSelfAlloc ? '#047857' : '#1d4ed8';
+      modeBadge.style.borderColor = isSelfAlloc ? '#a7f3d0' : '#bfdbfe';
+    }
 
     // Calculate metrics
     const totalRanges = list.length;
@@ -111,7 +118,9 @@ async function pgSmsRanges() {
         `<span style="font-family:monospace;font-weight:700;color:#16a34a;">${currSym} ${Number(clientRate).toFixed(4)}</span>`,
         { v: '', h: `<div style="display:inline-flex;align-items:center;gap:4px;">
           <button type="button" class="apx-btn apx-btn-icon apx-btn-small" style="color:#0284c7;border-color:#bae6fd;background:#f0f9ff;" onclick="zyViewClientRange(${i})" title="View Details"><i class="fas fa-eye"></i></button>
-          <button type="button" class="apx-btn apx-btn-small" style="color:#2563eb;border-color:#bfdbfe;background:#eff6ff;" onclick="zyOpenClientRequestNumbersModal('${zyEsc(rName)}', ${r.id || 'null'}, ${roomCount})" title="Request Numbers"><i class="fas fa-phone-volume"></i> Request</button>
+          ${isSelfAlloc
+            ? `<button type="button" class="apx-btn apx-btn-small" style="color:#059669;border-color:#a7f3d0;background:#ecfdf5;" onclick="zyOpenSelfAllocateModal('${zyEsc(rName)}', ${r.id || 'null'}, window._zyClPolicy, pgSmsRanges)" title="Self-Allocate Numbers"><i class="fas fa-bolt"></i> Self-Allocate</button>`
+            : `<button type="button" class="apx-btn apx-btn-small" style="color:#2563eb;border-color:#bfdbfe;background:#eff6ff;" onclick="zyOpenRequestNumbersModal('${zyEsc(rName)}', ${r.id || 'null'}, window._zyClPolicy, pgSmsRanges)" title="Request Numbers"><i class="fas fa-phone-volume"></i> Request</button>`}
         </div>` }
       ];
     });
@@ -145,6 +154,7 @@ function zyViewClientRange(i) {
   const curr = r.currency || 'USD';
   const currSym = curr === 'EUR' ? '€' : (curr === 'GBP' ? '£' : '$');
   const clis = r.cli_list || (Array.isArray(r.clis) && r.clis.length ? r.clis.join(', ') : (r.cli || 'All CLIs'));
+  const clientRate = r.payout != null ? r.payout : (r.client_rate != null ? r.client_rate : 0.01);
   const roomCount = Math.max(0, (r.available != null ? r.available : (r.free_count ?? 1500)));
 
   zyModal(`Range Specification: ${zyEsc(rName)}`, `
@@ -195,62 +205,35 @@ function zyViewClientRange(i) {
       </div>
     </div>`,
     `<button class="zy-btn-grey" onclick="closeModal()">Close</button>
-     <button class="zy-btn-blue" onclick="closeModal();zyOpenClientRequestNumbersModal('${zyEsc(rName)}', ${r.id || 'null'}, ${roomCount})"><i class="fas fa-phone-volume"></i> Request Numbers</button>`);
+     ${(window._zyClPolicy && window._zyClPolicy.mode === 'self_allocate')
+       ? `<button class="zy-btn-blue" onclick="closeModal();zyOpenSelfAllocateModal('${zyEsc(rName)}', ${r.id || 'null'}, window._zyClPolicy, pgSmsRanges)"><i class="fas fa-bolt"></i> Self-Allocate Numbers</button>`
+       : `<button class="zy-btn-blue" onclick="closeModal();zyOpenRequestNumbersModal('${zyEsc(rName)}', ${r.id || 'null'}, window._zyClPolicy, pgSmsRanges)"><i class="fas fa-phone-volume"></i> Request Numbers</button>`}`);
 }
 
 async function pgRateCard() {
   await pgSmsRanges();
 }
 
-window.zyOpenClientRequestNumbersModal = function(rangeName, rId, room = 1500) {
-  zyModal(`Request numbers for ${zyEsc(rangeName)}`, `
-    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:#475569;display:flex;flex-wrap:wrap;gap:12px;justify-content:space-between;">
-      <span>Your daily limit: <strong style="color:#0f172a;">4,000 left today</strong></span>
-      <span>Your limit on this range: <strong style="color:#10b981;">${room.toLocaleString()} left</strong></span>
-      <span>Your overall limit: <strong style="color:#0f172a;">4,001 left</strong></span>
-    </div>
-    <div style="margin-bottom:12px;">
-      <label style="display:block;font-size:12px;font-weight:700;color:#475569;margin-bottom:5px;">Plan</label>
-      <select id="cl-req-payterm" class="zy-input" style="width:100%;height:38px;">
-        <option value="7/1" selected>Weekly (7/1)</option>
-        <option value="30/30">Monthly (30/30)</option>
-        <option value="7/7">7/7</option>
-        <option value="15/15">15/15</option>
-        <option value="15/30">15/30</option>
-        <option value="Monthly60">Monthly60</option>
-      </select>
-    </div>
-    <div style="margin-bottom:8px;">
-      <label style="display:block;font-size:12px;font-weight:700;color:#475569;margin-bottom:5px;">How many?</label>
-      <input type="number" id="cl-req-qty" class="zy-input" value="10" min="1" max="${room}" style="width:100%;height:38px;">
-    </div>
-    <div style="font-size:11.5px;color:#64748b;margin-top:6px;">Numbers will be reviewed and assigned to your account by your account manager.</div>`,
-    `<button class="zy-btn-grey" onclick="closeModal()">Cancel</button>
-     <button class="zy-btn-blue" onclick="zySubmitClientRequestNumbers('${zyEsc(rangeName)}')"><i class="fas fa-check"></i> Send Request</button>`);
-};
-
-window.zySubmitClientRequestNumbers = function(rangeName) {
-  const qty = parseInt(document.getElementById('cl-req-qty')?.value, 10) || 10;
-  closeModal();
-  toast(`Requested ${qty} numbers for ${rangeName}. Your agent has been notified.`, 'success');
-};
-
 /* ═══ MY SMS NUMBERS ════════════════════════════════════════ */
 async function pgMyNumbers() {
   const c = document.getElementById('page-content');
   zyCrumb(['My SMS Numbers']);
   c.innerHTML = `
-    <div class="zy-intro">Active numbers allocated to your client account. Traffic and live SMS records are monitored continuously.</div>
-    <div class="zy-intro">Abbreviations: SD - SMS Daily, SW - SMS Weekly</div>
-    <div class="apx-card" style="background:#ffffff;border:1.5px solid #cbd5e1;border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.04);margin-top:10px;">
-      <div class="apx-card-header" style="height:40px;display:flex;align-items:center;justify-content:space-between;padding:0 14px;background:#f8fafc;border-bottom:1px solid #cbd5e1;">
-        <span style="font-weight:700;font-size:13px;color:#1e293b;"><i class="fas fa-mobile-screen" style="color:#10b981;margin-right:6px;"></i> My SMS Numbers Pool</span>
+    <div class="page-header">
+      <div>
+        <div class="page-title"><i class="fas fa-mobile-screen" style="color:#2563eb;"></i> My SMS Numbers Pool</div>
+        <div class="page-subtitle">Active numbers allocated to your client account. (SD: Daily, SW: Weekly)</div>
+      </div>
+      <div class="page-actions">
+        <button class="btn btn-danger btn-sm" onclick="zyClientReturnSelected()"><i class="fas fa-arrow-up"></i> Return to Agent</button>
+      </div>
+    </div>
+    <div class="card apx-card" style="margin-top:10px;">
+      <div class="card-header apx-card-header">
+        <span class="card-title"><i class="fas fa-mobile-screen" style="color:#10b981;margin-right:6px;"></i> My SMS Numbers Pool</span>
         <div class="zy-head-acts" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-          <button class="sp-btn sp-btn-danger sp-btn-sm" onclick="zyClientReturnSelected()" title="Return selected numbers back to agent pool">
-            <i class="fas fa-arrow-up" style="margin-right:4px;"></i> Return to Agent
-          </button>
-          <button class="sp-btn sp-btn-ghost sp-btn-sm" onclick="pgMyNumbers()" title="Refresh">
-            <i class="fas fa-rotate-right"></i> Refresh
+          <button class="btn btn-danger btn-sm" onclick="zyClientReturnSelected()" title="Return selected numbers back to agent pool">
+            <i class="fas fa-arrow-up"></i> Return to Agent
           </button>
         </div>
       </div>
@@ -405,7 +388,12 @@ async function pgMySms(summary = false) {
   `).join('');
 
   c.innerHTML = `
-    <div class="zy-intro" style="font-size:13px;color:#475569;margin-bottom:14px;line-height:1.5;">Here You can view all the call detail records.</div>
+    <div class="page-header">
+      <div>
+        <div class="page-title"><i class="fas fa-chart-column" style="color:#2563eb;"></i> CDR &amp; Statistics</div>
+        <div class="page-subtitle">Here You can view all the call detail records, traffic stats, and export reports.</div>
+      </div>
+    </div>
 
     <div class="zy-filter-grid">
       <div class="zy-filter-grid-fields">
@@ -458,7 +446,7 @@ async function pgMySms(summary = false) {
         <div class="zy-toolbar-left">
           <div class="zy-search-wrap">
             <i class="fas fa-search"></i>
-            <input type="text" class="zy-toolbar-search" placeholder="Search..." oninput="if(typeof zyToolbarFilter==='function')zyToolbarFilter(this.value)">
+            <input type="text" class="zy-toolbar-search" placeholder="Number, CLI, message, range" oninput="if(typeof zyToolbarFilter==='function')zyToolbarFilter(this.value)">
           </div>
           <div class="zy-toolbar-select-wrap">
             <label class="zy-toolbar-label" for="rp-limit">Show Records</label>
@@ -487,14 +475,9 @@ async function pgMySms(summary = false) {
           </div>
         </div>
       </div>
-    </div>
 
-    <!-- Results Panel: SMS REPORTS & STATS -->
-    <div class="zy-panel" style="border:1px solid #cbd5e1;border-radius:4px;background:#ffffff;box-shadow:0 1px 3px rgba(0,0,0,0.05);overflow:hidden;">
-      <div class="zy-panel-head" style="background:#f1f5f9;border-bottom:1px solid #cbd5e1;padding:10px 14px;font-size:13.5px;font-weight:700;color:#1e293b;letter-spacing:0.3px;text-transform:uppercase;">
-        SMS REPORTS &amp; STATS
-      </div>
-      <div class="zy-panel-body" id="rp-body" style="padding:14px;">
+      <!-- Results Table: seamless unified report body inside the single card -->
+      <div class="zy-panel-body" id="rp-body" style="padding:0;margin-top:12px;">
         <div class="zy-loading" style="padding:40px;text-align:center;color:#64748b;">Loading CDR records…</div>
       </div>
     </div>`;
@@ -623,7 +606,9 @@ async function pgMySmsLoad(pageOrSummary = 1) {
     } else {
       const cols = ['Date', 'Range', 'Type', 'Number', 'CLI', 'SMS', 'Currency', 'My Payout', 'Cause', 'IP'];
       const rows = data.map(s => {
-        const dtStr = (s.timestamp || s.date || '').replace('T', ' ').slice(0, 19);
+        const dtCell = typeof zyFormatDateTimeStacked === 'function'
+          ? zyFormatDateTimeStacked(s.timestamp || s.date)
+          : { v: (s.timestamp || s.date || '').replace('T', ' ').slice(0, 19), h: (s.timestamp || s.date || '').replace('T', ' ').slice(0, 19) };
         const myP = parseFloat(s.client_payout != null ? s.client_payout : (s.client_rate != null ? s.client_rate : (s.payout || 0))) || 0;
         const causeVal = (s.cause || (s.status === 'delivered' || s.status === 'success' ? 'Success' : (s.status || '—')));
 
@@ -631,7 +616,7 @@ async function pgMySmsLoad(pageOrSummary = 1) {
         const smsHtml = typeof zyHighlightOtp === 'function' ? zyHighlightOtp(s.message || '') : (typeof zyEsc === 'function' ? zyEsc(s.message || '') : (s.message || ''));
 
         return [
-          dtStr,
+          dtCell,
           s.range_name || s.range_label || s.range || (s.country || '—'),
           s.type || 'General',
           { v: s.number || '—', h: `<span class="monospace" style="font-weight:600;">${typeof zyEsc === 'function' ? zyEsc(s.number || '—') : (s.number || '—')}</span>` },
@@ -685,20 +670,26 @@ async function pgMySmsLoad(pageOrSummary = 1) {
 async function pgSmsTestPanel() {
   const c = document.getElementById('page-content');
   zyCrumb(['SMS Test Panel']);
-  c.innerHTML = `<div class="zy-intro">Here you can see all test numbers.. you can make call on them and see test reports.</div>
-    <div class="apx-card" style="background:#ffffff;border:1.5px solid #cbd5e1;border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.04);margin-top:10px;margin-bottom:16px;">
-      <div class="apx-card-header" style="height:40px;display:flex;align-items:center;justify-content:space-between;padding:0 14px;background:#f8fafc;border-bottom:1px solid #cbd5e1;">
-        <span style="font-weight:700;font-size:13px;color:#1e293b;"><i class="fas fa-flask" style="color:#0ea5e9;margin-right:6px;"></i> SMS Test Numbers</span>
+  c.innerHTML = `
+    <div class="page-header">
+      <div>
+        <div class="page-title"><i class="fas fa-flask" style="color:#2563eb;"></i> SMS Test Panel</div>
+        <div class="page-subtitle">Here you can see all test numbers, test them, and view test reports.</div>
+      </div>
+    </div>
+    <div class="card apx-card" style="margin-top:10px;margin-bottom:16px;">
+      <div class="card-header apx-card-header">
+        <span class="card-title"><i class="fas fa-flask" style="color:#0ea5e9;margin-right:6px;"></i> SMS Test Numbers</span>
         <div class="zy-head-acts" style="display:flex;align-items:center;gap:6px;">
           ${zyS2('tp-range', 'Select Range', [])}
-          <button class="zy-btn-blue-solid" style="height:28px;padding:0 12px;font-size:11.5px;border-radius:4px;width:auto;" onclick="zyTestFilter()"><i class="fas fa-filter"></i> Filter</button>
+          <button class="btn btn-primary btn-sm" onclick="zyTestFilter()"><i class="fas fa-filter"></i> Filter</button>
         </div>
       </div>
-      <div class="apx-card-body zy-panel-body" style="padding:14px;"><div class="zy-loading">Loading…</div></div>
+      <div class="card-body apx-card-body zy-panel-body"><div class="zy-loading">Loading…</div></div>
     </div>
-    <div class="apx-card" style="background:#ffffff;border:1.5px solid #cbd5e1;border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.04);">
-      <div class="apx-card-header" style="height:40px;display:flex;align-items:center;justify-content:space-between;padding:0 14px;background:#f8fafc;border-bottom:1px solid #cbd5e1;">
-        <span style="font-weight:700;font-size:13px;color:#1e293b;"><i class="fas fa-list-check" style="color:#10b981;margin-right:6px;"></i> Recent SMS Test</span>
+    <div class="card apx-card">
+      <div class="card-header apx-card-header">
+        <span class="card-title"><i class="fas fa-list-check" style="color:#10b981;margin-right:6px;"></i> Recent SMS Test</span>
       </div>
       <div class="apx-card-body" id="tp-recent" style="padding:14px;"><div class="zy-loading">Loading…</div></div>
     </div>`;
@@ -915,7 +906,7 @@ window.zyClientViewCliSms = function(idx) {
     ${samples.length ? buildTable(
       ['Time', 'Number', 'Message Preview', 'Status'],
       samples.map(s => [
-        (s.timestamp || '').replace('T', ' ').slice(0, 19),
+        typeof zyFormatDateTimeStacked === 'function' ? zyFormatDateTimeStacked(s.timestamp).h : (s.timestamp || '').replace('T', ' ').slice(0, 19),
         `<span class="monospace">${escapeHtml(s.number || '—')}</span>`,
         escapeHtml(s.text || '—'),
         `<span class="badge badge-green">${s.status || 'Delivered'}</span>`
@@ -929,13 +920,17 @@ async function pgClientCreditNotes() {
   const c = document.getElementById('page-content');
   zyCrumb(['Credit Notes']);
   c.innerHTML = `
-    <div class="zy-intro" style="font-size:13px;color:#475569;margin-bottom:14px;line-height:1.5;">Review your earned credit notes and download official settlement vouchers.</div>
-    <div class="zy-panel">
-      <div class="zy-panel-head" style="display:flex;align-items:center;justify-content:space-between;">
-        <span>My Credit Notes</span>
-        <button class="sp-btn-secondary" style="height:28px;padding:0 10px;font-size:11px;" onclick="pgClientCreditNotesLoad()"><i class="fas fa-sync"></i> Refresh</button>
+    <div class="page-header">
+      <div>
+        <div class="page-title"><i class="fas fa-file-invoice" style="color:#2563eb;"></i> My Credit Notes</div>
+        <div class="page-subtitle">Review your earned credit notes and download official settlement vouchers.</div>
       </div>
-      <div class="zy-panel-body" id="ccn-body"><div class="zy-loading">Loading…</div></div>
+    </div>
+    <div class="card zy-panel">
+      <div class="card-header zy-panel-head" style="display:flex;align-items:center;justify-content:space-between;">
+        <span class="card-title">My Credit Notes</span>
+      </div>
+      <div class="card-body zy-panel-body" id="ccn-body"><div class="zy-loading">Loading…</div></div>
     </div>`;
   pgClientCreditNotesLoad();
 }
@@ -987,7 +982,12 @@ async function pgClientPaymentRequests() {
   }
 
   c.innerHTML = `
-    <div class="zy-intro" style="font-size:13px;color:#475569;margin-bottom:14px;line-height:1.5;">View your account balance and submit payout requests to your account manager.</div>
+    <div class="page-header">
+      <div>
+        <div class="page-title"><i class="fas fa-wallet" style="color:#2563eb;"></i> Payment Requests</div>
+        <div class="page-subtitle">View your account balance and submit payout requests to your account manager.</div>
+      </div>
+    </div>
     
     <!-- Astra SMS 2-Card Metric Row -->
     <div style="display:grid;grid-template-columns:repeat(2, minmax(0, 1fr));gap:12px;margin-bottom:16px;">
@@ -1025,7 +1025,6 @@ async function pgClientPaymentRequests() {
     <div class="zy-panel">
       <div class="zy-panel-head" style="display:flex;align-items:center;justify-content:space-between;">
         <span>My Payout Requests</span>
-        <button class="sp-btn-secondary" style="height:28px;padding:0 10px;font-size:11px;" onclick="pgClientPaymentRequestsLoad()"><i class="fas fa-sync"></i> Refresh</button>
       </div>
       <div class="zy-panel-body" id="cpr-body"><div class="zy-loading">Loading…</div></div>
     </div>`;
@@ -1157,8 +1156,14 @@ async function pgClientNotifications() {
   const c = document.getElementById('page-content');
   zyCrumb(['Notifications']);
   c.innerHTML = `
-    <div class="zy-panel" style="border:1px solid #cbd5e1;border-radius:12px;background:#ffffff;box-shadow:0 1px 3px rgba(0,0,0,0.05);margin-top:10px;">
-      <div class="zy-panel-body" style="text-align:center;padding:70px 20px;color:var(--sp-text-muted,#64748b);">
+    <div class="page-header">
+      <div>
+        <div class="page-title"><i class="fas fa-bell" style="color:#2563eb;"></i> Notifications</div>
+        <div class="page-subtitle">System notifications and important updates.</div>
+      </div>
+    </div>
+    <div class="card zy-panel" style="margin-top:10px;">
+      <div class="card-body zy-panel-body" style="text-align:center;padding:70px 20px;color:var(--sp-text-muted,#64748b);">
         <div style="width:56px;height:56px;border-radius:50%;background:#f1f5f9;display:inline-flex;align-items:center;justify-content:center;margin-bottom:16px;">
           <i class="fas fa-bell-slash" style="font-size:24px;color:#94a3b8;"></i>
         </div>

@@ -40,9 +40,6 @@ async function renderLoginPanels() {
         <button class="btn btn-primary btn-sm" onclick="openAddLoginPanelModal()">
           <i class="fas fa-plus"></i> Add Login Panel
         </button>
-        <button class="btn btn-outline btn-sm" onclick="renderLoginPanels()">
-          <i class="fas fa-sync"></i> Refresh
-        </button>
       </div>
     </div>
 

@@ -811,11 +811,7 @@ async function renderDashboard() {
         </div>
       </div>
 
-      <div class="charts-grid">
-        <div class="card">
-          <div class="card-header"><div class="card-title">Quick Stats</div></div>
-          <div id="quick-stats"></div>
-        </div>
+      <div class="charts-grid" style="grid-template-columns:1fr;">
         <div class="card">
           <div class="card-header"><div class="card-title">App Distribution</div></div>
           <div class="chart-container" style="height:250px;">
@@ -829,15 +825,6 @@ async function renderDashboard() {
         ${statCard('Revenue', 'fas fa-dollar-sign', '$' + (stats.revenue_today || 0), 'yellow', 'Daily earnings')}
         ${statCard('Active number pool', 'fas fa-mobile-screen', stats.active_numbers || 0, 'blue', (stats.total_numbers || 0) + ' total pool')}
         ${statCard('Delivery rate', 'fas fa-chart-line', (stats.success_rate || 0) + '%', 'green', 'Delivery rate')}
-      </div>
-    `;
-
-    document.getElementById('quick-stats').innerHTML = `
-      <div style="display:flex;flex-direction:column;gap:14px;padding:8px 0;">
-        ${progressRow('Delivery Success', stats.success_rate || 0, 100, 'green')}
-        ${progressRow('Numbers Active', stats.active_numbers || 0, stats.total_numbers || 1, 'blue')}
-        ${progressRow('SMPP Load', stats.smpp_load || 0, 100, 'yellow')}
-        ${progressRow('Storage Used', stats.storage_used || 0, 100, 'purple')}
       </div>
     `;
 
@@ -971,7 +958,6 @@ async function renderCrApiPanels() {
         </div>
         <div class="page-actions">
           <button class="btn btn-primary btn-sm" onclick="openAddCrApiModal()"><i class="fas fa-plus"></i> Add Connection</button>
-          <button class="btn btn-outline btn-sm" onclick="renderCrApiPanels()"><i class="fas fa-sync"></i> Refresh</button>
         </div>
       </div>
       <div class="card">
@@ -1097,9 +1083,6 @@ async function renderSmppAccounts() {
         <div class="page-actions">
           <button class="btn btn-primary btn-sm" onclick="openAddSmppModal()">
             <i class="fas fa-plus"></i> Add Account
-          </button>
-          <button class="btn btn-outline btn-sm" onclick="renderSmppAccounts()">
-            <i class="fas fa-sync"></i> Refresh
           </button>
         </div>
       </div>
@@ -1600,11 +1583,6 @@ async function renderStandardWebhook() {
           <div class="page-title">Standard Webhook</div>
           <div class="page-subtitle">HTTP interconnect for SMS forwarding</div>
         </div>
-        <div class="page-actions">
-          <button class="btn btn-outline btn-sm" onclick="renderStandardWebhook()">
-            <i class="fas fa-sync"></i> Refresh
-          </button>
-        </div>
       </div>
 
       <div class="card" style="margin-bottom:20px;background:rgba(76,110,245,0.05);border-left:4px solid var(--accent);">
@@ -1879,7 +1857,6 @@ async function renderMyNumbers(page = 1, search = '', status = '') {
           </div>
           <div class="apx-card-actions">
             <button class="apx-btn apx-btn-small" onclick="window.open('/api/numbers/download','_blank')" data-apx-tooltip="Download CSV"><i class="fas fa-download"></i> CSV</button>
-            <button class="apx-btn apx-btn-small" onclick="renderMyNumbers(1)" data-apx-tooltip="Refresh Pool"><i class="fas fa-rotate"></i> Refresh</button>
           </div>
         </div>
         <div class="apx-card-body zy-panel-body" id="owner-numbers-body" style="padding:0;"><div class="zy-loading" style="padding:30px;text-align:center;">Loading numbers pool…</div></div>
@@ -2744,7 +2721,6 @@ async function renderBulkAllocation() {
         <div class="card">
           <div class="card-header" style="display:flex;align-items:center;justify-content:space-between;">
             <div class="card-title">Recent Allocation History</div>
-            <button type="button" class="btn btn-ghost btn-sm" onclick="loadRecentAllocHistory()"><i class="fas fa-sync"></i> Refresh</button>
           </div>
           <div id="alloc-history-box" style="padding:12px;">
             <div class="loading"><div class="spinner"></div> Loading history…</div>
@@ -4585,9 +4561,6 @@ async function renderSmsTestPanel() {
             <button type="button" class="zy-btn-blue-solid" style="height:34px;padding:0 14px;font-size:12px;border-radius:6px;width:auto;" onclick="loadAdTestNumbers()">
               <i class="fas fa-filter"></i> Filter
             </button>
-            <button type="button" class="zy-act zy-act-red" style="height:34px;width:34px;display:inline-flex;align-items:center;justify-content:center;border-radius:6px;padding:0;" onclick="loadAdTestNumbers()" title="Refresh">
-              <i class="fas fa-rotate"></i>
-            </button>
             <button type="button" class="btn btn-outline btn-sm" style="height:34px;font-size:12px;" onclick="loadPage('test-panel-numbers')">
               <i class="fas fa-upload"></i> Manage Numbers
             </button>
@@ -4975,14 +4948,9 @@ async function renderMySms(page = 1, isSummary = false) {
           Show Report
         </button>
       </div>
-    </div>
 
-    <!-- Results Panel: SMS REPORTS & STATS -->
-    <div class="zy-panel" style="border:1px solid #cbd5e1;border-radius:4px;background:#ffffff;box-shadow:0 1px 3px rgba(0,0,0,0.05);overflow:hidden;">
-      <div class="zy-panel-head" style="background:#f1f5f9;border-bottom:1px solid #cbd5e1;padding:10px 14px;font-size:13.5px;font-weight:700;color:#1e293b;letter-spacing:0.3px;text-transform:uppercase;">
-        SMS REPORTS &amp; STATS
-      </div>
-      <div class="zy-panel-body" id="rp-body" style="padding:14px;">
+      <!-- Results Table: seamless unified report body inside the single card -->
+      <div class="zy-panel-body" id="rp-body" style="padding:0;margin-top:14px;">
         <div class="zy-loading" style="padding:40px;text-align:center;color:#64748b;">Loading CDR records…</div>
       </div>
     </div>
@@ -5136,7 +5104,9 @@ async function renderMySmsLoad(isSummary = false) {
       // Detailed View
       const cols = ['Date Time', 'Range', 'Type', 'Number', 'CLI', 'SMS Message', 'Manager', 'Agent', 'Client', 'Currency', 'Carrier Cost', 'Payout Given', 'Owner Profit', 'Status', 'IP'];
       const rows = data.map(s => {
-        const dtStr = (s.timestamp || s.date || '').replace('T', ' ').slice(0, 19);
+        const dtCell = typeof zyFormatDateTimeStacked === 'function'
+          ? zyFormatDateTimeStacked(s.timestamp || s.date)
+          : { v: (s.timestamp || s.date || '').replace('T', ' ').slice(0, 19), h: (s.timestamp || s.date || '').replace('T', ' ').slice(0, 19) };
         const carrierCost = parseFloat(s.carrier_rate != null ? s.carrier_rate : (s.payout || 0)) || 0;
         const payoutGiven = parseFloat(s.payout_rate != null ? s.payout_rate : (s.client_payout != null ? s.client_payout : (s.client_rate || 0))) || 0;
         const prof = Math.max(0, carrierCost - payoutGiven);
@@ -5146,7 +5116,7 @@ async function renderMySmsLoad(isSummary = false) {
           : `<span class="badge badge-yellow" style="font-size:11px;">${causeVal}</span>`;
 
         return [
-          dtStr,
+          dtCell,
           s.range_name || s.range_label || s.range || (s.country || '—'),
           s.type || 'General',
           `<span class="monospace" style="font-weight:600;">${escapeHtml(s.number || '—')}</span>`,
@@ -5513,9 +5483,6 @@ async function renderCliSearch() {
         <div class="page-title" style="font-size:18px;font-weight:800;color:#0f172a;">CLI Search &amp; Route Inspector</div>
         <div class="page-subtitle" style="font-size:12.5px;color:#64748b;">Real-time inspection of active ranges, destination endpoints, and live traffic by Sender ID / CLI</div>
       </div>
-      <div class="page-actions">
-        <button class="btn btn-outline btn-sm" onclick="loadCliSearchData()"><i class="fas fa-sync"></i> Refresh Live</button>
-      </div>
     </div>
 
     <!-- Time Presets Bar -->
@@ -5831,7 +5798,7 @@ async function renderDeliveryLogs(page = 1) {
     const c = document.getElementById('page-content');
     c.innerHTML = `
       <div class="page-header">
-        <div><div class="page-title">SMS CDR Stats</div><div class="page-subtitle">Home &gt; SMS CDR Stats</div></div>
+        <div><div class="page-title">SMS CDR Stats</div><div class="page-subtitle">View detailed SMS call records, filter traffic, and export reports.</div></div>
       </div>
       <div class="card">
         <div class="filters-bar" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
@@ -6038,9 +6005,6 @@ async function renderSmppDashboard() {
     c.innerHTML = `
       <div class="page-header">
         <div><div class="page-title">SMPP Dashboard</div><div class="page-subtitle">Server performance overview</div></div>
-        <div class="page-actions">
-          <button class="btn btn-outline btn-sm" onclick="renderSmppDashboard()"><i class="fas fa-sync"></i> Refresh</button>
-        </div>
       </div>
       <div class="stats-grid">
         ${statCard('Active Sessions', 'fas fa-plug', sessions?.length || 0, 'blue', 'SMPP connections')}
@@ -6108,9 +6072,6 @@ async function renderSmppSessions() {
     c.innerHTML = `
       <div class="page-header">
         <div><div class="page-title">SMPP Sessions</div><div class="page-subtitle">Active server sessions</div></div>
-        <div class="page-actions">
-          <button class="btn btn-outline btn-sm" onclick="renderSmppSessions()"><i class="fas fa-sync"></i> Refresh</button>
-        </div>
       </div>
       <div class="card">
         ${buildTable(
@@ -6156,9 +6117,6 @@ async function renderConnectedClients() {
     c.innerHTML = `
       <div class="page-header">
         <div><div class="page-title">Connected Clients</div><div class="page-subtitle">${data.length} active clients</div></div>
-        <div class="page-actions">
-          <button class="btn btn-outline btn-sm" onclick="renderConnectedClients()"><i class="fas fa-sync"></i> Refresh</button>
-        </div>
       </div>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;">
         ${data.map(s => `
@@ -6198,9 +6156,6 @@ async function renderDlrMonitor() {
     c.innerHTML = `
       <div class="page-header">
         <div><div class="page-title">DLR Monitor</div><div class="page-subtitle">Delivery receipt tracking</div></div>
-        <div class="page-actions">
-          <button class="btn btn-outline btn-sm" onclick="renderDlrMonitor()"><i class="fas fa-sync"></i> Refresh</button>
-        </div>
       </div>
       <div class="stats-grid" style="grid-template-columns:repeat(4,1fr);">
         ${statCard('DLR Rate', 'fas fa-percent', (data?.dlr_rate || 0) + '%', 'green', 'Success')}
@@ -6331,9 +6286,6 @@ async function renderSmppSecurity() {
     c.innerHTML = `
       <div class="page-header">
         <div><div class="page-title">SMPP Security Center</div><div class="page-subtitle">Authentication and access logs</div></div>
-        <div class="page-actions">
-          <button class="btn btn-outline btn-sm" onclick="renderSmppSecurity()"><i class="fas fa-sync"></i> Refresh</button>
-        </div>
       </div>
       <div class="card">
         ${buildTable(
@@ -6362,9 +6314,6 @@ async function renderConnectionLogs() {
     c.innerHTML = `
       <div class="page-header">
         <div><div class="page-title">Connection Logs</div><div class="page-subtitle">All SMPP connection events</div></div>
-        <div class="page-actions">
-          <button class="btn btn-outline btn-sm" onclick="renderConnectionLogs()"><i class="fas fa-sync"></i> Refresh</button>
-        </div>
       </div>
       <div class="card">
         ${buildTable(
@@ -6397,9 +6346,6 @@ async function renderRegistrationRequests() {
       <div class="page-header">
         <div><div class="page-title">Registration Requests</div>
         <div class="page-subtitle">${pending} pending</div></div>
-        <div class="page-actions">
-          <button class="btn btn-outline btn-sm" onclick="renderRegistrationRequests()"><i class="fas fa-sync"></i> Refresh</button>
-        </div>
       </div>
       <div class="card">
         ${buildTable(
@@ -6480,9 +6426,6 @@ async function renderPayoutRequests(activeTab = 'all') {
         <div class="page-actions" style="display:flex;gap:8px;flex-wrap:wrap;">
           <button class="sp-btn-secondary" style="height:36px;padding:0 14px;font-size:13px;display:inline-flex;align-items:center;gap:6px;" onclick="openSetMinPayoutModal(${minPayout})">
             <i class="fas fa-sliders"></i> Minimum Payout
-          </button>
-          <button class="sp-btn-secondary" style="height:36px;padding:0 14px;font-size:13px;display:inline-flex;align-items:center;gap:6px;" onclick="renderPayoutRequests('${activeTab}')">
-            <i class="fas fa-sync"></i> Refresh
           </button>
         </div>
       </div>
@@ -6631,18 +6574,15 @@ async function renderAgentRequests() {
       <div class="page-header">
         <div>
           <div class="page-title">Number Requests</div>
-          <div class="page-subtitle">${pending} pending inventory requests from Agents</div>
-        </div>
-        <div class="page-actions">
-          <button class="btn btn-outline btn-sm" onclick="renderAgentRequests()"><i class="fas fa-sync"></i> Refresh</button>
+          <div class="page-subtitle">${pending} pending number inventory requests across accounts</div>
         </div>
       </div>
       <div class="card">
         ${buildTable(
-          ['#', 'Agent', 'Range / Service', 'App', 'Qty', 'Urgency', 'Status', 'Date', 'Actions'],
+          ['#', 'Requester', 'Range / Service', 'App', 'Qty', 'Urgency', 'Status', 'Date', 'Actions'],
           data.map(r => [
             r.id || '—',
-            `<strong>${r.agent_username || r.agent_name || ('Agent #' + r.agent_id)}</strong>`,
+            `<strong>${r.requester_username || r.agent_username || r.agent_name || ('Account #' + (r.requester_id || r.agent_id || '—'))}</strong> <span class="badge badge-blue" style="font-size:10px;">${r.requester_role || r.agent_role || 'Agent'}</span>`,
             r.range_name || ('Range #' + (r.range_id || '—')),
             r.app_name || r.service_name || 'General',
             `<span class="badge badge-blue fw-600">${r.quantity || 1}</span>`,
@@ -7104,7 +7044,6 @@ async function renderAdminAgents(page = 1) {
         <div><div class="page-title">All Agents</div><div class="page-subtitle">${data?.total || 0} agents system-wide</div></div>
         <div class="page-actions">
           <button class="btn btn-primary btn-sm" onclick="openAdminAddAgentModal()"><i class="fas fa-user-plus"></i> Add Agent</button>
-          <button class="btn btn-outline btn-sm" onclick="renderAdminAgents(1)"><i class="fas fa-sync"></i> Refresh</button>
         </div>
       </div>
       <div class="card">
@@ -7228,6 +7167,27 @@ async function openEditAgentModal(id) {
           <div class="form-group"><label class="form-label">Commission %</label><input type="number" value="${agent.commission_rate || 0}" id="edit-ag-comm" step="0.1" min="0" max="100"></div>
         </div>
         <div class="form-group"><label class="form-label">New Password (optional)</label><input type="password" id="edit-ag-pass" autocomplete="new-password" placeholder="Leave blank to keep current"></div>
+        <div style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:10px;padding:12px 14px;margin-bottom:14px;">
+          <div style="font-weight:700;font-size:12px;color:#475569;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Number Acquisition Override (Optional)</div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Acquisition Mode</label>
+              <select id="edit-ag-alloc-mode">
+                <option value="" ${!agent.alloc_mode ? 'selected' : ''}>Inherit Default</option>
+                <option value="request" ${agent.alloc_mode === 'request' ? 'selected' : ''}>Request Only</option>
+                <option value="self_allocate" ${agent.alloc_mode === 'self_allocate' ? 'selected' : ''}>Self-Allocate Only</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Daily Limit (blank = inherit, 0 = unlimited)</label>
+              <input type="number" id="edit-ag-alloc-daily" min="0" value="${agent.alloc_daily_limit ?? ''}" placeholder="Inherit">
+            </div>
+          </div>
+          <div class="form-group" style="margin-bottom:0;">
+            <label class="form-label">Total Holding Limit (blank = inherit, 0 = unlimited)</label>
+            <input type="number" id="edit-ag-alloc-total" min="0" value="${agent.alloc_total_limit ?? ''}" placeholder="Inherit">
+          </div>
+        </div>
         <div class="form-actions">
           <button type="button" class="btn btn-outline" onclick="closeModal()">Cancel</button>
           <button type="submit" class="btn btn-primary" id="edit-ag-btn"><i class="fas fa-save"></i> Save Changes</button>
@@ -7244,11 +7204,17 @@ async function submitEditAgent(event, id) {
   event.preventDefault();
   const username = document.getElementById('edit-ag-user').value.trim();
   if (!username) { toast('Username is required', 'error'); return; }
+  const agMode = document.getElementById('edit-ag-alloc-mode')?.value || '';
+  const agDailyRaw = document.getElementById('edit-ag-alloc-daily')?.value;
+  const agTotalRaw = document.getElementById('edit-ag-alloc-total')?.value;
   const payload = {
     username,
     full_name: document.getElementById('edit-ag-fullname').value.trim(),
     email: document.getElementById('edit-ag-email').value.trim(),
-    commission_rate: parseFloat(document.getElementById('edit-ag-comm').value) || 0
+    commission_rate: parseFloat(document.getElementById('edit-ag-comm').value) || 0,
+    alloc_mode: agMode || null,
+    alloc_daily_limit: agDailyRaw !== '' && agDailyRaw !== undefined ? Math.max(0, parseInt(agDailyRaw, 10) || 0) : null,
+    alloc_total_limit: agTotalRaw !== '' && agTotalRaw !== undefined ? Math.max(0, parseInt(agTotalRaw, 10) || 0) : null
   };
   const pass = document.getElementById('edit-ag-pass').value;
   if (pass) {
@@ -7281,9 +7247,6 @@ async function renderAdminClients(page = 1) {
     c.innerHTML = `
       <div class="page-header">
         <div><div class="page-title">All Clients</div><div class="page-subtitle">${data?.total || 0} clients system-wide</div></div>
-        <div class="page-actions">
-          <button class="btn btn-outline btn-sm" onclick="renderAdminClients(1)"><i class="fas fa-sync"></i> Refresh</button>
-        </div>
       </div>
       <div class="card">
         ${renderManagementTabs('clients')}
@@ -7402,6 +7365,27 @@ async function openEditClientModal(id) {
         </div>
         <div class="form-group"><label class="form-label">Email</label><input type="email" value="${client.email || ''}" id="edit-cl-email" autocomplete="off"></div>
         <div class="form-group"><label class="form-label">New Password (optional)</label><input type="password" id="edit-cl-pass" autocomplete="new-password" placeholder="Leave blank to keep current"></div>
+        <div style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:10px;padding:12px 14px;margin-bottom:14px;">
+          <div style="font-weight:700;font-size:12px;color:#475569;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Number Acquisition Override (Optional)</div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Acquisition Mode</label>
+              <select id="edit-cl-alloc-mode">
+                <option value="" ${!client.alloc_mode ? 'selected' : ''}>Inherit Default</option>
+                <option value="request" ${client.alloc_mode === 'request' ? 'selected' : ''}>Request Only</option>
+                <option value="self_allocate" ${client.alloc_mode === 'self_allocate' ? 'selected' : ''}>Self-Allocate Only</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Daily Limit (blank = inherit, 0 = unlimited)</label>
+              <input type="number" id="edit-cl-alloc-daily" min="0" value="${client.alloc_daily_limit ?? ''}" placeholder="Inherit">
+            </div>
+          </div>
+          <div class="form-group" style="margin-bottom:0;">
+            <label class="form-label">Total Holding Limit (blank = inherit, 0 = unlimited)</label>
+            <input type="number" id="edit-cl-alloc-total" min="0" value="${client.alloc_total_limit ?? ''}" placeholder="Inherit">
+          </div>
+        </div>
         <div class="form-actions">
           <button type="button" class="btn btn-outline" onclick="closeModal()">Cancel</button>
           <button type="submit" class="btn btn-primary" id="edit-cl-btn"><i class="fas fa-save"></i> Save Changes</button>
@@ -7418,10 +7402,16 @@ async function submitEditClient(event, id) {
   event.preventDefault();
   const username = document.getElementById('edit-cl-user').value.trim();
   if (!username) { toast('Username is required', 'error'); return; }
+  const clMode = document.getElementById('edit-cl-alloc-mode')?.value || '';
+  const clDailyRaw = document.getElementById('edit-cl-alloc-daily')?.value;
+  const clTotalRaw = document.getElementById('edit-cl-alloc-total')?.value;
   const payload = {
     username,
     full_name: document.getElementById('edit-cl-fullname').value.trim(),
-    email: document.getElementById('edit-cl-email').value.trim()
+    email: document.getElementById('edit-cl-email').value.trim(),
+    alloc_mode: clMode || null,
+    alloc_daily_limit: clDailyRaw !== '' && clDailyRaw !== undefined ? Math.max(0, parseInt(clDailyRaw, 10) || 0) : null,
+    alloc_total_limit: clTotalRaw !== '' && clTotalRaw !== undefined ? Math.max(0, parseInt(clTotalRaw, 10) || 0) : null
   };
   const pass = document.getElementById('edit-cl-pass').value;
   if (pass) {
@@ -7459,9 +7449,6 @@ async function renderHierarchy() {
     c.innerHTML = `
       <div class="page-header">
         <div><div class="page-title">Hierarchy View</div><div class="page-subtitle">Owner → Manager → Agent → Client</div></div>
-        <div class="page-actions">
-          <button class="btn btn-outline btn-sm" onclick="renderHierarchy()"><i class="fas fa-sync"></i> Refresh</button>
-        </div>
       </div>
       <div class="card" style="margin-bottom:16px;">
         ${renderManagementTabs('hierarchy')}
@@ -7829,6 +7816,27 @@ async function openEditUserModal(id) {
             </label>
           </div>
         </div>
+        <div style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:10px;padding:12px 14px;margin-bottom:14px;">
+          <div style="font-weight:700;font-size:12px;color:#475569;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Number Acquisition Override (Optional)</div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Acquisition Mode</label>
+              <select id="edit-alloc-mode">
+                <option value="" ${!user.alloc_mode ? 'selected' : ''}>Inherit Default</option>
+                <option value="request" ${user.alloc_mode === 'request' ? 'selected' : ''}>Request Only</option>
+                <option value="self_allocate" ${user.alloc_mode === 'self_allocate' ? 'selected' : ''}>Self-Allocate Only</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Daily Limit (blank = inherit, 0 = unlimited)</label>
+              <input type="number" id="edit-alloc-daily" min="0" value="${user.alloc_daily_limit ?? ''}" placeholder="Inherit">
+            </div>
+          </div>
+          <div class="form-group" style="margin-bottom:0;">
+            <label class="form-label">Total Holding Limit (blank = inherit, 0 = unlimited)</label>
+            <input type="number" id="edit-alloc-total" min="0" value="${user.alloc_total_limit ?? ''}" placeholder="Inherit">
+          </div>
+        </div>
         <div class="form-actions">
           <button type="button" class="btn btn-outline" onclick="closeModal()">Cancel</button>
           <button type="submit" class="btn btn-primary" id="edit-submit-btn"><i class="fas fa-save"></i> Save Changes</button>
@@ -7859,6 +7867,9 @@ async function submitEditUser(event, id) {
     }
 
     const commVal = parseFloat(document.getElementById('edit-commission')?.value);
+    const allocMode = document.getElementById('edit-alloc-mode')?.value || '';
+    const allocDailyRaw = document.getElementById('edit-alloc-daily')?.value;
+    const allocTotalRaw = document.getElementById('edit-alloc-total')?.value;
     const payload = {
       username,
       email: document.getElementById('edit-email').value,
@@ -7874,7 +7885,10 @@ async function submitEditUser(event, id) {
       allow_rest_api: document.getElementById('edit-allow-rest')?.checked !== false,
       can_manage_downline: document.getElementById('edit-can-downline')?.checked !== false,
       can_cli_search: document.getElementById('edit-can-cli')?.checked !== false,
-      status: document.getElementById('edit-active')?.checked ? 'active' : 'suspended'
+      status: document.getElementById('edit-active')?.checked ? 'active' : 'suspended',
+      alloc_mode: allocMode || null,
+      alloc_daily_limit: allocDailyRaw !== '' && allocDailyRaw !== undefined ? Math.max(0, parseInt(allocDailyRaw, 10) || 0) : null,
+      alloc_total_limit: allocTotalRaw !== '' && allocTotalRaw !== undefined ? Math.max(0, parseInt(allocTotalRaw, 10) || 0) : null
     };
 
     const password = document.getElementById('edit-pass').value;
@@ -8066,9 +8080,6 @@ async function renderAccountBalances() {
     c.innerHTML = `
       <div class="page-header">
         <div><div class="page-title">Account Balances</div><div class="page-subtitle">Financial overview of all accounts</div></div>
-        <div class="page-actions">
-          <button class="btn btn-outline btn-sm" onclick="renderAccountBalances()"><i class="fas fa-sync"></i> Refresh</button>
-        </div>
       </div>
       <div class="stats-grid" style="grid-template-columns:repeat(3,1fr);">
         ${statCard('Total Balance', 'fas fa-dollar-sign', '$' + totalBalance.toFixed(2), 'green', 'All accounts')}
@@ -8185,7 +8196,6 @@ async function renderAuditLogs(page = 1) {
       <div class="page-header">
         <div><div class="page-title">Audit Logs</div><div class="page-subtitle">System activity trail</div></div>
         <div class="page-actions">
-          <button class="btn btn-outline btn-sm" onclick="renderAuditLogs(1)"><i class="fas fa-sync"></i> Refresh</button>
           <button class="btn btn-outline btn-sm text-danger" onclick="clearAuditLogs()"><i class="fas fa-trash-can"></i> Clear All Logs</button>
         </div>
       </div>
@@ -8234,7 +8244,6 @@ async function renderLoginActivity() {
     <div class="page-header">
       <div><div class="page-title">Login Activity</div><div class="page-subtitle">Every login attempt — account, role, IP address, and time</div></div>
       <div class="page-actions">
-        <button class="btn btn-outline btn-sm" onclick="loadLoginActivity()"><i class="fas fa-sync"></i> Refresh</button>
         <button class="btn btn-outline btn-sm text-danger" onclick="clearLoginActivity()"><i class="fas fa-trash-can"></i> Clear Login Logs</button>
       </div>
     </div>
@@ -8979,9 +8988,6 @@ async function renderWebhookConfig() {
           <button class="sp-btn-secondary" style="height:36px;padding:0 14px;font-size:12px;display:inline-flex;align-items:center;gap:6px;" onclick="testWebhookPing()">
             <i class="fas fa-paper-plane"></i> Test Webhook Ping
           </button>
-          <button class="sp-btn-secondary" style="height:36px;padding:0 14px;font-size:12px;display:inline-flex;align-items:center;gap:6px;" onclick="renderWebhookConfig()">
-            <i class="fas fa-sync"></i> Refresh
-          </button>
         </div>
       </div>
       ${renderApiWebhooksTabs('webhook')}
@@ -9502,9 +9508,6 @@ async function renderFirewallDashboard() {
     c.innerHTML = `
       <div class="page-header">
         <div><div class="page-title">Firewall & Security Control</div><div class="page-subtitle">Security overview and intrusion defense</div></div>
-        <div class="page-actions">
-          <button class="btn btn-outline btn-sm" onclick="renderFirewallDashboard()"><i class="fas fa-sync"></i> Refresh</button>
-        </div>
       </div>
       ${renderSecurityTabs('firewall')}
       <div class="stats-grid">
@@ -9688,9 +9691,6 @@ async function renderFirewallEvents(page = 1) {
     c.innerHTML = `
       <div class="page-header">
         <div><div class="page-title">Firewall Events</div><div class="page-subtitle">Security log</div></div>
-        <div class="page-actions">
-          <button class="btn btn-outline btn-sm" onclick="renderFirewallEvents(1)"><i class="fas fa-sync"></i> Refresh</button>
-        </div>
       </div>
       <div class="card">
         ${renderSecurityTabs('events')}
@@ -9990,6 +9990,57 @@ async function renderGeneralSettings() {
                 <div class="text-muted fs-12">Temporarily lock user panels for maintenance</div>
               </div>
               <input type="checkbox" ${data.maintenance_mode ? 'checked' : ''} id="s-maintenance" style="transform:scale(1.2);">
+            </div>
+          </div>
+
+          <!-- Number Acquisition Mode & Hierarchy Limits -->
+          <div class="card">
+            <div class="card-header" style="border-bottom:1px solid #eef2f6;padding-bottom:12px;margin-bottom:14px;">
+              <div class="card-title"><i class="fas fa-sliders" style="color:var(--brand-primary,#5E9800);margin-right:6px;"></i> Number Acquisition Mode &amp; Limits</div>
+            </div>
+            <p class="fs-12 text-muted" style="margin-bottom:14px;">Choose whether each tier can only <strong>Request</strong> numbers or only <strong>Self-Allocate</strong> directly (mutually exclusive — never both at once). Leave limits as <code>0</code> for unlimited.</p>
+            <div style="display:grid;grid-template-columns:1fr;gap:12px;">
+              ${[
+                { key: 'manager', label: 'Managers' },
+                { key: 'agent',   label: 'Agents' },
+                { key: 'client',  label: 'Clients' }
+              ].map(t => {
+                const modeVal = data[`${t.key}_alloc_mode`] === 'self_allocate' ? 'self_allocate' : 'request';
+                const dailyVal = parseInt(data[`${t.key}_alloc_daily_limit`], 10) || 0;
+                const totalVal = parseInt(data[`${t.key}_alloc_total_limit`], 10) || 0;
+                return `
+                  <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px 12px;">
+                    <div style="font-weight:700;font-size:12.5px;color:#0f172a;margin-bottom:8px;">${t.label} Default Policy</div>
+                    <div style="display:grid;grid-template-columns:1.2fr 1fr 1fr;gap:8px;align-items:end;">
+                      <div>
+                        <label class="form-label" style="font-size:11px;margin-bottom:3px;">Active Mode</label>
+                        <select id="s-${t.key}-alloc-mode" style="width:100%;">
+                          <option value="request" ${modeVal === 'request' ? 'selected' : ''}>Request Only</option>
+                          <option value="self_allocate" ${modeVal === 'self_allocate' ? 'selected' : ''}>Self-Allocate Only</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label class="form-label" style="font-size:11px;margin-bottom:3px;">Daily Limit</label>
+                        <input type="number" id="s-${t.key}-alloc-daily" min="0" value="${dailyVal}" placeholder="0 = unlimited">
+                      </div>
+                      <div>
+                        <label class="form-label" style="font-size:11px;margin-bottom:3px;">Total Limit</label>
+                        <input type="number" id="s-${t.key}-alloc-total" min="0" value="${totalVal}" placeholder="0 = unlimited">
+                      </div>
+                    </div>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px;margin-top:12px;padding-top:10px;border-top:1px solid #e2e8f0;">
+              <label style="display:flex;align-items:center;gap:8px;font-size:12.5px;cursor:pointer;color:#1e293b;">
+                <input type="checkbox" id="s-allow-mgr-alloc" ${data.allow_manager_alloc_config !== false ? 'checked' : ''} style="width:16px;height:16px;accent-color:#2563eb;">
+                <span>Allow <strong>Managers</strong> to configure their downline Agents &amp; Clients</span>
+              </label>
+              <label style="display:flex;align-items:center;gap:8px;font-size:12.5px;cursor:pointer;color:#1e293b;">
+                <input type="checkbox" id="s-allow-ag-alloc" ${data.allow_agent_alloc_config !== false ? 'checked' : ''} style="width:16px;height:16px;accent-color:#2563eb;">
+                <span>Allow <strong>Agents</strong> to configure their downline Clients</span>
+              </label>
             </div>
           </div>
 
@@ -11249,7 +11300,18 @@ async function saveSettings(event) {
       timezone: document.getElementById('s-timezone')?.value || 'UTC',
       admin_email: document.getElementById('s-admin-email')?.value?.trim() || '',
       maintenance_mode: document.getElementById('s-maintenance')?.checked || false,
-      payterms: (document.getElementById('s-payterms')?.value || '').split(',').map(s => s.trim()).filter(Boolean)
+      payterms: (document.getElementById('s-payterms')?.value || '').split(',').map(s => s.trim()).filter(Boolean),
+      manager_alloc_mode: document.getElementById('s-manager-alloc-mode')?.value || 'request',
+      manager_alloc_daily_limit: Math.max(0, parseInt(document.getElementById('s-manager-alloc-daily')?.value, 10) || 0),
+      manager_alloc_total_limit: Math.max(0, parseInt(document.getElementById('s-manager-alloc-total')?.value, 10) || 0),
+      agent_alloc_mode: document.getElementById('s-agent-alloc-mode')?.value || 'request',
+      agent_alloc_daily_limit: Math.max(0, parseInt(document.getElementById('s-agent-alloc-daily')?.value, 10) || 0),
+      agent_alloc_total_limit: Math.max(0, parseInt(document.getElementById('s-agent-alloc-total')?.value, 10) || 0),
+      client_alloc_mode: document.getElementById('s-client-alloc-mode')?.value || 'request',
+      client_alloc_daily_limit: Math.max(0, parseInt(document.getElementById('s-client-alloc-daily')?.value, 10) || 0),
+      client_alloc_total_limit: Math.max(0, parseInt(document.getElementById('s-client-alloc-total')?.value, 10) || 0),
+      allow_manager_alloc_config: document.getElementById('s-allow-mgr-alloc')?.checked !== false,
+      allow_agent_alloc_config: document.getElementById('s-allow-ag-alloc')?.checked !== false
     };
 
     const result = await apiFetch('/api/settings', { method: 'POST', body: JSON.stringify(payload) });
@@ -11969,7 +12031,6 @@ async function renderNumberTransfersLog(page = 1) {
         <div class="page-subtitle">Complete log of all number transfers</div></div>
         <div class="page-actions">
           <button class="btn btn-outline btn-sm" onclick="toast('Exporting...', 'info')"><i class="fas fa-download"></i> Export CSV</button>
-          <button class="btn btn-outline btn-sm" onclick="renderNumberTransfersLog(1)"><i class="fas fa-sync"></i> Refresh</button>
         </div>
       </div>
       <div class="card">

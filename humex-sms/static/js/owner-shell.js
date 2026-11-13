@@ -471,7 +471,7 @@ renderDashboard = async function () {
     const yearlySmsVal = p.year != null ? p.year : (s.this_year_sms || 0);
 
     const kpiCardsHtml = (typeof zyKpiCard === 'function') ? `
-      <div class="zy-kpi-grid">
+      <div class="zy-kpi-grid stats-grid">
         ${zyKpiCard({
           title: "Today SMS",
           value: Number(todaySmsVal).toLocaleString(),
@@ -513,7 +513,7 @@ renderDashboard = async function () {
 
     const bottomKpiCardsHtml = (typeof zyKpiCard === 'function') ? `
       <div class="zy-section-title" style="margin-top:28px;margin-bottom:14px;">System Performance & Revenue</div>
-      <div class="zy-kpi-grid">
+      <div class="zy-kpi-grid stats-grid three-cards">
         ${zyKpiCard({
           title: "Revenue",
           value: `$${Number(s.revenue_today || 0).toFixed(2)}`,
@@ -730,9 +730,18 @@ renderMySms = async function (summary = false) {
   `).join('');
 
   c.innerHTML = `
-    <div class="zy-intro" style="font-size:12px;color:#64748b;margin-bottom:10px;">Here You can view all the call detail records.</div>
-    <!-- APX / ZY COMPACT FILTER BAR -->
-    <div class="zy-filter-grid" data-apx="filter-bar" style="margin-bottom:14px;">
+    <div class="page-header">
+      <div>
+        <div class="page-title"><i class="fas fa-file-invoice" style="color:#2563eb;"></i> SMS Stats &amp; Reports</div>
+        <div class="page-subtitle">Here you can view all call detail records, system traffic, and export reports.</div>
+      </div>
+    </div>
+    <!-- UNIFIED CONTINUOUS SMS REPORTS CARD (AstraSMS reference) -->
+    <div class="zy-filter-grid" data-apx="filter-bar" style="margin-bottom:20px;padding:16px;">
+      <div style="font-size:14px;font-weight:700;color:#1e293b;letter-spacing:0.2px;margin-bottom:12px;display:flex;align-items:center;gap:8px;">
+        <i class="fas fa-file-invoice" style="color:#0ea5e9;"></i>
+        <span>SMS Reports</span>
+      </div>
       <div class="zy-filter-grid-fields">
         <div>
           <label for="rp-from">From</label>
@@ -804,13 +813,13 @@ renderMySms = async function (summary = false) {
           </button>
         </div>
       </div>
-      <div class="zy-filter-divider" style="height:1px;background:#e2e8f0;margin:4px 0;"></div>
+      <div class="zy-filter-divider" style="height:1px;background:#e2e8f0;margin:6px 0;"></div>
 
       <div class="zy-table-toolbar">
         <div class="zy-toolbar-left">
           <div class="zy-search-wrap">
             <i class="fas fa-search"></i>
-            <input type="text" class="zy-toolbar-search" placeholder="Search..." oninput="if(typeof zyToolbarFilter==='function')zyToolbarFilter(this.value)">
+            <input type="text" class="zy-toolbar-search" placeholder="Number, CLI, message, range" oninput="if(typeof zyToolbarFilter==='function')zyToolbarFilter(this.value)">
           </div>
           <div class="zy-toolbar-select-wrap">
             <label class="zy-toolbar-label" for="rp-limit">Show Records</label>
@@ -839,14 +848,9 @@ renderMySms = async function (summary = false) {
           </div>
         </div>
       </div>
-    </div>
 
-    <!-- Results Panel: SMS REPORTS & STATS -->
-    <div class="zy-panel" style="border:1px solid #cbd5e1;border-radius:4px;background:#ffffff;box-shadow:0 1px 3px rgba(0,0,0,0.05);overflow:hidden;">
-      <div class="zy-panel-head" style="background:#f1f5f9;border-bottom:1px solid #cbd5e1;padding:10px 14px;font-size:13.5px;font-weight:700;color:#1e293b;letter-spacing:0.3px;text-transform:uppercase;">
-        SMS REPORTS &amp; STATS
-      </div>
-      <div class="zy-panel-body" id="rp-body" style="padding:14px;">
+      <!-- Results Table: seamless unified report body inside the single card -->
+      <div class="zy-panel-body" id="rp-body" style="padding:0;margin-top:12px;">
         <div class="zy-loading" style="padding:40px;text-align:center;color:#64748b;">Loading CDR records…</div>
       </div>
     </div>
@@ -1050,7 +1054,9 @@ async function renderMySmsLoad(pageOrSummary = 1) {
       ];
 
       const rows = data.map(s => {
-        const dtStr = (s.timestamp || s.date || '').replace('T', ' ').slice(0, 19);
+        const dtCell = typeof zyFormatDateTimeStacked === 'function'
+          ? zyFormatDateTimeStacked(s.timestamp || s.date)
+          : { v: (s.timestamp || s.date || '').replace('T', ' ').slice(0, 19), h: (s.timestamp || s.date || '').replace('T', ' ').slice(0, 19) };
         const myPayoutVal = parseFloat(s.my_payout != null ? s.my_payout : (s.company_rate != null ? s.company_rate : (s.payout || 0))) || 0;
         const agentPayoutVal = parseFloat(s.agent_payout != null ? s.agent_payout : (s.agent_rate != null ? s.agent_rate : 0)) || 0;
         const profitVal = Math.max(0, myPayoutVal - agentPayoutVal);
@@ -1064,7 +1070,7 @@ async function renderMySmsLoad(pageOrSummary = 1) {
         const managerVal = s.manager || s.manager_username || '—';
 
         return [
-          dtStr,
+          dtCell,
           s.provider || '—',
           s.range || s.range_name || s.range_label || s.country || '—',
           s.type || 'General',
