@@ -862,7 +862,6 @@ async function pgMySms(page = 1) {
           logs.map(s => {
             const rInfo = (s.range_id && rgLookup[s.range_id]) || rgLookup[`${s.country}|${s.provider}`];
             const dispRange = s.range_name || s.range_label || s.range || rInfo?.range_name || rInfo?.name || (s.country && s.provider && s.provider !== 'Manual' ? `${s.country} - ${s.provider}` : (s.country || '—'));
-            const msgHtml = typeof zyHighlightOtp === 'function' ? zyHighlightOtp(s.message) : escapeHtml(s.message || '');
             return [
               typeof zyFormatDateTimeStacked === 'function' ? zyFormatDateTimeStacked(s.timestamp || s.date).h : fmtShort(s.timestamp),
               escapeHtml(s.provider || '—'),
@@ -870,7 +869,7 @@ async function pgMySms(page = 1) {
               s.type === 'Test Panel' ? 'Test Panel' : 'General',
               `<span class="monospace">${escapeHtml(s.number || '—')}</span>`,
               `<span class="monospace">${escapeHtml(s.cli || '—')}</span>`,
-              `<div style="max-width:300px;white-space:normal;line-height:1.4;word-break:break-word;">${msgHtml}</div>`,
+              typeof zyRenderSmsCell === 'function' ? zyRenderSmsCell(s.message) : `<div class="zy-sms-cell">${escapeHtml(s.message || '')}</div>`,
               'USD',
               `<span class="text-success">$${s.profit || s.cost || 0}</span>`
             ];

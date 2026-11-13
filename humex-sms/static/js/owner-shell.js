@@ -1075,7 +1075,9 @@ async function renderMySmsLoad(pageOrSummary = 1) {
         const cliStr = String(s.cli || s.app || '').trim();
         const cliHtml = cliStr ? `<span class="monospace" style="white-space:normal;word-break:break-word;">${zyEsc(cliStr)}</span>` : '—';
         const msgRaw = String(s.message || '');
-        const msgHtml = typeof zyHighlightOtp === 'function' ? zyHighlightOtp(msgRaw) : zyEsc(msgRaw);
+        const msgCellHtml = typeof zyRenderSmsCell === 'function'
+          ? zyRenderSmsCell(msgRaw)
+          : `<div class="zy-sms-cell">${zyEsc(msgRaw)}</div>`;
 
         const agentVal = cleanOrg(s.agent || s.agent_username || s.agent_name);
         const managerVal = cleanOrg(s.manager || s.manager_username);
@@ -1088,7 +1090,7 @@ async function renderMySmsLoad(pageOrSummary = 1) {
           typeVal,
           { v: numStr, h: numberHtml },
           { v: cliStr, h: cliHtml },
-          { v: msgRaw, h: `<div style="max-width:300px;white-space:normal;line-height:1.4;word-break:break-word;">${msgHtml}</div>` },
+          { v: msgRaw, h: msgCellHtml },
           { v: agentVal, h: agentVal ? zyEsc(agentVal) : '' },
           { v: managerVal, h: managerVal ? zyEsc(managerVal) : '' },
           zyEsc(s.currency || '$'),

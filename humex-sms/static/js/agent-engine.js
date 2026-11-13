@@ -2418,7 +2418,7 @@ async function pgDetailedSms(page = 1) {
               s.type === 'Test Panel' ? 'Test Panel' : 'General',
               `<span class="monospace">${escapeHtml(s.number || '—')}</span>`,
               `<span class="monospace">${escapeHtml(s.cli || '—')}</span>`,
-              `<div style="max-width:300px;white-space:normal;line-height:1.4;word-break:break-word;">${escapeHtml(s.message || '')}</div>`,
+              typeof zyRenderSmsCell === 'function' ? zyRenderSmsCell(s.message || '') : `<div class="zy-sms-cell">${escapeHtml(s.message || '')}</div>`,
               escapeHtml(cleanCl),
               'USD',
               `<span class="text-success">$${Number(s.my_payout ?? s.agent_amount ?? s.agent_payout ?? s.profit ?? 0).toFixed(4)}</span>`

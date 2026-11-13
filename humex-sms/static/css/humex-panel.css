@@ -5149,6 +5149,17 @@ table.zy-dt2-table td .monospace,
   display: inline-block;
 }
 
+/* CDR SMS message cell: max ~32 chars per line (~"Your Whop verification code is:") then wrap cleanly */
+.zy-sms-cell {
+  display: block;
+  min-width: 215px;
+  max-width: 255px;
+  white-space: normal;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
 /* Money / Payout / Rate: right align, weight 600 */
 table td.col-money,
 table th.col-money,

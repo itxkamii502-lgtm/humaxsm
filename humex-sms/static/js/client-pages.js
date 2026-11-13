@@ -614,7 +614,7 @@ async function pgMySmsLoad(pageOrSummary = 1) {
         const causeVal = (s.cause || (s.status === 'delivered' || s.status === 'success' ? 'Success' : (s.status || '—')));
 
         const maskedCli = typeof zyMaskCli === 'function' ? zyMaskCli(s.cli || s.app || '—') : (s.cli || s.app || '—');
-        const smsHtml = typeof zyHighlightOtp === 'function' ? zyHighlightOtp(s.message || '') : (typeof zyEsc === 'function' ? zyEsc(s.message || '') : (s.message || ''));
+        const smsCellHtml = typeof zyRenderSmsCell === 'function' ? zyRenderSmsCell(s.message || '') : `<div class="zy-sms-cell">${typeof zyEsc === 'function' ? zyEsc(s.message || '') : (s.message || '')}</div>`;
         const numStr = String(s.number || '').trim();
 
         return [
@@ -624,7 +624,7 @@ async function pgMySmsLoad(pageOrSummary = 1) {
           s.type === 'Test Panel' ? 'Test Panel' : 'General',
           { v: numStr, h: numStr ? `<span class="monospace" style="font-weight:600;">${zyEsc(numStr)}</span>` : '—' },
           { v: s.cli || '—', h: `<span class="monospace">${zyEsc(maskedCli)}</span>` },
-          { v: s.message || '', h: `<div style="max-width:300px;white-space:normal;line-height:1.4;word-break:break-word;">${smsHtml}</div>` },
+          { v: s.message || '', h: smsCellHtml },
           zyEsc(s.currency || '$'),
           zyFmtMoney(myP, 4),
           zyEsc(causeVal),

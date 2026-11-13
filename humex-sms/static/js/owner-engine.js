@@ -4285,7 +4285,7 @@ async function renderTestPanelNumbers(page = 1) {
               fmtShort(s.timestamp),
               `<span class="monospace">${escapeHtml(s.number || '—')}</span>`,
               `<span style="font-weight:600">${escapeHtml(s.cli || '—')}</span>`,
-              `<span class="text-muted">${escapeHtml(s.message || '—')}</span>`
+              typeof zyRenderSmsCell === 'function' ? zyRenderSmsCell(s.message) : `<div class="zy-sms-cell">${escapeHtml(s.message || '—')}</div>`
             ])
           )}
         </div>
@@ -4727,7 +4727,7 @@ async function loadAdRecentSms() {
       const rLabel = escapeHtml(s.range_label || s.range_name || s.country || '—');
       const numCell = `<span class="monospace" style="font-weight:600;">${escapeHtml(s.number || '—')}</span>`;
       const cliCell = `<span class="monospace" style="color:#2563eb;font-weight:600;">${escapeHtml(s.cli || s.app || '—')}</span>`;
-      const msgCell = `<div style="max-width:300px;white-space:normal;line-height:1.4;word-break:break-word;">${zyHighlightOtp(s.message)}</div>`;
+      const msgCell = typeof zyRenderSmsCell === 'function' ? zyRenderSmsCell(s.message) : `<div class="zy-sms-cell">${zyHighlightOtp(s.message)}</div>`;
       const statusBadge = `<span class="badge badge-green" style="font-size:11px;"><i class="fas fa-check"></i> Delivered</span>`;
 
       return [dtCell, prov, rLabel, 'Test Panel', { v: s.number || '', h: numCell }, { v: s.cli || '', h: cliCell }, { v: s.message || '', h: msgCell }, { v: 'delivered', h: statusBadge }];
@@ -5136,7 +5136,7 @@ async function renderMySmsLoad(isSummary = false) {
           s.type === 'Test Panel' ? 'Test Panel' : 'General',
           `<span class="monospace" style="font-weight:600;">${escapeHtml(s.number || '—')}</span>`,
           `<span class="monospace" style="color:#2563eb;font-weight:600;">${escapeHtml(s.cli || s.app || '—')}</span>`,
-          `<div style="max-width:300px;white-space:normal;line-height:1.4;word-break:break-word;">${zyHighlightOtp(s.message)}</div>`,
+          typeof zyRenderSmsCell === 'function' ? zyRenderSmsCell(s.message) : `<div class="zy-sms-cell">${zyHighlightOtp(s.message)}</div>`,
           escapeHtml(cleanOrg(s.agent || s.agent_username)),
           escapeHtml(cleanOrg(s.manager || s.manager_username)),
           escapeHtml(s.currency || '$'),
@@ -5761,7 +5761,7 @@ async function doSearchSms() {
         s.type === 'Test Panel' ? 'Test Panel' : 'General',
         `<span class="monospace">${escapeHtml(s.number || '—')}</span>`,
         `<span style="font-weight:600">${escapeHtml(s.cli || '—')}</span>`,
-        escapeHtml(s.message || '—'),
+        typeof zyRenderSmsCell === 'function' ? zyRenderSmsCell(s.message) : `<div class="zy-sms-cell">${escapeHtml(s.message || '—')}</div>`,
         `<span class="text-success">$${s.profit || 0}</span>`,
         statusBadge(s.status)
       ])
@@ -5881,7 +5881,7 @@ async function renderDeliveryLogs(page = 1) {
             s.type === 'Test Panel' ? 'Test Panel' : 'General',
             `<span class="monospace">${escapeHtml(s.number || '—')}</span>`,
             escapeHtml(s.cli || '—'),
-            `<span class="text-muted">${escapeHtml(s.message || '—')}</span>`,
+            typeof zyRenderSmsCell === 'function' ? zyRenderSmsCell(s.message) : `<div class="zy-sms-cell">${escapeHtml(s.message || '—')}</div>`,
             escapeHtml(s.currency || 'USD'),
             `<span class="text-success">$${s.profit || 0}</span>`
           ])

@@ -2870,6 +2870,51 @@ window.zyHighlightOtp = function(msg) {
     : String(msg).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 };
 
+// Wrap SMS text at word boundaries so each line holds at most 32 chars (e.g. "Your Whop verification code is:")
+window.zyWrapSmsText = function(msg, maxChars = 32) {
+  const esc = (s) => (typeof zyEsc === 'function'
+    ? zyEsc(s)
+    : String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'));
+  if (msg == null || String(msg).trim() === '') return '—';
+  const paragraphs = String(msg).replace(/\r\n?/g, '\n').split('\n');
+  const outLines = [];
+  for (const para of paragraphs) {
+    const trimmed = para.trim();
+    if (!trimmed) continue;
+    const words = trimmed.split(/\s+/);
+    let line = '';
+    for (const w of words) {
+      if (w.length > maxChars) {
+        if (line) {
+          outLines.push(line);
+          line = '';
+        }
+        for (let i = 0; i < w.length; i += maxChars) {
+          const chunk = w.slice(i, i + maxChars);
+          if (chunk.length === maxChars && i + maxChars < w.length) {
+            outLines.push(chunk);
+          } else {
+            line = chunk;
+          }
+        }
+      } else if (!line) {
+        line = w;
+      } else if (line.length + 1 + w.length <= maxChars) {
+        line += ' ' + w;
+      } else {
+        outLines.push(line);
+        line = w;
+      }
+    }
+    if (line) outLines.push(line);
+  }
+  return outLines.length ? outLines.map(esc).join('<br>') : '—';
+};
+
+window.zyRenderSmsCell = function(msg, maxChars = 32) {
+  return `<div class="zy-sms-cell">${window.zyWrapSmsText(msg, maxChars)}</div>`;
+};
+
 // ── Floating Action Button (FAB) (Hidden as requested) ──
 window.zyRenderFab = function(_tooltipText = '', _onClickHandler = '') {
   return '';

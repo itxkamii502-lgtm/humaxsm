@@ -1514,7 +1514,7 @@ async function zyCdrLoad(pageOrSummary = 1) {
         const clP = parseFloat(s.client_payout != null ? s.client_payout : (s.client_rate || 0)) || 0;
         const prof = parseFloat(s.agent_amount != null ? s.agent_amount : Math.max(0, myP - clP)) || 0;
         const maskedCli = zyMaskCli(s.cli || s.app || '—');
-        const smsHtml = typeof zyHighlightOtp === 'function' ? zyHighlightOtp(s.message || '') : zyEsc(s.message || '');
+        const smsCellHtml = typeof zyRenderSmsCell === 'function' ? zyRenderSmsCell(s.message || '') : `<div class="zy-sms-cell">${zyEsc(s.message || '')}</div>`;
         const clName = cleanOrg(s.client || s.client_username || s.client_name || s.user);
         const numStr = String(s.number || '').trim();
 
@@ -1525,7 +1525,7 @@ async function zyCdrLoad(pageOrSummary = 1) {
           s.type === 'Test Panel' ? 'Test Panel' : 'General',
           { v: numStr, h: numStr ? `<span class="monospace" style="font-weight:600;">${zyEsc(numStr)}</span>` : '—' },
           { v: s.cli || '—', h: `<span class="monospace">${zyEsc(maskedCli)}</span>` },
-          { v: s.message || '', h: `<div style="max-width:300px;white-space:normal;line-height:1.4;word-break:break-word;">${smsHtml}</div>` },
+          { v: s.message || '', h: smsCellHtml },
           { v: clName, h: clName ? zyEsc(clName) : '' },
           zyEsc(s.currency || '$'),
           Number(myP).toFixed(4),

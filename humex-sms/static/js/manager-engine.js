@@ -1827,7 +1827,7 @@ async function loadMgrCdr(page = 1) {
           escapeHtml(s.range_name || s.range_label || s.range || s.country || '—'),
           `<span class="monospace">${escapeHtml(s.number || '—')}</span>`,
           escapeHtml(s.cli || '—'),
-          `<span class="text-muted">${escapeHtml(s.message || '—')}</span>`,
+          typeof zyRenderSmsCell === 'function' ? zyRenderSmsCell(s.message) : `<div class="zy-sms-cell">${escapeHtml(s.message || '—')}</div>`,
           'USD',
           `<span class="text-success">$${s.profit || 0}</span>`
         ])
