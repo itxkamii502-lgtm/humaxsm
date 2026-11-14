@@ -15,8 +15,10 @@ loadPage = function(page) {
     document.querySelectorAll('.nav-item').forEach(e => e.classList.remove('active'));
     const navEl = document.getElementById(`nav-${page}`);
     if (navEl) navEl.classList.add('active');
-    document.getElementById('breadcrumb').textContent = navEl ? navEl.querySelector('span').textContent : page;
-    document.getElementById('page-content').innerHTML = `<div class="empty-state"><div class="spinner"></div></div>`;
+    const bcEl = document.getElementById('breadcrumb') || document.querySelector('[data-breadcrumb="1"]');
+    if (bcEl) bcEl.textContent = navEl ? (navEl.querySelector('span')?.textContent || page) : page;
+    const pcEl = document.getElementById('page-content');
+    if (pcEl) pcEl.innerHTML = `<div class="empty-state"><div class="spinner"></div></div>`;
     _agExtraPages[page]();
   } else {
     _agOrigLoad(page);
@@ -338,7 +340,8 @@ async function returnSelectedAssignedNumbers() {
 
 function downloadAgentNumbers() {
   try {
-    window.open(`/api/numbers/download?agent_id=${AGENT_ID}`, '_blank');
+    const url = `/api/numbers/download?agent_id=${AGENT_ID}`;
+    if (typeof zyDownloadFile === 'function') zyDownloadFile(url, 'agent_numbers.csv');
     toast('Downloading numbers CSV...', 'info');
   } catch (err) {
     console.error('Download error:', err);
@@ -379,11 +382,11 @@ async function pgAgentTransferHistory(page = 1) {
             t.from_user_id === AGENT_ID
               ? `<span class="badge badge-red">Sent</span>`
               : `<span class="badge badge-green">Received</span>`,
-            `<strong>${t.from_username || '—'}</strong> <span class="badge badge-${t.from_role === 'Admin' ? 'red' : 'purple'}">${t.from_role || '—'}</span>`,
-            `<strong>${t.to_username || '—'}</strong> <span class="badge badge-${t.to_role === 'Agent' ? 'cyan' : 'green'}">${t.to_role || '—'}</span>`,
+            `<strong>${escapeHtml(t.from_username || '—')}</strong> <span class="badge badge-${t.from_role === 'Admin' ? 'red' : 'purple'}">${escapeHtml(t.from_role || '—')}</span>`,
+            `<strong>${escapeHtml(t.to_username || '—')}</strong> <span class="badge badge-${t.to_role === 'Agent' ? 'cyan' : 'green'}">${escapeHtml(t.to_role || '—')}</span>`,
             `<span class="badge badge-blue">${t.count || 0}</span>`,
-            t.service || '—',
-            t.notes || '—',
+            escapeHtml(t.service || '—'),
+            escapeHtml(t.notes || '—'),
             fmtShort(t.timestamp),
             statusBadge(t.status)
           ])
@@ -401,7 +404,8 @@ async function pgAgentTransferHistory(page = 1) {
 function exportTransferHistory() {
   try {
     toast('Exporting transfer history...', 'info');
-    window.open(`/api/number-transfers/export?agent_id=${AGENT_ID}`, '_blank');
+    const url = `/api/number-transfers/export?agent_id=${AGENT_ID}`;
+    if (typeof zyDownloadFile === 'function') zyDownloadFile(url, 'transfer_history.csv');
   } catch (err) {
     console.error('Export error:', err);
     toast('Failed to export', 'error');

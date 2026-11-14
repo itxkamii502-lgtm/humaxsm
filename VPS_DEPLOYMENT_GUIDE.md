@@ -1,4 +1,4 @@
-# ALPHA SMS — Complete VPS Production Deployment Guide
+# HUMEX SMS — Complete VPS Production Deployment Guide
 
 Yeh guide HUMEX SMS softswitch platform ko Kisi bhi Linux VPS (Ubuntu 20.04 / 22.04 / 24.04 ya Debian) par deploy karne ke liye step-by-step instructions provide karti hai.
 
@@ -61,7 +61,7 @@ npm install
 cp .env.example .env
 nano .env
 ```
-Apni zaroorat ke mutabiq values set karein (e.g. `SMPP_SECRET`, `PORT=3000`, `TRUST_PROXY=1`).
+Apni zaroorat ke mutabiq values set karein (e.g. `SMPP_SECRET`, `INBOUND_TOKEN`, `ALLOWED_ORIGINS`, `PORT=3000`, `TRUST_PROXY=1`).
 
 ---
 
@@ -174,5 +174,5 @@ node reset-owner-password.js
 
 # Manual Database Backup:
 # Backups auto-generate in backups/ directory, ya manually:
-tar -czvf backup-$(date +%F).tar.gz "HUMEX SMS/data"
+tar -czvf backup-$(date +%F).tar.gz "humex-sms/data"
 ```

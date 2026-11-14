@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════
-   𝑴𝑨𝑰𝑻 𝑺𝑴𝑺 — CLIENT pages. Requires speed-kit.js
+   HUMEX SMS — CLIENT pages. Requires shared-ui-kit.js
    ═══════════════════════════════════════════════════════════════ */
 
 let ZY_RANGES = [], ZY_NUMROWS = [], ZY_TESTNUMS = [];
@@ -735,7 +735,7 @@ function zyTestFilter() {
   t.page = 1; zy2Render('dt-testnums');
 }
 
-/* ═══ CLI SEARCH (AstraSMS-Style Realtime Route Inspector) ═════ */
+/* ═══ CLI SEARCH (Realtime Route Inspector) ═════════════════════ */
 let _clCliHours = 24;
 let _clCliRoutes = [];
 
@@ -961,12 +961,23 @@ async function pgClientCreditNotesLoad() {
       n.currency || 'USD',
       Number(n.amount || 0).toFixed(3),
       isNaN(due) ? '' : due.toISOString().slice(0, 10),
-      { v: '', h: `<button class="zy-rowbtn" onclick="window.open('/api/credit-notes/${n.id}/pdf', '_blank')" title="Download Voucher"><i class="fas fa-file-invoice" style="color:var(--sp-primary);"></i></button>` }
+      { v: '', h: `<button class="zy-rowbtn" onclick="zyClientCreditPdf(${Number(n.id)})" title="Download Voucher"><i class="fas fa-file-invoice" style="color:var(--sp-primary);"></i></button>` }
     ];
   });
   body.innerHTML = zyDT2('dt-ccn', {
     cols: ['Date', 'Description', 'Term', 'Currency', 'Amount', 'Due Date', 'Voucher'], rows, sort: 0, dir: -1 });
   zy2Render('dt-ccn');
+}
+
+async function zyClientCreditPdf(id) {
+  try {
+    const res = await fetch(`/api/credit-notes/${Number(id)}/pdf`, { credentials: 'include' });
+    if (!res.ok) { if (typeof toast === 'function') toast('Unable to open voucher', 'error'); return; }
+    const html = await res.text();
+    if (typeof window.zyPrintHtml === 'function') window.zyPrintHtml(html);
+  } catch (_) {
+    if (typeof toast === 'function') toast('Unable to open voucher', 'error');
+  }
 }
 
 /* ═══ PAYMENT REQUESTS ══════════════════════════════════════ */
@@ -1048,7 +1059,7 @@ window.zyClientRequestPayoutModal = async function(currentBal = 0) {
   try {
     const settings = await apiFetch('/api/settings');
     minPayout = Number(settings?.min_payout ?? 10);
-  } catch (e) {}
+  } catch (e) { console.warn('Client settings fetch error:', e); }
 
   zyModal('Request Payout', `
     <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px 14px;margin-bottom:14px;font-size:13px;">

@@ -235,17 +235,26 @@ function readDb(name) {
   }
 }
 
+function atomicWriteFileSync(filePath, content) {
+  const rand = crypto.randomBytes(6).toString('hex');
+  const tmpPath = `${filePath}.tmp.${process.pid}.${rand}`;
+  fs.writeFileSync(tmpPath, content, 'utf-8');
+  fs.renameSync(tmpPath, filePath);
+}
+
 function writeDb(name, data) {
   try {
     const filePath = path.join(DATA_DIR, `${name}.json`);
-    const tmpPath = path.join(DATA_DIR, `${name}.tmp.json`);
     const jsonStr = (name === 'sms_log' || name === 'test_sms_logs')
       ? JSON.stringify(data)
       : JSON.stringify(data, null, 2);
-    fs.writeFileSync(tmpPath, jsonStr, 'utf-8');
-    fs.renameSync(tmpPath, filePath);
+    atomicWriteFileSync(filePath, jsonStr);
     DB_CACHE.set(name, data);
-    DB_MTIME.set(name, Date.now());
+    try {
+      DB_MTIME.set(name, fs.statSync(filePath).mtimeMs || Date.now());
+    } catch (_) {
+      DB_MTIME.set(name, Date.now());
+    }
     if (name === 'sms_log') {
       // everything in the journal is now inside sms_log.json
       try { fs.writeFileSync(SMS_JOURNAL, ''); } catch (e) { /* ignore */ }
@@ -1861,17 +1870,44 @@ const ALLOWED_ORIGINS = new Set(
     .filter(Boolean)
 );
 
+function getEffectiveHosts(req) {
+  const hosts = new Set();
+  if (!req || !req.headers) return hosts;
+  const h = String(req.headers.host || '').split(',')[0].trim().toLowerCase();
+  if (h) hosts.add(h);
+  if (process.env.TRUST_PROXY !== 'false') {
+    const xfh = String(req.headers['x-forwarded-host'] || '').split(',')[0].trim().toLowerCase();
+    if (xfh) hosts.add(xfh);
+  }
+  return hosts;
+}
+
+function isRequestHttps(req) {
+  if (!req) return false;
+  if (req.secure) return true;
+  const xfp = String((req.headers && req.headers['x-forwarded-proto']) || '').toLowerCase();
+  if (xfp.includes('https')) return true;
+  const origin = String((req.headers && req.headers.origin) || '').toLowerCase();
+  if (origin.startsWith('https://')) return true;
+  const referer = String((req.headers && req.headers.referer) || '').toLowerCase();
+  if (referer.startsWith('https://')) return true;
+  const xfh = String((req.headers && req.headers['x-forwarded-host']) || '').split(',')[0].trim().toLowerCase();
+  if (xfh && (xfh.endsWith('.run.app') || xfh.endsWith('.googleusercontent.com'))) return true;
+  return false;
+}
+
 app.use((req, res, next) => {
   const origin = req.headers.origin;
-  const host = req.headers.host;
+  const effectiveHosts = getEffectiveHosts(req);
   let isAllowed = false;
 
   if (origin) {
     const originLower = origin.toLowerCase();
-    const isSameOrigin = host && (
-      originLower === `http://${host.toLowerCase()}` ||
-      originLower === `https://${host.toLowerCase()}`
-    );
+    let isSameOrigin = false;
+    try {
+      const parsedOrigin = new URL(originLower);
+      isSameOrigin = effectiveHosts.has(parsedOrigin.host.toLowerCase());
+    } catch (_) {}
     if (isSameOrigin || ALLOWED_ORIGINS.has(originLower)) {
       isAllowed = true;
       res.setHeader('Access-Control-Allow-Origin', origin);
@@ -1882,6 +1918,15 @@ app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Session-Token, X-Manager-ID, X-Agent-ID, X-Client-ID, X-Inbound-Token');
   res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  if (isRequestHttps(req)) {
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  }
+  res.setHeader(
+    'Content-Security-Policy',
+    "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; font-src 'self' data: https://fonts.gstatic.com https://cdnjs.cloudflare.com; img-src 'self' data: blob: https:; connect-src 'self' ws: wss:; frame-ancestors *; object-src 'none'; base-uri 'self';"
+  );
   // X-Frame-Options omitted to allow embedding in AI Studio preview iframe
   if (req.method === 'OPTIONS') {
     return res.sendStatus(isAllowed || !origin ? 200 : 403);
@@ -1901,12 +1946,13 @@ const staticOpts = {
 // Intercept direct HTML file requests with strict role authorization
 const DIRECT_HTML_ROLES = {
   'index.html': ['owner', 'admin'],
-  'dashboard.html': ['owner', 'admin'],
   'manager.html': ['manager'],
   'agent.html': ['agent'],
   'client.html': ['client', 'reseller'],
   'testpanel.html': ['testpanel']
 };
+
+app.get(['/dashboard.html', '/static/dashboard.html'], (req, res) => res.redirect('/login'));
 
 app.get(['/static/:file(*.html)', '/:file(*.html)'], (req, res, next) => {
   const baseName = path.basename(req.params.file || '').toLowerCase();
@@ -2668,6 +2714,15 @@ function getThemeCss(settings) {
   `;
 }
 
+function escHtml(v) {
+  return String(v ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function sendInjectedHtml(res, filePath) {
   try {
     let content = fs.readFileSync(filePath, 'utf-8');
@@ -2876,8 +2931,10 @@ function savePersistedSessions() {
         obj[hashedToken] = sess;
       }
     }
-    fs.writeFileSync(SESSIONS_FILE, JSON.stringify(obj, null, 2), 'utf8');
-  } catch (_) {}
+    atomicWriteFileSync(SESSIONS_FILE, JSON.stringify(obj, null, 2));
+  } catch (e) {
+    console.warn('Error saving sessions:', e.message);
+  }
 }
 
 loadPersistedSessions();
@@ -2902,7 +2959,7 @@ function getSessionToken(req) {
   const xSession = (req && req.headers && (req.headers['x-session-token'] || req.headers['x-auth-token'])) || '';
   if (xSession) return String(xSession).trim();
   const cookies = parseCookies(req);
-  return cookies['alpha_session_token'] || cookies['session_token'] || (req && req.query && (req.query.token || req.query.session_token)) || null;
+  return cookies['alpha_session_token'] || cookies['session_token'] || null;
 }
 
 function getSessionUser(req) {
@@ -3004,9 +3061,13 @@ function requireApiRole(allowedRoles) {
 // ── Role Page Routes with Strict Server-Side Isolation (/ints/ namespace) ───────────
 app.get('/ints/login', (req, res) => {
   // If navigating directly to login, always deliver the login screen freshly
+  const isHttps = isRequestHttps(req);
+  const sec = isHttps ? '; Secure; Partitioned' : '';
+  const sameSite = isHttps ? 'None' : 'Lax';
   res.setHeader('Set-Cookie', [
-    `alpha_session_token=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax`,
-    `alpha_session_role=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax`
+    `alpha_session_token=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; SameSite=${sameSite}${sec}`,
+    `alpha_session_role=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=${sameSite}${sec}`,
+    `session_token=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; SameSite=${sameSite}${sec}`
   ]);
   sendInjectedHtml(res, path.join(STATIC_DIR, 'login.html'));
 });
@@ -3072,17 +3133,6 @@ app.get('/ints/:role/:page', (req, res) => {
   const user = getSessionUser(req);
   if (!user) {
     return res.redirect('/ints/login');
-  }
-  const rawToken = getSessionToken(req);
-  if (rawToken && req.query && req.query.token) {
-    const isHttps = req.secure || req.headers['x-forwarded-proto'] === 'https';
-    const sec = isHttps ? '; Secure; Partitioned' : '';
-    const sameSite = isHttps ? 'None' : 'Lax';
-    res.setHeader('Set-Cookie', [
-      `alpha_session_token=${rawToken}; Path=/; HttpOnly; SameSite=${sameSite}; Max-Age=86400${sec}`,
-      `alpha_session_role=${user.role || targetRole}; Path=/; SameSite=${sameSite}; Max-Age=86400${sec}`,
-      `session_token=${rawToken}; Path=/; SameSite=${sameSite}; Max-Age=86400${sec}`
-    ]);
   }
   const userRole = (user.role || '').toLowerCase();
   const isOwnerOrAdmin = r => r === 'admin' || r === 'owner';
@@ -3348,6 +3398,33 @@ app.use('/api', (req, res, next) => {
   // 5. Everything else needs a session
   const user = getSessionUser(req);
   if (!user) return res.status(401).json({ error: 'Unauthorized. Please log in.' });
+
+  // 5b. CSRF origin check for cookie-authenticated state-changing browser requests
+  const hasExplicitAuthHeader = Boolean(
+    (req.headers['authorization'] && String(req.headers['authorization']).startsWith('Bearer ')) ||
+    req.headers['x-session-token'] ||
+    req.headers['x-auth-token']
+  );
+  if (WRITE_METHODS.has(method) && !hasExplicitAuthHeader) {
+    const reqOrigin = req.headers.origin;
+    const reqReferer = req.headers.referer;
+    const effectiveHosts = getEffectiveHosts(req);
+    const checkUrlHost = (rawUrl) => {
+      try {
+        const u = new URL(rawUrl);
+        return effectiveHosts.has(u.host.toLowerCase()) || ALLOWED_ORIGINS.has(`${u.protocol}//${u.host}`.toLowerCase());
+      } catch (_) {
+        return false;
+      }
+    };
+    if (reqOrigin && !checkUrlHost(reqOrigin)) {
+      return res.status(403).json({ error: 'Forbidden. Invalid CSRF origin.' });
+    }
+    if (!reqOrigin && reqReferer && !checkUrlHost(reqReferer)) {
+      return res.status(403).json({ error: 'Forbidden. Invalid CSRF referer.' });
+    }
+  }
+
   req.sessionUser = user;
   const role = normRole(user.role);
 
@@ -3398,25 +3475,23 @@ app.post('/api/auth/login', (req, res) => {
     return res.status(400).json({ success: false, error: 'Username and password are required', detail: 'Username and password are required' });
   }
 
-  // Strict math captcha verification with auto-pruning
+  // Strict math captcha verification (always required)
   cleanExpiredCaptchas();
-  if (captcha_id !== undefined || captcha_answer !== undefined || activeCaptchas.size > 0) {
-    if (!captcha_id || captcha_answer === undefined || String(captcha_answer).trim() === '') {
-      return res.status(400).json({ success: false, error: 'Please enter the correct answer to the math captcha.', detail: 'Missing captcha' });
-    }
-    const capRecord = activeCaptchas.get(String(captcha_id));
-    if (!capRecord || Date.now() > capRecord.expires) {
-      if (capRecord) activeCaptchas.delete(String(captcha_id));
-      return res.status(400).json({ success: false, error: 'Captcha expired. Please refresh and try again.', detail: 'Captcha expired' });
-    }
-    const parsedAns = parseInt(String(captcha_answer).trim(), 10);
-    if (isNaN(parsedAns) || parsedAns !== capRecord.answer) {
-      activeCaptchas.delete(String(captcha_id));
-      return res.status(400).json({ success: false, error: 'Incorrect captcha answer. Please try again.', detail: 'Invalid captcha' });
-    }
-    // Captcha is single-use: consume immediately upon verification
-    activeCaptchas.delete(String(captcha_id));
+  if (!captcha_id || captcha_answer === undefined || String(captcha_answer).trim() === '') {
+    return res.status(400).json({ success: false, error: 'Please enter the correct answer to the math captcha.', detail: 'Missing captcha' });
   }
+  const capRecord = activeCaptchas.get(String(captcha_id));
+  if (!capRecord || Date.now() > capRecord.expires) {
+    if (capRecord) activeCaptchas.delete(String(captcha_id));
+    return res.status(400).json({ success: false, error: 'Captcha expired. Please refresh and try again.', detail: 'Captcha expired' });
+  }
+  const parsedAns = parseInt(String(captcha_answer).trim(), 10);
+  if (isNaN(parsedAns) || parsedAns !== capRecord.answer) {
+    activeCaptchas.delete(String(captcha_id));
+    return res.status(400).json({ success: false, error: 'Incorrect captcha answer. Please try again.', detail: 'Invalid captcha' });
+  }
+  // Captcha is single-use: consume immediately upon verification
+  activeCaptchas.delete(String(captcha_id));
 
   const clientIp = req.ip || (req.socket && req.socket.remoteAddress) || '127.0.0.1';
   if (isIpBlocked(clientIp)) {
@@ -3458,7 +3533,7 @@ app.post('/api/auth/login', (req, res) => {
     if (user) source = 'testpanel_credentials';
   }
 
-  // ── FIX 9 Option C: IP + user.id lockout key (after lookup, before bcrypt/2FA, exempts owner/admin) ──
+  // Lockout keys: IP+user and global per-account lockout (not bypassable by IP spoofing)
   const isOwnerOrAdmin = user && (
     (source === 'users' && (String(user.role || '').toLowerCase() === 'owner' || String(user.role || '').toLowerCase() === 'admin' || user.id === 1)) ||
     cleanU === 'kamran_bhatti' || cleanU === 'kamran' || cleanU === 'owner' || cleanU === 'admin'
@@ -3467,10 +3542,17 @@ app.post('/api/auth/login', (req, res) => {
   const userLockKey = user
     ? ('login_user:' + clientIp + ':' + user.id)
     : ('login_user:' + clientIp + ':unknown:' + cleanU);
+  const acctLockKey = user
+    ? ('login_acct:' + source + ':' + user.id)
+    : ('login_acct:unknown:' + cleanU);
 
   const maxLoginAttempts = isOwnerOrAdmin ? 10 : 5;
   const userBucket = rateLimitBuckets.get(userLockKey);
-  if (userBucket && (Date.now() - userBucket.start < 15 * 60 * 1000) && userBucket.count >= maxLoginAttempts) {
+  const acctBucket = rateLimitBuckets.get(acctLockKey);
+  if (
+    (userBucket && (Date.now() - userBucket.start < 15 * 60 * 1000) && userBucket.count >= maxLoginAttempts) ||
+    (acctBucket && (Date.now() - acctBucket.start < 15 * 60 * 1000) && acctBucket.count >= maxLoginAttempts)
+  ) {
     return res.status(429).json({ success: false, error: 'Too many failed login attempts. Please wait 15 minutes before trying again.', detail: 'Rate limit exceeded' });
   }
 
@@ -3495,6 +3577,9 @@ app.post('/api/auth/login', (req, res) => {
     // ── TWO-FACTOR AUTHENTICATION (2FA) CHECK ──
     if (user.two_fa && user.two_fa_secret) {
       if (!two_fa_code) {
+        if (isRateLimited('login_2fa_prompt:' + source + ':' + user.id, 10, 15 * 60 * 1000)) {
+          return res.status(429).json({ success: false, error: 'Too many 2FA challenges. Please wait 15 minutes.', detail: 'Rate limit exceeded' });
+        }
         return res.json({
           success: false,
           require_2fa: true,
@@ -3505,6 +3590,7 @@ app.post('/api/auth/login', (req, res) => {
         (Array.isArray(user.two_fa_backup_codes) && user.two_fa_backup_codes.includes(String(two_fa_code).trim()));
       if (!is2faValid) {
         isRateLimited(userLockKey, maxLoginAttempts, 15 * 60 * 1000);
+        isRateLimited(acctLockKey, maxLoginAttempts, 15 * 60 * 1000);
         return res.status(401).json({
           success: false,
           require_2fa: true,
@@ -3536,7 +3622,6 @@ app.post('/api/auth/login', (req, res) => {
       id: user.id || 1,
       username: user.username,
       role: role,
-      token: sessionToken,
       email: user.email || '',
       two_fa: !!user.two_fa,
       source: source,
@@ -3552,7 +3637,7 @@ app.post('/api/auth/login', (req, res) => {
     });
     savePersistedSessions();
 
-    const isHttps = req.secure || req.headers['x-forwarded-proto'] === 'https';
+    const isHttps = isRequestHttps(req);
     const sec = isHttps ? '; Secure; Partitioned' : '';
     const sameSite = isHttps ? 'None' : 'Lax';
 
@@ -3564,11 +3649,12 @@ app.post('/api/auth/login', (req, res) => {
     ]);
 
     rateLimitBuckets.delete(userLockKey);
+    rateLimitBuckets.delete(acctLockKey);
+    rateLimitBuckets.delete('login_2fa_prompt:' + source + ':' + user.id);
     logAudit(user.username, 'Login Success', `Logged in as ${role}`, 'Auth');
 
     return res.json({
       success: true,
-      token: sessionToken,
       user: userPayload,
       role: role,
       username: user.username,
@@ -3580,6 +3666,7 @@ app.post('/api/auth/login', (req, res) => {
   }
 
   isRateLimited(userLockKey, maxLoginAttempts, 15 * 60 * 1000);
+  isRateLimited(acctLockKey, maxLoginAttempts, 15 * 60 * 1000);
   logAudit(u, 'Login Failed', 'Invalid username or password', 'Auth');
   return res.status(401).json({ success: false, error: 'Invalid username or password', detail: 'Invalid username or password' });
 });
@@ -3761,12 +3848,13 @@ function handleSessionLogout(req, res) {
     activeSessions.delete(hashed);
     savePersistedSessions();
   }
-  const isHttps = req.secure || req.headers['x-forwarded-proto'] === 'https';
-  const sec = isHttps ? '; Secure' : '';
+  const isHttps = isRequestHttps(req);
+  const sec = isHttps ? '; Secure; Partitioned' : '';
+  const sameSite = isHttps ? 'None' : 'Lax';
   res.setHeader('Set-Cookie', [
-    `alpha_session_token=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; SameSite=Lax${sec}`,
-    `alpha_session_role=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax${sec}`,
-    `session_token=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; SameSite=Lax${sec}`
+    `alpha_session_token=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; SameSite=${sameSite}${sec}`,
+    `alpha_session_role=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=${sameSite}${sec}`,
+    `session_token=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; SameSite=${sameSite}${sec}`
   ]);
   res.json({ success: true, message: 'Logged out successfully' });
 }
@@ -5291,8 +5379,41 @@ app.get('/api/statements', requireAuth, (req, res) => {
   res.json({ success: true, currency, data: result });
 });
 
+function canAccessCreditNote(sessionUser, note, mgrAgentUsernames = null) {
+  if (!sessionUser || !note) return false;
+  const sRole = normRole(sessionUser.role);
+  if (sRole === 'owner') return true;
+  const uid = Number(sessionUser.id);
+  const uname = String(sessionUser.username || '').trim().toLowerCase();
+  const nUname = String(note.username || note.user || '').trim().toLowerCase();
+  if (sRole === 'manager') {
+    const agentsSet = mgrAgentUsernames || new Set(
+      (readDb('agents') || [])
+        .filter(a => Number(a.manager_id) === uid)
+        .map(a => String(a.username || '').trim().toLowerCase())
+        .filter(Boolean)
+    );
+    return Number(note.manager_id) === uid || Number(note.user_id) === uid || (uname && nUname === uname) || (nUname && agentsSet.has(nUname));
+  }
+  if (sRole === 'agent') {
+    return Number(note.agent_id) === uid || Number(note.user_id) === uid || (uname && nUname === uname);
+  }
+  if (sRole === 'client') {
+    return Number(note.client_id) === uid || Number(note.user_id) === uid || (uname && nUname === uname);
+  }
+  return false;
+}
+
 app.get('/api/credit-notes', requireAuth, (req, res) => {
-  const notes = readDb('credit_notes') || [];
+  let notes = readDb('credit_notes') || [];
+  const sRole = normRole(req.sessionUser && req.sessionUser.role);
+  if (sRole !== 'owner') {
+    const uid = Number(req.sessionUser.id);
+    const mgrAgents = sRole === 'manager'
+      ? new Set((readDb('agents') || []).filter(a => Number(a.manager_id) === uid).map(a => String(a.username || '').trim().toLowerCase()).filter(Boolean))
+      : null;
+    notes = notes.filter(n => canAccessCreditNote(req.sessionUser, n, mgrAgents));
+  }
   res.json({ success: true, data: notes });
 });
 
@@ -5303,12 +5424,22 @@ app.get('/api/credit-notes/:id/pdf', requireAuth, (req, res) => {
   if (!note) {
     return res.status(404).send('Credit note not found');
   }
+  if (!canAccessCreditNote(req.sessionUser, note)) {
+    return res.status(403).send('Forbidden. You cannot access this credit note.');
+  }
 
-  const siteName = (readDb('settings') || {}).site_name || 'ALPHA SMS';
-  const voucherNo = `CN-${String(note.id).padStart(5, '0')}`;
-  const dateStr = (note.date || note.created || new Date().toISOString()).slice(0, 10);
+  const siteName = escHtml((readDb('settings') || {}).site_name || 'HUMEX SMS');
+  const voucherNo = escHtml(`CN-${String(note.id).padStart(5, '0')}`);
+  const dateStr = escHtml((note.date || note.created || new Date().toISOString()).slice(0, 10));
   const amountStr = Number(note.amount || 0).toFixed(2);
-  const cur = note.currency || 'USD';
+  const cur = escHtml(note.currency || 'USD');
+  const statusStr = escHtml(note.status || 'Settled');
+  const recipientStr = escHtml(note.username || (note.agent_id ? 'Agent #' + note.agent_id : 'Account Holder'));
+  const roleStr = escHtml(note.role || 'Partner');
+  const accountIdStr = escHtml(note.agent_id || note.user_id || '—');
+  const termStr = escHtml(note.term || 'Weekly');
+  const reasonStr = escHtml(note.reason || 'SMS Wholesale Revenue');
+  const descReasonStr = escHtml(note.reason || 'Settlement voucher');
 
   const html = `<!DOCTYPE html>
 <html>
@@ -5346,29 +5477,29 @@ app.get('/api/credit-notes/:id/pdf', requireAuth, (req, res) => {
   <div class="header">
     <div>
       <div class="logo">HUMEX <span>SMS</span></div>
-      <div style="font-size: 12px; color: #64748b; margin-top: 4px;">Wholesale SMS Platform & Carrier Settlement</div>
+      <div style="font-size: 12px; color: #64748b; margin-top: 4px;">Wholesale SMS Platform &amp; Carrier Settlement</div>
       <span class="badge">Official Settlement Credit Note</span>
     </div>
     <div class="meta">
       <div><strong>Voucher:</strong> #${voucherNo}</div>
       <div><strong>Date:</strong> ${dateStr}</div>
       <div><strong>Currency:</strong> ${cur}</div>
-      <div><strong>Status:</strong> ${note.status || 'Settled'}</div>
+      <div><strong>Status:</strong> ${statusStr}</div>
     </div>
   </div>
 
   <div class="info-grid">
     <div class="info-box">
       <strong>Issued To</strong>
-      <div style="font-size: 15px; font-weight: 700; color: #0f172a;">${note.username || (note.agent_id ? 'Agent #' + note.agent_id : 'Account Holder')}</div>
-      <div>Role: ${note.role || 'Partner'}</div>
-      <div>Account ID: #${note.agent_id || note.user_id || '—'}</div>
+      <div style="font-size: 15px; font-weight: 700; color: #0f172a;">${recipientStr}</div>
+      <div>Role: ${roleStr}</div>
+      <div>Account ID: #${accountIdStr}</div>
     </div>
     <div class="info-box">
-      <strong>Terms & Settlement</strong>
-      <div>Payment Term: <b>${note.term || 'Weekly'}</b></div>
+      <strong>Terms &amp; Settlement</strong>
+      <div>Payment Term: <b>${termStr}</b></div>
       <div>Transaction Type: Credit Note Settlement</div>
-      <div>Settled Via: ${note.reason || 'SMS Wholesale Revenue'}</div>
+      <div>Settled Via: ${reasonStr}</div>
     </div>
   </div>
 
@@ -5383,9 +5514,9 @@ app.get('/api/credit-notes/:id/pdf', requireAuth, (req, res) => {
     </thead>
     <tbody>
       <tr>
-        <td><strong>Wholesale SMS Commission & Payout</strong><br><span style="font-size: 12px; color: #64748b;">${note.reason || 'Settlement voucher'}</span></td>
+        <td><strong>Wholesale SMS Commission &amp; Payout</strong><br><span style="font-size: 12px; color: #64748b;">${descReasonStr}</span></td>
         <td>#${voucherNo}</td>
-        <td>${note.term || 'Weekly'}</td>
+        <td>${termStr}</td>
         <td style="text-align: right; font-weight: 700;">$${amountStr}</td>
       </tr>
     </tbody>
@@ -5775,7 +5906,16 @@ app.patch('/api/support-tickets/:id', requireAuth, (req, res) => {
   if (!isOwner && tUser !== myUser) {
     return res.status(403).json({ error: 'Forbidden. You can only update your own tickets.' });
   }
-  tickets[idx] = { ...tickets[idx], ...req.body, id: tickets[idx].id };
+  if (!isOwner) {
+    const safePatch = {};
+    if (req.body && req.body.subject !== undefined) safePatch.subject = String(req.body.subject).slice(0, 200);
+    if (req.body && req.body.message !== undefined) safePatch.message = String(req.body.message).slice(0, 5000);
+    if (req.body && req.body.priority !== undefined) safePatch.priority = String(req.body.priority).slice(0, 32);
+    if (req.body && Array.isArray(req.body.replies)) safePatch.replies = req.body.replies;
+    tickets[idx] = { ...tickets[idx], ...safePatch, id: tickets[idx].id };
+  } else {
+    tickets[idx] = { ...tickets[idx], ...req.body, id: tickets[idx].id };
+  }
   writeDb('support_tickets', tickets);
   res.json(tickets[idx]);
 });
@@ -5839,11 +5979,11 @@ function getSmppKey() {
       if (raw.length === 32) return raw;
     }
     const newKey = crypto.randomBytes(32);
-    fs.writeFileSync(keyPath, newKey);
+    fs.writeFileSync(keyPath, newKey, { mode: 0o600 });
     return newKey;
   } catch (err) {
-    console.error('getSmppKey error:', err);
-    return crypto.createHash('sha256').update('alpha-smpp-default-fallback').digest();
+    console.error('getSmppKey error: cannot access key file:', err);
+    throw new Error('SMPP encryption key unavailable');
   }
 }
 
@@ -7428,6 +7568,14 @@ function registerPaginatedCrud(routePath, tableName) {
           return act === u;
         });
       }
+    } else if (tableName === 'login_activity') {
+      if (!isOwner) {
+        const u = String(sessionUser.username || '').toLowerCase();
+        data = data.filter(item => {
+          const lu = String(item.username || item.user || '').toLowerCase();
+          return (item.user_id != null && Number(item.user_id) === Number(sessionUser.id)) || (u && lu === u);
+        });
+      }
     }
 
     // RBAC filtering based on authenticated sessionUser
@@ -7677,8 +7825,8 @@ function registerPaginatedCrud(routePath, tableName) {
       item.agent_id = sessionUser.id;
       item.manager_id = sessionUser.manager_id || null;
     } else if (tableName === 'payout_requests') {
-      item.amount = Math.max(0, Number(item.amount) || 0);
-      if (item.amount <= 0) {
+      item.amount = Math.round(Math.max(0, Number(item.amount) || 0) * 100) / 100;
+      if (!Number.isFinite(item.amount) || item.amount <= 0) {
         return res.status(400).json({ error: 'Valid payout amount is required' });
       }
 
@@ -7689,11 +7837,26 @@ function registerPaginatedCrud(routePath, tableName) {
         return res.status(400).json({ error: `Payment low. Minimum payout is $${minPayout.toFixed(2)}.` });
       }
 
-      item.username = item.username || item.user || sessionUser.username;
-      item.user = item.user || item.username;
-      item.role = item.role || item.recipient_role || sessionUser.role;
-      item.user_id = item.user_id || sessionUser.id;
-      item.status = item.status || 'pending';
+      if (!isOwner) {
+        delete item.paid_at;
+        delete item.paid_by_username;
+        delete item.paid_by_role;
+        item.username = sessionUser.username;
+        item.user = sessionUser.username;
+        item.role = sessionUser.role;
+        item.recipient_role = sessionUser.role;
+        item.user_id = sessionUser.id;
+        item.status = 'pending';
+        delete item.manager_id;
+        delete item.agent_id;
+        delete item.client_id;
+      } else {
+        item.username = item.username || item.user || sessionUser.username;
+        item.user = item.user || item.username;
+        item.role = item.role || item.recipient_role || sessionUser.role;
+        item.user_id = item.user_id || sessionUser.id;
+        item.status = item.status || 'pending';
+      }
       item.currency = item.currency || 'USD';
 
       // Check available balance of the user
@@ -7702,27 +7865,34 @@ function registerPaginatedCrud(routePath, tableName) {
         const ags = readDb('agents') || [];
         const a = ags.find(x => Number(x.id) === Number(sessionUser.id) || String(x.username).toLowerCase() === String(sessionUser.username).toLowerCase());
         userBalance = Number(a?.balance || 0);
-        item.agent_id = item.agent_id || sessionUser.id;
-        item.agent_username = item.agent_username || sessionUser.username;
-        if (sessionUser.manager_id) item.manager_id = item.manager_id || sessionUser.manager_id;
+        item.agent_id = sessionUser.id;
+        item.agent_username = sessionUser.username;
+        const mgrId = a?.manager_id ?? sessionUser.manager_id;
+        if (mgrId) item.manager_id = mgrId;
       } else if (isManager) {
         const usrs = readDb('users') || [];
         const m = usrs.find(x => Number(x.id) === Number(sessionUser.id) || String(x.username).toLowerCase() === String(sessionUser.username).toLowerCase());
         userBalance = Number(m?.balance || 0);
-        item.manager_id = item.manager_id || sessionUser.id;
-        item.manager_username = item.manager_username || sessionUser.username;
+        item.manager_id = sessionUser.id;
+        item.manager_username = sessionUser.username;
       } else if (isClient) {
         const cls = readDb('clients') || [];
         const c = cls.find(x => Number(x.id) === Number(sessionUser.id) || String(x.username).toLowerCase() === String(sessionUser.username).toLowerCase());
         userBalance = Number(c?.balance || 0);
-        item.client_id = item.client_id || sessionUser.id;
-        item.client_username = item.client_username || sessionUser.username;
-        if (c?.agent_id) item.agent_id = item.agent_id || c.agent_id;
-        if (c?.manager_id) item.manager_id = item.manager_id || c.manager_id;
+        item.client_id = sessionUser.id;
+        item.client_username = sessionUser.username;
+        if (c?.agent_id) item.agent_id = c.agent_id;
+        if (c?.manager_id) item.manager_id = c.manager_id;
       }
 
-      if (!isOwner && userBalance < item.amount) {
-        return res.status(400).json({ error: `Insufficient balance. Available balance: $${userBalance.toFixed(2)}` });
+      const pendingSum = data
+        .filter(p => p && (p.status === 'pending' || p.status === 'approved') &&
+          ((p.user_id != null && Number(p.user_id) === Number(sessionUser.id)) ||
+           String(p.username || p.user || '').toLowerCase() === String(sessionUser.username || '').toLowerCase()))
+        .reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
+      const availableBalance = Math.max(0, Math.round((userBalance - pendingSum) * 100) / 100);
+      if (!isOwner && availableBalance < item.amount) {
+        return res.status(400).json({ error: `Insufficient balance. Available balance: $${availableBalance.toFixed(2)}` });
       }
 
       item.timestamp = item.timestamp || item.created || new Date().toISOString();
@@ -7833,12 +8003,16 @@ function registerPaginatedCrud(routePath, tableName) {
       'company_rate', 'company_cost', 'cost', 'carrier_rate', 'buy_rate',
       'sell_rate', 'commission_rate', 'commission_percent', 'payterm',
       'client_payterm', 'balance', 'role', 'manager_id', 'agent_id',
-      'client_id', 'permissions', 'is_owner'
+      'client_id', 'permissions', 'is_owner', 'two_fa', 'two_fa_secret',
+      'two_fa_backup_codes', 'pending_2fa_secret', 'password_hash'
     ];
     if (!isOwner && req.body && typeof req.body === 'object') {
       const hasForbiddenField = FORBIDDEN_NON_OWNER_PATCH_FIELDS.some(k => (k in req.body) || req.body[k] !== undefined);
       if (hasForbiddenField) {
-        return res.status(403).json({ error: 'Forbidden. Non-owner cannot modify financial, rate, role, or hierarchy fields.' });
+        return res.status(403).json({ error: 'Forbidden. Non-owner cannot modify financial, rate, security, role, or hierarchy fields.' });
+      }
+      if (sRole === 'client' && tableName === 'clients' && req.body.status !== undefined) {
+        return res.status(403).json({ error: 'Forbidden. Clients cannot change their own account status.' });
       }
       const touchesAllocPolicy = ['alloc_mode', 'alloc_daily_limit', 'alloc_total_limit'].some(k => req.body[k] !== undefined);
       if (touchesAllocPolicy) {
@@ -7910,8 +8084,12 @@ function registerPaginatedCrud(routePath, tableName) {
         }
       }
       if (tableName === 'payout_requests') {
-        if (!isManager || Number(existing.manager_id) !== Number(sessionUser.id)) {
-          return res.status(403).json({ error: 'Forbidden. You can only manage payout requests for your own downline.' });
+        const reqTargetRole = String(existing.role || existing.recipient_role || '').trim().toLowerCase();
+        const isSelfRequest = Number(existing.user_id) === Number(sessionUser.id) ||
+          String(existing.username || existing.user || '').trim().toLowerCase() === String(sessionUser.username || '').trim().toLowerCase() ||
+          reqTargetRole === 'manager';
+        if (!isManager || Number(existing.manager_id) !== Number(sessionUser.id) || isSelfRequest) {
+          return res.status(403).json({ error: 'Forbidden. Managers cannot approve/manage their own payout requests and can only manage downline payouts.' });
         }
       }
     }
@@ -7981,6 +8159,17 @@ function registerPaginatedCrud(routePath, tableName) {
       }
     }
 
+    if (tableName === 'payout_requests') {
+      const prevStatus = String(existing?.status || '').trim().toLowerCase();
+      const nextStatus = updates.status !== undefined ? String(updates.status).trim().toLowerCase() : '';
+      if ((prevStatus === 'paid' || prevStatus === 'completed') && (nextStatus === 'paid' || nextStatus === 'completed' || updates.amount !== undefined || updates.status !== undefined)) {
+        return res.status(409).json({ error: `Payout request #${existing.id} is already ${prevStatus} and cannot be paid or modified again.` });
+      }
+      if (prevStatus === 'rejected' && (nextStatus === 'paid' || nextStatus === 'completed')) {
+        return res.status(409).json({ error: `Rejected payout request #${existing.id} cannot be marked paid.` });
+      }
+    }
+
     if (tableName === 'payout_requests' && (updates.status === 'paid' || updates.status === 'completed')) {
       const prevStatus = existing ? existing.status : null;
       if (prevStatus !== 'paid' && prevStatus !== 'completed') {
@@ -7997,6 +8186,9 @@ function registerPaginatedCrud(routePath, tableName) {
           const uIdx = records.findIndex(r => r && targetUsername && String(r.username).trim().toLowerCase() === targetUsername);
           if (uIdx !== -1) {
             const currentBal = Number(records[uIdx].balance || 0);
+            if (currentBal + 1e-9 < amt) {
+              return res.status(409).json({ error: `Insufficient user balance ($${currentBal.toFixed(2)}) for payout of $${amt.toFixed(2)}` });
+            }
             records[uIdx].balance = Math.max(0, Math.round((currentBal - amt) * 100) / 100);
             writeDb(targetTable, records);
           } else {
@@ -8100,6 +8292,15 @@ function registerPaginatedCrud(routePath, tableName) {
       }
       if (tableName === 'users' && !isOwner) {
         return res.status(403).json({ error: 'Access denied. Only Owner can delete users.' });
+      }
+      if (tableName === 'payout_requests' && !isOwner) {
+        const reqTargetRole = String(target.role || target.recipient_role || '').trim().toLowerCase();
+        const isSelfReq = Number(target.user_id) === Number(sessionUser.id) ||
+          String(target.username || target.user || '').trim().toLowerCase() === String(sessionUser.username || '').trim().toLowerCase() ||
+          reqTargetRole === 'manager';
+        if (!isManager || Number(target.manager_id) !== Number(sessionUser.id) || isSelfReq) {
+          return res.status(403).json({ error: 'Forbidden. You can only delete downline payout requests.' });
+        }
       }
 
       // Owner protection: Cannot delete Owner
@@ -8294,15 +8495,55 @@ app.post('/api/numbers/revoke', requireAuth, (req, res) => {
     }
 
     const { user_id, number, count: reqCount, reason } = req.body || {};
-    let numbers = readDb('numbers') || [];
-    let revokedCount = 0;
     const targetUserId = Number(user_id);
+    if (!targetUserId && !number) {
+      return res.status(400).json({ error: 'user_id or number is required' });
+    }
+    let numbers = readDb('numbers') || [];
+    if (!isOwner) {
+      if (number) {
+        const prefix = String(number).replace('*', '');
+        const matching = numbers.filter(n => n.number === number || String(n.number).startsWith(prefix));
+        const inScope = matching.some(n => isAgent ? Number(n.agent_id) === Number(sessionUser.id) : Number(n.manager_id) === Number(sessionUser.id));
+        if (matching.length > 0 && !inScope) {
+          return res.status(403).json({ error: 'Forbidden. You cannot revoke numbers outside your scope.' });
+        }
+      }
+      if (targetUserId) {
+        if (isAgent) {
+          const clients = readDb('clients') || [];
+          const targetClient = clients.find(c => Number(c.id) === targetUserId);
+          if (!targetClient || Number(targetClient.agent_id) !== Number(sessionUser.id)) {
+            return res.status(403).json({ error: 'Forbidden. You can only revoke numbers from your own clients.' });
+          }
+        } else if (isManager) {
+          const agents = readDb('agents') || [];
+          const clients = readDb('clients') || [];
+          const targetAgent = agents.find(a => Number(a.id) === targetUserId);
+          const targetClient = clients.find(c => Number(c.id) === targetUserId);
+          const ownsAgent = targetAgent && Number(targetAgent.manager_id) === Number(sessionUser.id);
+          const ownsClient = targetClient && Number(targetClient.manager_id) === Number(sessionUser.id);
+          if (!ownsAgent && !ownsClient) {
+            return res.status(403).json({ error: 'Forbidden. You can only revoke numbers within your manager chain.' });
+          }
+        }
+      }
+    }
+    let revokedCount = 0;
 
     numbers = numbers.map(n => {
       if (reqCount && revokedCount >= reqCount) return n;
-      if (number && n.number !== number && !String(n.number).startsWith(number.replace('*', ''))) return n;
-      
-      const matchesUser = (Number(n.client_id) === targetUserId || Number(n.agent_id) === targetUserId || Number(n.manager_id) === targetUserId);
+      if (number && n.number !== number && !String(n.number).startsWith(String(number).replace('*', ''))) return n;
+      if (isAgent && Number(n.agent_id) !== Number(sessionUser.id)) return n;
+      if (isManager && Number(n.manager_id) !== Number(sessionUser.id)) return n;
+
+      const matchesUser = targetUserId
+        ? (isAgent
+            ? Number(n.client_id) === targetUserId
+            : isManager
+              ? (Number(n.agent_id) === targetUserId || Number(n.client_id) === targetUserId)
+              : (Number(n.client_id) === targetUserId || Number(n.agent_id) === targetUserId || Number(n.manager_id) === targetUserId))
+        : true;
       if (!matchesUser) return n;
       if (n.fixed_for_test || n.is_test_panel || isTestNumber(n.number)) return n;
 
@@ -9329,6 +9570,7 @@ app.post('/api/numbers/bulk-allocate', (req, res) => {
     const sRole = (sessionUser?.role || '').toLowerCase();
     const isOwner = sRole === 'owner' || sRole === 'admin';
     const isManager = sRole === 'manager';
+    const isAgent = sRole === 'agent';
 
     const targetType = (req.body.target_type || 'client').toLowerCase();
     const targetId = Number(req.body.target_id || req.body.client_id);
@@ -9342,6 +9584,9 @@ app.post('/api/numbers/bulk-allocate', (req, res) => {
 
     if (isManager && targetType !== 'agent') {
       return res.status(403).json({ error: 'Managers can only allocate numbers to Agents.' });
+    }
+    if (isAgent && targetType !== 'client') {
+      return res.status(403).json({ error: 'Agents can only allocate numbers to Clients.' });
     }
 
     const rawPayterm = String(req.body.payterm || '').trim();
@@ -9387,6 +9632,9 @@ app.post('/api/numbers/bulk-allocate', (req, res) => {
       const clients = readDb('clients') || [];
       const cl = clients.find(c => Number(c.id) === targetId);
       if (!cl) return res.status(404).json({ error: 'Client not found' });
+      if (isAgent && Number(cl.agent_id) !== Number(sessionUser.id)) {
+        return res.status(403).json({ error: 'Client does not belong to your agent account.' });
+      }
       toUsername = cl.username;
       toRole = 'Client';
       parentManagerId = cl.manager_id || null;
@@ -9395,8 +9643,10 @@ app.post('/api/numbers/bulk-allocate', (req, res) => {
 
     let numbers = readDb('numbers') || [];
     let pool;
-    if (isManager) {
-      pool = numbers.filter(n => Number(n.manager_id) === Number(sessionUser.id) && !n.agent_id && !n.client_id);
+    if (isAgent) {
+      pool = numbers.filter(n => Number(n.agent_id) === Number(sessionUser.id) && !n.client_id && !n.fixed_for_test && !n.is_test_panel && !isTestNumber(n.number));
+    } else if (isManager) {
+      pool = numbers.filter(n => Number(n.manager_id) === Number(sessionUser.id) && !n.agent_id && !n.client_id && !n.fixed_for_test && !n.is_test_panel && !isTestNumber(n.number));
     } else {
       pool = numbers.filter(n => !n.manager_id && !n.agent_id && !n.client_id && !n.fixed_for_test && !n.is_test_panel && !isTestNumber(n.number));
     }
@@ -9947,27 +10197,30 @@ app.get('/api/notifications', (req, res) => {
   try {
     const notifications = readDb('notifications') || [];
     let { role, recipient_id, recipient_username, unread } = req.query;
-    {
-      const su = req.sessionUser; const sr = normRole(su && su.role);
-      if (sr !== 'owner') { role = sr; recipient_id = su.id; recipient_username = su.username; }
-    }
+    const su = req.sessionUser;
+    const sr = normRole(su && su.role);
     let list = Array.isArray(notifications) ? [...notifications] : [];
 
-    if (role && role !== 'all') {
-      const r = String(role).trim().toLowerCase();
-      list = list.filter(n => {
-        const nr = (n.recipient_role || '').trim().toLowerCase();
-        if (!nr || nr === 'all') return true;
-        if (r === 'owner' || r === 'admin') return true;
-        return nr === r;
-      });
-    }
-    if (recipient_username) {
-      const uname = String(recipient_username).trim().toLowerCase();
-      list = list.filter(n => {
-        if (!n.recipient_username) return true;
-        return n.recipient_username.trim().toLowerCase() === uname;
-      });
+    if (sr !== 'owner') {
+      list = list.filter(n => canAccessNotification(su, n));
+    } else {
+      if (role && role !== 'all') {
+        const r = String(role).trim().toLowerCase();
+        list = list.filter(n => {
+          const nr = String(n.recipient_role ?? n.role ?? '').trim().toLowerCase();
+          if (!nr || nr === 'all') return true;
+          if (r === 'owner' || r === 'admin') return true;
+          return nr === r;
+        });
+      }
+      if (recipient_username) {
+        const uname = String(recipient_username).trim().toLowerCase();
+        list = list.filter(n => {
+          const targetU = n.recipient_username ?? n.username;
+          if (!targetU) return true;
+          return String(targetU).trim().toLowerCase() === uname;
+        });
+      }
     }
     if (unread === 'true' || unread === '1') {
       list = list.filter(n => !n.read);
@@ -9989,56 +10242,84 @@ app.get('/api/notifications', (req, res) => {
   }
 });
 
-// Professional Header Notification & Live Activity Feed (Includes min 5 SMS records)
+function canAccessNotification(su, n) {
+  if (!su || !n) return false;
+  const sr = normRole(su.role);
+  if (sr === 'owner') return true;
+  const rid = Number(su.id);
+  const uname = String(su.username || '').trim().toLowerCase();
+  const nr = String(n.recipient_role ?? n.role ?? '').trim().toLowerCase();
+  if (nr && nr !== 'all' && nr !== sr) return false;
+  const targetId = n.recipient_id ?? n.user_id;
+  if (targetId != null && Number(targetId) !== rid) return false;
+  const targetUname = n.recipient_username ?? n.username;
+  if (targetUname && String(targetUname).trim().toLowerCase() !== uname) return false;
+  return true;
+}
+
+// Professional Header Notification & Live Activity Feed (Strictly Scoped to Session)
 app.get('/api/notifications/header-feed', (req, res) => {
   try {
     const notifications = readDb('notifications') || [];
     let smsLog = readDb('sms_log') || [];
     const announcements = readDb('announcements') || [];
-    const { role, recipient_id, recipient_username } = req.query;
+    const su = req.sessionUser;
+    const sr = normRole(su && su.role);
+    const isOwner = sr === 'owner';
 
-    const r = (role || 'all').trim().toLowerCase();
-    const uname = (recipient_username || '').trim().toLowerCase();
-    const rid = recipient_id ? Number(recipient_id) : null;
+    const r = isOwner ? String(req.query.role || 'owner').trim().toLowerCase() : sr;
+    const uname = isOwner
+      ? String(req.query.recipient_username || su.username || '').trim().toLowerCase()
+      : String(su.username || '').trim().toLowerCase();
+    const rid = isOwner ? (req.query.recipient_id ? Number(req.query.recipient_id) : null) : Number(su.id);
 
-    // Filter user notifications
+    // Filter user notifications strictly
     let filteredNotifs = Array.isArray(notifications) ? [...notifications] : [];
-    if (r && r !== 'all') {
-      filteredNotifs = filteredNotifs.filter(n => {
-        const nr = (n.recipient_role || '').trim().toLowerCase();
-        if (!nr || nr === 'all') return true;
-        if (r === 'owner' || r === 'admin') return true;
-        return nr === r;
-      });
-    }
-    if (uname) {
-      filteredNotifs = filteredNotifs.filter(n => {
-        if (!n.recipient_username) return true;
-        return n.recipient_username.trim().toLowerCase() === uname;
-      });
+    if (!isOwner) {
+      filteredNotifs = filteredNotifs.filter(n => canAccessNotification(su, n));
+    } else {
+      if (r && r !== 'all' && r !== 'owner') {
+        filteredNotifs = filteredNotifs.filter(n => {
+          const nr = (n.recipient_role || '').trim().toLowerCase();
+          return !nr || nr === 'all' || nr === r;
+        });
+      }
+      if (req.query.recipient_username && uname) {
+        filteredNotifs = filteredNotifs.filter(n => !n.recipient_username || n.recipient_username.trim().toLowerCase() === uname);
+      }
     }
     const unreadCount = filteredNotifs.filter(n => !n.read).length;
 
-    // Filter or get last 5-10 SMS records
-    let recentSms = Array.isArray(smsLog) ? [...smsLog] : [];
-    if (r === 'client' && uname) {
-      const clientSms = recentSms.filter(s => (s.user || '').toLowerCase() === uname || (s.client_username || '').toLowerCase() === uname);
-      if (clientSms.length > 0) recentSms = clientSms;
-    } else if (r === 'agent' && rid) {
-      const agentSms = recentSms.filter(s => Number(s.agent_id) === rid);
-      if (agentSms.length > 0) recentSms = agentSms;
-    } else if (r === 'manager' && rid) {
-      const mgrSms = recentSms.filter(s => Number(s.manager_id) === rid);
-      if (mgrSms.length > 0) recentSms = mgrSms;
+    // Strictly scope SMS records by session role & chain (NEVER fall back to all logs when 0 matches)
+    let recentSms = [];
+    if (sr === 'owner') {
+      recentSms = Array.isArray(smsLog) ? [...smsLog] : [];
+    } else if (sr === 'manager' && rid) {
+      recentSms = (Array.isArray(smsLog) ? smsLog : []).filter(s => Number(s.manager_id) === rid);
+    } else if (sr === 'agent' && rid) {
+      recentSms = (Array.isArray(smsLog) ? smsLog : []).filter(s => Number(s.agent_id) === rid);
+    } else if (sr === 'client') {
+      recentSms = (Array.isArray(smsLog) ? smsLog : []).filter(s =>
+        (rid && Number(s.client_id) === rid) ||
+        (uname && ((s.user || '').toLowerCase() === uname || (s.client_username || '').toLowerCase() === uname))
+      );
+    } else {
+      // testpanel or unknown roles never receive production sms_log
+      recentSms = [];
     }
 
-    const latestSms = recentSms.slice(0, 8);
+    const latestSms = recentSms.slice(0, 8).map(s => {
+      if (sr === 'client') {
+        return { ...s, cli: serverMaskCli(s.cli || s.app || s.sender) };
+      }
+      return s;
+    });
 
     // Latest Owner Broadcast (for popup modal on open)
     const latestBroadcast = (Array.isArray(announcements) ? announcements : []).find(a => {
       const aRole = (a.role || a.target_role || 'All').toLowerCase();
       const isOwnerPost = a.sender_role === 'Owner' || a.sender_role === 'Admin' || a.is_broadcast;
-      const targetMatches = aRole === 'all' || aRole === r || r === 'owner' || r === 'admin';
+      const targetMatches = aRole === 'all' || aRole === sr || sr === 'owner';
       return isOwnerPost && targetMatches && a.is_popup !== false;
     }) || null;
 
@@ -10068,10 +10349,12 @@ app.post('/api/notifications/:id/read', (req, res) => {
     const notifications = readDb('notifications') || [];
     const id = Number(req.params.id);
     const notif = notifications.find(n => n.id === id);
-    if (notif) {
-      notif.read = true;
-      writeDb('notifications', notifications);
+    if (!notif) return res.status(404).json({ error: 'Notification not found' });
+    if (!canAccessNotification(req.sessionUser, notif)) {
+      return res.status(403).json({ error: 'Forbidden. Cannot mark another user notification as read.' });
     }
+    notif.read = true;
+    writeDb('notifications', notifications);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -10081,13 +10364,19 @@ app.post('/api/notifications/:id/read', (req, res) => {
 app.post('/api/notifications/mark-all-read', (req, res) => {
   try {
     let notifications = readDb('notifications') || [];
+    const su = req.sessionUser;
+    const sr = normRole(su && su.role);
     const { role, recipient_id, recipient_username } = req.body || {};
     notifications.forEach(n => {
-      let match = true;
-      if (role && n.recipient_role !== 'all' && n.recipient_role !== String(role).toLowerCase()) match = false;
-      if (recipient_id && n.recipient_id && Number(n.recipient_id) !== Number(recipient_id)) match = false;
-      if (recipient_username && n.recipient_username && n.recipient_username.toLowerCase() !== String(recipient_username).toLowerCase()) match = false;
-      if (match) n.read = true;
+      if (sr !== 'owner') {
+        if (canAccessNotification(su, n)) n.read = true;
+      } else {
+        let match = true;
+        if (role && n.recipient_role !== 'all' && n.recipient_role !== String(role).toLowerCase()) match = false;
+        if (recipient_id && n.recipient_id && Number(n.recipient_id) !== Number(recipient_id)) match = false;
+        if (recipient_username && n.recipient_username && n.recipient_username.toLowerCase() !== String(recipient_username).toLowerCase()) match = false;
+        if (match) n.read = true;
+      }
     });
     writeDb('notifications', notifications);
     res.json({ success: true });
@@ -10119,6 +10408,8 @@ app.all(['/api/notifications/wipe', '/api/notifications/clear'], (req, res) => {
     const initialLen = notifications.length;
     if (clear_all && (sr === 'owner')) {
       notifications = [];
+    } else if (sr !== 'owner') {
+      notifications = notifications.filter(n => !canAccessNotification(su, n));
     } else {
       notifications = notifications.filter(n => {
         let match = false;
@@ -10141,6 +10432,10 @@ app.delete('/api/notifications/:id', (req, res) => {
   try {
     let notifications = readDb('notifications') || [];
     const id = Number(req.params.id);
+    const notif = notifications.find(n => n.id === id);
+    if (notif && !canAccessNotification(req.sessionUser, notif)) {
+      return res.status(403).json({ error: 'Forbidden. Cannot delete another user notification.' });
+    }
     const initialLen = notifications.length;
     notifications = notifications.filter(n => n.id !== id);
     if (notifications.length !== initialLen) {
@@ -10691,8 +10986,8 @@ app.get('/api/agent-requests/:id/file', requireAuth, (req, res) => {
   }
 });
 
-// Registration Requests
-app.get('/api/registration-requests', (req, res) => {
+// Registration Requests (Owner only)
+app.get('/api/registration-requests', requireAuth, requireApiRole(['owner']), (req, res) => {
   const data = readDb('registration_requests') || [];
   if (req.query.page || (req.query.limit && req.query.limit !== '10000')) {
     const page = parseInt(req.query.page) || 1;
@@ -10703,7 +10998,7 @@ app.get('/api/registration-requests', (req, res) => {
   res.json(data);
 });
 
-app.post('/api/registration-requests', (req, res) => {
+app.post('/api/registration-requests', requireAuth, requireApiRole(['owner']), (req, res) => {
   const data = readDb('registration_requests') || [];
   if (req.body && req.body.username && isUsernameTaken(req.body.username)) {
     return res.status(400).json({ error: 'This username already exists', detail: 'This username already exists. Please choose a different username.' });
@@ -10714,7 +11009,7 @@ app.post('/api/registration-requests', (req, res) => {
   res.json(item);
 });
 
-app.patch('/api/registration-requests/:id', (req, res) => {
+app.patch('/api/registration-requests/:id', requireAuth, requireApiRole(['owner']), (req, res) => {
   const data = readDb('registration_requests') || [];
   const id = Number(req.params.id);
   const idx = data.findIndex(x => x.id === id);
@@ -10724,7 +11019,7 @@ app.patch('/api/registration-requests/:id', (req, res) => {
   res.json(data[idx]);
 });
 
-app.delete('/api/registration-requests/:id', (req, res) => {
+app.delete('/api/registration-requests/:id', requireAuth, requireApiRole(['owner']), (req, res) => {
   const data = readDb('registration_requests') || [];
   const id = Number(req.params.id);
   writeDb('registration_requests', data.filter(x => x.id !== id));
@@ -11430,13 +11725,22 @@ app.all(['/crapi/viewstats', '/crapi/:user/viewstats', '/api/sms/viewstats'], (r
 
   let sms = readDb('sms_log') || [];
 
-  if (currentToken && currentToken.agent_id) {
+  if (currentToken.client_id) {
+    const cid = Number(currentToken.client_id);
+    sms = sms.filter(s => Number(s.client_id) === cid);
+  } else if (currentToken.agent_id) {
+    const aid = Number(currentToken.agent_id);
     const clients = readDb('clients') || [];
     const myUsernames = new Set(
-      clients.filter(c => String(c.agent_id) === String(currentToken.agent_id) && c.username)
+      clients.filter(c => Number(c.agent_id) === aid && c.username)
              .map(c => c.username.toLowerCase())
     );
-    sms = sms.filter(s => myUsernames.has((s.user || '').toLowerCase()) || String(s.agent_id) === String(currentToken.agent_id));
+    sms = sms.filter(s => Number(s.agent_id) === aid || myUsernames.has((s.user || '').toLowerCase()));
+  } else if (currentToken.manager_id) {
+    const mid = Number(currentToken.manager_id);
+    sms = sms.filter(s => Number(s.manager_id) === mid);
+  } else if (currentToken.role && currentToken.role.toLowerCase() !== 'owner' && currentToken.role.toLowerCase() !== 'admin') {
+    sms = [];
   }
 
   const dt1 = p.dt1 ? p.dt1.replace(' ', 'T').replace('%20', 'T') : '';
@@ -12252,7 +12556,8 @@ app.all(['/api/cli-search', '/api/sms/cli-search'], requireAuth, (req, res) => {
       if (isDeliv) totalDelivered++; else totalFailed++;
 
       const rName = s.range || s.range_name || s.range_label || s.country || 'General Range';
-      const cliVal = s.cli || s.app || s.sender || '—';
+      const rawCliVal = s.cli || s.app || s.sender || '—';
+      const cliVal = isClient ? serverMaskCli(rawCliVal) : rawCliVal;
       const key = `${rName}___${cliVal}`;
 
       if (!groupMap.has(key)) {
@@ -12293,7 +12598,10 @@ app.all(['/api/cli-search', '/api/sms/cli-search'], requireAuth, (req, res) => {
       conversion_rate: g.count > 0 ? Math.round((g.delivered / g.count) * 100) : 100
     })).sort((a, b) => b.count - a.count);
 
-    const uniqueClis = new Set(matchedSms.map(s => s.cli || s.app || s.sender)).size;
+    const uniqueClis = new Set(matchedSms.map(s => {
+      const c = s.cli || s.app || s.sender;
+      return isClient ? serverMaskCli(c) : c;
+    })).size;
     const uniqueRanges = new Set(routes.map(r => r.range)).size;
 
     return res.json({
@@ -12309,15 +12617,18 @@ app.all(['/api/cli-search', '/api/sms/cli-search'], requireAuth, (req, res) => {
         hours_searched: hours
       },
       routes,
-      recent_messages: matchedSms.slice(0, 50).map(s => ({
-        id: s.id,
-        number: s.number,
-        cli: s.cli || s.app || s.sender || '—',
-        range: s.range || s.range_name || s.range_label || s.country || '—',
-        text: s.message || s.text || '',
-        timestamp: s.timestamp || s.date || '',
-        status: s.status || 'delivered'
-      }))
+      recent_messages: matchedSms.slice(0, 50).map(s => {
+        const rawCli = s.cli || s.app || s.sender || '—';
+        return {
+          id: s.id,
+          number: s.number,
+          cli: isClient ? serverMaskCli(rawCli) : rawCli,
+          range: s.range || s.range_name || s.range_label || s.country || '—',
+          text: s.message || s.text || '',
+          timestamp: s.timestamp || s.date || '',
+          status: s.status || 'delivered'
+        };
+      })
     });
   } catch (err) {
     console.error('Error in /api/cli-search:', err);
@@ -12918,58 +13229,66 @@ app.post('/api/settings/upload-logo', (req, res) => {
       return res.status(400).json({ success: false, error: 'No image provided' });
     }
 
-    let ext = 'png';
+    let declaredExt = '';
     let base64Payload = image.trim();
     if (base64Payload.startsWith('data:')) {
       const commaIdx = base64Payload.indexOf(',');
-      if (commaIdx !== -1) {
-        const header = base64Payload.slice(0, commaIdx).toLowerCase();
-        if (header.includes('jpeg') || header.includes('jpg')) ext = 'jpg';
-        else if (header.includes('svg')) ext = 'svg';
-        else if (header.includes('webp')) ext = 'webp';
-        else if (header.includes('gif')) ext = 'gif';
-        base64Payload = base64Payload.slice(commaIdx + 1);
+      if (commaIdx === -1) {
+        return res.status(400).json({ success: false, error: 'Invalid image data URI' });
       }
+      const header = base64Payload.slice(0, commaIdx).toLowerCase();
+      if (header.includes('svg')) {
+        return res.status(400).json({ success: false, error: 'SVG uploads are disabled for security. Upload PNG, JPG, WEBP, or GIF.' });
+      }
+      if (header.includes('image/png')) declaredExt = 'png';
+      else if (header.includes('image/jpeg') || header.includes('image/jpg')) declaredExt = 'jpg';
+      else if (header.includes('image/webp')) declaredExt = 'webp';
+      else if (header.includes('image/gif')) declaredExt = 'gif';
+      else {
+        return res.status(400).json({ success: false, error: 'Unsupported image MIME type. Use PNG, JPG, WEBP, or GIF.' });
+      }
+      base64Payload = base64Payload.slice(commaIdx + 1);
     }
 
     base64Payload = base64Payload.replace(/\s+/g, '');
     const buffer = Buffer.from(base64Payload, 'base64');
-    if (!buffer || buffer.length === 0) {
+    if (!buffer || buffer.length < 8) {
       return res.status(400).json({ success: false, error: 'Invalid image data' });
     }
+    if (buffer.length > 2 * 1024 * 1024) {
+      return res.status(413).json({ success: false, error: 'Logo exceeds 2 MB limit' });
+    }
 
+    // Verify actual magic bytes (never trust data URI header or extension blindly)
+    let detectedExt = null;
+    if (buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47) detectedExt = 'png';
+    else if (buffer[0] === 0xFF && buffer[1] === 0xD8 && buffer[2] === 0xFF) detectedExt = 'jpg';
+    else if (buffer[0] === 0x47 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x38) detectedExt = 'gif';
+    else if (buffer.length >= 12 && buffer.slice(0, 4).toString('ascii') === 'RIFF' && buffer.slice(8, 12).toString('ascii') === 'WEBP') detectedExt = 'webp';
+
+    if (!detectedExt || (declaredExt && declaredExt !== detectedExt)) {
+      return res.status(400).json({ success: false, error: 'Invalid or mismatched raster image file. Allowed formats: PNG, JPG, WEBP, GIF.' });
+    }
+
+    const ext = detectedExt;
     const imgDir = path.join(STATIC_DIR, 'img');
     if (!fs.existsSync(imgDir)) fs.mkdirSync(imgDir, { recursive: true });
+    if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
 
     const filename = `custom-logo.${ext}`;
-    const filePath = path.join(imgDir, filename);
-    fs.writeFileSync(filePath, buffer);
+    fs.writeFileSync(path.join(imgDir, filename), buffer);
+    fs.writeFileSync(path.join(uploadsDir, filename), buffer);
+    if (ext === 'png') {
+      try {
+        fs.writeFileSync(path.join(imgDir, 'humex-sms-logo.png'), buffer);
+      } catch (e) { console.warn('Logo sync fallback warning:', e.message); }
+    }
 
-    // Also persist custom logo into uploadsDir (DATA_DIR/uploads) so it survives VPS code updates
-    try {
-      if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
-      fs.writeFileSync(path.join(uploadsDir, filename), buffer);
-      fs.writeFileSync(path.join(uploadsDir, 'custom-logo.png'), buffer);
-    } catch (_) {}
-
-    // Also maintain custom-logo.png and sync all fallbacks so old logos never persist
-    try {
-      fs.writeFileSync(path.join(imgDir, 'custom-logo.png'), buffer);
-      fs.writeFileSync(path.join(imgDir, 'humex-sms-logo.png'), buffer);
-      fs.writeFileSync(path.join(imgDir, 'humax-sms-logo.png'), buffer);
-      fs.writeFileSync(path.join(imgDir, 'humex-sms-dp.jpg'), buffer);
-      const b64 = buffer.toString('base64');
-      const dataUri = `data:image/${ext === 'svg' ? 'svg+xml' : ext};base64,${b64}`;
-      const svgFallback = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="100%" height="100%"><image href="${dataUri}" width="1024" height="1024" /></svg>\n`;
-      fs.writeFileSync(path.join(imgDir, 'humex-sms-circle-logo.svg'), svgFallback);
-      fs.writeFileSync(path.join(imgDir, 'humex-sms-logo.svg'), svgFallback);
-      fs.writeFileSync(path.join(imgDir, 'custom-logo.svg'), svgFallback);
-    } catch(e) {}
-
+    const mime = ext === 'jpg' ? 'jpeg' : ext;
     const logoUrl = `/static/img/${filename}?v=${Date.now()}`;
     const settings = readDb('settings') || {};
     settings.logo_url = logoUrl;
-    settings.logo_data = `data:image/${ext === 'svg' ? 'svg+xml' : ext};base64,${base64Payload}`;
+    settings.logo_data = `data:image/${mime};base64,${buffer.toString('base64')}`;
     writeDb('settings', settings);
 
     broadcastWs({ type: 'brand_theme_updated', settings });
@@ -13143,7 +13462,7 @@ app.post('/api/backup/restore', upload.single('file'), (req, res) => {
         const rawContent = entry.getData().toString('utf8');
         const parsed = JSON.parse(rawContent);
         const targetPath = path.join(DATA_DIR, fileName);
-        fs.writeFileSync(targetPath, rawContent, 'utf8');
+        atomicWriteFileSync(targetPath, rawContent);
 
         const dbName = fileName.replace(/\.json$/, '');
         DB_CACHE.set(dbName, parsed);
@@ -13463,8 +13782,11 @@ const wsConnPerIp = new Map();
 function wsOriginAllowed(req) {
   const origin = req && req.headers && req.headers.origin;
   if (!origin) return true; // non-browser clients
-  try { if (new URL(origin).host === req.headers.host) return true; } catch (e) { return false; }
-  return String(process.env.ALLOWED_ORIGINS || '').split(',').map(x => x.trim()).filter(Boolean).includes(origin);
+  try {
+    const parsedHost = new URL(origin).host.toLowerCase();
+    if (getEffectiveHosts(req).has(parsedHost)) return true;
+  } catch (e) { return false; }
+  return String(process.env.ALLOWED_ORIGINS || '').split(',').map(x => x.trim().toLowerCase()).filter(Boolean).includes(origin.toLowerCase());
 }
 wss.on('connection', (ws, req) => {
   const ip = getReqIp(req);
@@ -13542,8 +13864,8 @@ app.get('/api/reports/orphans', requireAuth, (req, res) => {
       orphaned_clients_count: orphanedClients.length,
       orphaned_numbers_count: orphanedNumbers.length
     },
-    orphaned_agents: orphanedAgents,
-    orphaned_clients: orphanedClients,
+    orphaned_agents: orphanedAgents.map(safeUser),
+    orphaned_clients: orphanedClients.map(safeUser),
     orphaned_numbers: orphanedNumbers
   });
 });

@@ -54,60 +54,17 @@ window.AGENT_USERNAME = AGENT_USERNAME;
 })();
 
 function getAuthToken() {
-  try {
-    const sTok = sessionStorage.getItem('session_token');
-    if (sTok && typeof sTok === 'string' && sTok.trim()) return sTok.trim();
-
-    const uStr = sessionStorage.getItem('admin_user');
-    if (uStr) {
-      const u = JSON.parse(uStr);
-      if (u && u.token && typeof u.token === 'string' && u.token.trim()) return u.token.trim();
-    }
-
-    const lTok = localStorage.getItem('session_token');
-    if (lTok && typeof lTok === 'string' && lTok.trim()) {
-      sessionStorage.setItem('session_token', lTok.trim());
-      return lTok.trim();
-    }
-
-    const luStr = localStorage.getItem('admin_user') || localStorage.getItem('active_session_user');
-    if (luStr) {
-      const lu = JSON.parse(luStr);
-      if (lu && lu.token && typeof lu.token === 'string' && lu.token.trim()) {
-        sessionStorage.setItem('session_token', lu.token.trim());
-        return lu.token.trim();
-      }
-    }
-
-    if (typeof window !== 'undefined' && window.location && window.location.search) {
-      const p = new URLSearchParams(window.location.search);
-      const urlTok = p.get('token') || p.get('session_token');
-      if (urlTok && urlTok.trim()) {
-        sessionStorage.setItem('session_token', urlTok.trim());
-        localStorage.setItem('session_token', urlTok.trim());
-        return urlTok.trim();
-      }
-    }
-  } catch (_) {}
   return '';
 }
 
 // ── API Helpers ──────────────────────────────────────────────────
 async function apiFetch(path, opts = {}, retries = 2) {
   try {
-    const token = getAuthToken();
-    const authHeaders = {};
-    if (token) {
-      authHeaders['Authorization'] = `Bearer ${token}`;
-      authHeaders['X-Session-Token'] = token;
-    }
-
     const response = await fetch(API + path, {
       credentials: 'include',
       headers: {
         'Content-Type': 'application/json',
         'X-Agent-ID': AGENT_ID || '',
-        ...authHeaders,
         ...(opts.headers || {})
       },
       ...opts
@@ -359,23 +316,24 @@ function buildSortableNumbersTable(numbersData, rangeInfoFor, rateInfoFor, opts 
 
   const bodyRows = rows.map(r => {
     const n = r.n;
+    const safeNumAttr = escapeHtml(n.number || '').replace(/'/g, '&#39;');
     return [
-      `<input type="checkbox" class="sms-num-check" value="${n.id}" data-assigned="${n.client_id ? '1' : '0'}" onchange="updateSmsSelectedCount()">`,
-      r.range,
-      r.prefix,
-      typeof zyRenderNumberCopyBox === 'function' ? zyRenderNumberCopyBox(r.number) : `<span class="monospace fw-600">${r.number || '—'}</span>`,
-      `<span class="fs-12 text-muted">${r.range_term}</span><br><strong class="text-success">$${Number(r.my_payout || 0).toFixed(4)}</strong>`,
+      `<input type="checkbox" class="sms-num-check" value="${Number(n.id)}" data-assigned="${n.client_id ? '1' : '0'}" onchange="updateSmsSelectedCount()">`,
+      escapeHtml(r.range || '—'),
+      escapeHtml(r.prefix || '—'),
+      typeof zyRenderNumberCopyBox === 'function' ? zyRenderNumberCopyBox(r.number) : `<span class="monospace fw-600">${escapeHtml(r.number || '—')}</span>`,
+      `<span class="fs-12 text-muted">${escapeHtml(r.range_term || '—')}</span><br><strong class="text-success">$${Number(r.my_payout || 0).toFixed(4)}</strong>`,
       n.client_id
-        ? `<span class="badge badge-blue"><i class="fas fa-user"></i> ${r.client}</span>`
+        ? `<span class="badge badge-blue"><i class="fas fa-user"></i> ${escapeHtml(r.client || 'Client')}</span>`
         : `<span class="badge badge-secondary">Agent Pool (Unallocated)</span>`,
       r.client_payout != null ? `<span class="fw-600" style="color:var(--brand-accent, #4ade80);">$${Number(r.client_payout).toFixed(4)}</span>` : '<span class="text-muted">—</span>',
-      `SD: ${r.limits_sd} | SW: 0`,
+      `SD: ${Number(r.limits_sd || 0)} | SW: 0`,
       `<div style="display:inline-flex;gap:4px;">
          ${n.client_id
-           ? `<button class="btn btn-outline btn-sm" onclick="openMoveNumberModal(${n.id}, '${n.number || ''}', ${n.client_id})" title="Move to another client"><i class="fas fa-arrows-split-up-and-left"></i> Move</button>
-              <button class="btn btn-danger btn-sm" onclick="unassignSingleNumber(${n.id}, '${n.number || ''}')" title="Unallocate back to pool"><i class="fas fa-rotate-left"></i> Unallocate</button>`
-           : `<button class="btn btn-primary btn-sm" onclick="openAssignNumberModal(${n.id}, '${n.number || ''}')" title="Allocate to client"><i class="fas fa-user-plus"></i> Allocate</button>
-              <button class="btn btn-warning btn-sm" onclick="returnSingleNumber(${n.id}, '${n.number || ''}')" title="Return to upstream holder"><i class="fas fa-arrow-up"></i> Return</button>`}
+           ? `<button class="btn btn-outline btn-sm" onclick="openMoveNumberModal(${Number(n.id)}, '${safeNumAttr}', ${Number(n.client_id)})" title="Move to another client"><i class="fas fa-arrows-split-up-and-left"></i> Move</button>
+              <button class="btn btn-danger btn-sm" onclick="unassignSingleNumber(${Number(n.id)}, '${safeNumAttr}')" title="Unallocate back to pool"><i class="fas fa-rotate-left"></i> Unallocate</button>`
+           : `<button class="btn btn-primary btn-sm" onclick="openAssignNumberModal(${Number(n.id)}, '${safeNumAttr}')" title="Allocate to client"><i class="fas fa-user-plus"></i> Allocate</button>
+              <button class="btn btn-warning btn-sm" onclick="returnSingleNumber(${Number(n.id)}, '${safeNumAttr}')" title="Return to upstream holder"><i class="fas fa-arrow-up"></i> Return</button>`}
        </div>`
     ];
   });
@@ -1257,19 +1215,19 @@ function exportSmsPdf() {
       n.client_name || 'Unassigned',
       n.status || ''
     ]);
-    const win = window.open('', '_blank');
-    win.document.write(`
-      <html><head><title>SMS Numbers</title>
+    const html = `
+      <!DOCTYPE html><html><head><title>SMS Numbers</title>
       <style>body{font-family:sans-serif;padding:20px;} table{width:100%;border-collapse:collapse;} th,td{border:1px solid #ccc;padding:6px 10px;text-align:left;font-size:13px;} th{background:#f0f0f0;}</style>
       </head><body>
       <h2>SMS Numbers</h2>
-      <table><tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr>
-      ${rows.map(r => `<tr>${r.map(c => `<td>${c}</td>`).join('')}</tr>`).join('')}
+      <table><tr>${headers.map(h => `<th>${escapeHtml(h)}</th>`).join('')}</tr>
+      ${rows.map(r => `<tr>${r.map(c => `<td>${escapeHtml(c)}</td>`).join('')}</tr>`).join('')}
       </table>
-      <script>window.onload = () => window.print();</script>
       </body></html>
-    `);
-    win.document.close();
+    `;
+    if (typeof window.zyPrintHtml === 'function') {
+      window.zyPrintHtml(html);
+    }
   } catch (err) {
     console.error('PDF export error:', err);
     toast('Failed to export PDF', 'error');
@@ -1368,26 +1326,102 @@ async function viewNumberDetail(numberId) {
   }
 }
 
-// ── UNASSIGN NUMBER ──────────────────────────────────────────────
+// ── UNASSIGN / MOVE / RETURN SINGLE NUMBER ──────────────────────
 async function openUnassignNumber(numberId, number) {
   if (!confirm(`⚠️ Are you sure you want to unassign number ${number} from its client?`)) {
     return;
   }
-  
   try {
-    const result = await apiFetch(`/api/numbers/${numberId}/unassign`, {
-      method: 'POST'
+    const result = await apiFetch('/api/numbers/bulk-unassign-many', {
+      method: 'POST',
+      body: JSON.stringify({ number_ids: [Number(numberId)] })
     });
-    
-    if (result && result.success) {
-      toast(`✅ Number ${number} unassigned successfully`, 'warning');
-      pgMySmsNumbers(smsNumbersPage);
+    if (result && (result.success || result.count !== undefined)) {
+      toast(`✅ Number ${number} unassigned back to agent pool`, 'success');
+      if (typeof pgMySmsNumbers === 'function') pgMySmsNumbers(typeof smsNumbersPage !== 'undefined' ? smsNumbersPage : 1);
+      else if (typeof loadPage === 'function') loadPage('my-sms-numbers');
     } else {
       toast(result?.error || 'Failed to unassign number', 'error');
     }
   } catch (err) {
     console.error('Unassign error:', err);
     toast('Error unassigning number: ' + err.message, 'error');
+  }
+}
+
+function unassignSingleNumber(numberId, number) {
+  return openUnassignNumber(numberId, number);
+}
+
+async function returnSingleNumber(numberId, number) {
+  if (!confirm(`Return number ${number || '#' + numberId} back to your upstream holder?`)) return;
+  try {
+    const res = await apiFetch('/api/numbers/return', {
+      method: 'POST',
+      body: JSON.stringify({ number_ids: [Number(numberId)] })
+    });
+    if (res && !res.error) {
+      toast(`Returned ${number || '#' + numberId} to upstream holder`, 'success');
+      if (typeof pgMySmsNumbers === 'function') pgMySmsNumbers(typeof smsNumbersPage !== 'undefined' ? smsNumbersPage : 1);
+      else if (typeof loadPage === 'function') loadPage('my-sms-numbers');
+    } else {
+      toast(res?.error || 'Failed to return number', 'error');
+    }
+  } catch (err) {
+    console.error('Return error:', err);
+    toast('Failed to return number', 'error');
+  }
+}
+
+async function openMoveNumberModal(numberId, number, currentClientId) {
+  try {
+    const clientsData = await apiFetch(`/api/clients?agent_id=${AGENT_ID}&limit=200`);
+    const clients = (clientsData?.data || []).filter(c => String(c.id) !== String(currentClientId));
+    if (!clients.length) {
+      toast('No other clients available to move this number to', 'warning');
+      return;
+    }
+    openModal(`Move Number — ${escapeHtml(number || '#' + numberId)}`, `
+      <form onsubmit="submitSingleMoveNumber(event, ${Number(numberId)})">
+        <div class="form-group">
+          <label class="form-label">Destination Client *</label>
+          <select id="move-single-client" required>
+            <option value="">— Select Client —</option>
+            ${clients.map(c => `<option value="${Number(c.id)}">${escapeHtml(c.username)}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn btn-outline" onclick="closeModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary"><i class="fas fa-right-left"></i> Move Number</button>
+        </div>
+      </form>
+    `);
+  } catch (err) {
+    console.error('Move modal error:', err);
+    toast('Failed to load clients', 'error');
+  }
+}
+
+async function submitSingleMoveNumber(event, numberId) {
+  event.preventDefault();
+  const toClientId = Number(document.getElementById('move-single-client')?.value);
+  if (!toClientId) { toast('Please select a destination client', 'error'); return; }
+  try {
+    const res = await apiFetch(`/api/numbers/${Number(numberId)}/move`, {
+      method: 'POST',
+      body: JSON.stringify({ to_client_id: toClientId })
+    });
+    if (res && !res.error) {
+      closeModal();
+      toast('Number moved to new client', 'success');
+      if (typeof pgMySmsNumbers === 'function') pgMySmsNumbers(typeof smsNumbersPage !== 'undefined' ? smsNumbersPage : 1);
+      else if (typeof loadPage === 'function') loadPage('my-sms-numbers');
+    } else {
+      toast(res?.error || 'Failed to move number', 'error');
+    }
+  } catch (err) {
+    console.error('Move error:', err);
+    toast('Failed to move number', 'error');
   }
 }
 
@@ -2454,10 +2488,10 @@ function exportCdrCsv() {
   toast('CSV exported', 'success');
 }
 function exportCdrPdf() {
-  const win = window.open('', '_blank');
   const table = document.querySelector('.table-wrap:last-of-type')?.outerHTML || '';
-  win.document.write(`<html><head><title>SMS CDR Stats</title><style>body{font-family:sans-serif;padding:20px;}table{width:100%;border-collapse:collapse;}th,td{border:1px solid #ccc;padding:6px;font-size:12px;}</style></head><body><h2>SMS CDR Stats</h2>${table}<script>window.onload=()=>window.print();</script></body></html>`);
-  win.document.close();
+  const html = `<html><head><title>SMS CDR Stats</title><style>body{font-family:sans-serif;padding:20px;}table{width:100%;border-collapse:collapse;}th,td{border:1px solid #ccc;padding:6px;font-size:12px;}</style></head><body><h2>SMS CDR Stats</h2>${table}</body></html>`;
+  if (typeof zyPrintHtml === 'function') { zyPrintHtml(html); return; }
+  window.print();
 }
 
 function exportCDR() {
@@ -2659,21 +2693,21 @@ function exportClientStatsCsv() {
   toast('CSV exported', 'success');
 }
 function exportClientStatsPdf() {
+  const esc = typeof escapeHtml === 'function' ? escapeHtml : (v => String(v ?? ''));
   const headers = ['Client', 'SMS', 'Currency', 'My Payout', 'Client Payout'];
   const rows = clientStatsRows.map(r => [r.username, r.smsCount, 'USD', '$' + r.myPayout.toFixed(4), '$' + r.clientPayout.toFixed(4)]);
-  const win = window.open('', '_blank');
-  win.document.write(`
+  const html = `
     <html><head><title>Client SMS Stats</title>
     <style>body{font-family:sans-serif;padding:20px;} table{width:100%;border-collapse:collapse;} th,td{border:1px solid #ccc;padding:6px 10px;text-align:left;font-size:13px;} th{background:#f0f0f0;}</style>
     </head><body>
     <h2>Client SMS Stats</h2>
-    <table><tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr>
-    ${rows.map(r => `<tr>${r.map(c => `<td>${c}</td>`).join('')}</tr>`).join('')}
+    <table><tr>${headers.map(h => `<th>${esc(h)}</th>`).join('')}</tr>
+    ${rows.map(r => `<tr>${r.map(c => `<td>${esc(c)}</td>`).join('')}</tr>`).join('')}
     </table>
-    <script>window.onload = () => window.print();</script>
     </body></html>
-  `);
-  win.document.close();
+  `;
+  if (typeof zyPrintHtml === 'function') { zyPrintHtml(html); return; }
+  window.print();
 }
 
 // ── SMS RANGE STATS ───────────────────────────────────────────────
@@ -2818,13 +2852,13 @@ async function pgCreditNotes() {
 // ── PAYMENT REQUESTS ──────────────────────────────────────────────
 // ── PAYOUT INVOICE (PDF via print) ─────────────────────────────────
 function downloadPayoutInvoice(r) {
+  const esc = typeof escapeHtml === 'function' ? escapeHtml : (v => String(v ?? ''));
   const siteName = (window.__BRAND_SETTINGS__ && window.__BRAND_SETTINGS__.site_name) || 'HUMEX SMS';
-  const prefix = siteName.replace(/[^A-Za-z0-9]/g, '').slice(0, 5).toUpperCase() || 'ALPHA';
+  const prefix = siteName.replace(/[^A-Za-z0-9]/g, '').slice(0, 5).toUpperCase() || 'HUMEX';
   const invoiceNo = `${prefix}-INV-${String(r.id).padStart(5, '0')}`;
   const dateStr = fmtShort(r.paid_at || r.timestamp);
-  const win = window.open('', '_blank');
-  win.document.write(`
-    <html><head><title>${invoiceNo}</title>
+  const html = `
+    <html><head><title>${esc(invoiceNo)}</title>
     <style>
       body{font-family:'Segoe UI',Arial,sans-serif;padding:40px;color:#222;max-width:700px;margin:0 auto;}
       .inv-header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #1e293b;padding-bottom:20px;margin-bottom:30px;}
@@ -2842,30 +2876,30 @@ function downloadPayoutInvoice(r) {
     <body>
       <div class="inv-header">
         <div>
-          <div class="inv-logo">ALPHA <span>SMS</span></div>
+          <div class="inv-logo">${esc(siteName)}</div>
           <div class="inv-title" style="margin-top:14px;">Payout Invoice</div>
           <span class="paid-stamp">✔ PAID</span>
         </div>
         <div class="inv-meta">
-          <div><strong>${invoiceNo}</strong></div>
-          <div>Date: ${dateStr}</div>
+          <div><strong>${esc(invoiceNo)}</strong></div>
+          <div>Date: ${esc(dateStr)}</div>
         </div>
       </div>
       <table>
         <tr><th>Paid To</th><th>Method</th><th>Wallet / Account</th><th>Request #</th></tr>
         <tr>
-          <td>${r.user || '—'}</td>
-          <td>${r.method || '—'}</td>
-          <td style="font-family:monospace;font-size:12px;">${r.wallet || '—'}</td>
-          <td>#${r.id}</td>
+          <td>${esc(r.user || '—')}</td>
+          <td>${esc(r.method || '—')}</td>
+          <td style="font-family:monospace;font-size:12px;">${esc(r.wallet || '—')}</td>
+          <td>#${esc(r.id)}</td>
         </tr>
       </table>
-      <div class="inv-total">Total Paid: $${(r.amount || 0).toFixed(2)}</div>
-      <div class="inv-footer">Generated by HUMEX SMS Panel · This is a system-generated payout invoice.</div>
-      <script>window.onload = () => window.print();</script>
+      <div class="inv-total">Total Paid: $${(Number(r.amount) || 0).toFixed(2)}</div>
+      <div class="inv-footer">Generated by ${esc(siteName)} Panel · This is a system-generated payout invoice.</div>
     </body></html>
-  `);
-  win.document.close();
+  `;
+  if (typeof zyPrintHtml === 'function') { zyPrintHtml(html); return; }
+  window.print();
 }
 
 async function pgPaymentRequests() {

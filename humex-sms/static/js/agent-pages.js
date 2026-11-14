@@ -788,7 +788,7 @@ async function pgSmsRateCard() {
   zy2Render('dt-rate');
 }
 
-/* ═══ ACCESS / CLI SEARCH (AstraSMS-Style Realtime Route Inspector) ═══ */
+/* ═══ ACCESS / CLI SEARCH (Realtime Route Inspector) ══════════════ */
 let _agCliHours = 24;
 let _agCliRoutes = [];
 
@@ -1663,17 +1663,25 @@ async function pgCreditNotesLoad() {
     due.setDate(due.getDate() + 1);
     return [
       (n.date || n.created || '').slice(0, 10),
-      n.reason || 'Wholesale SMS Settlement',
-      n.term || 'Weekly',
-      n.currency || 'USD',
+      n.reason ? zyEsc(n.reason) : 'Wholesale SMS Settlement',
+      zyEsc(n.term || 'Weekly'),
+      zyEsc(n.currency || 'USD'),
       Number(n.amount || 0).toFixed(3),
       isNaN(due) ? '' : due.toISOString().slice(0, 10),
-      { v: '', h: `<button class="zy-rowbtn" onclick="window.open('/api/credit-notes/${n.id}/pdf', '_blank')" title="Download Credit Voucher"><i class="fas fa-file-invoice" style="color:var(--sp-primary);"></i></button>` }
+      { v: '', h: `<button class="zy-rowbtn" onclick="zyAgentCreditPdf(${Number(n.id)})" title="Download Credit Voucher"><i class="fas fa-file-invoice" style="color:var(--sp-primary);"></i></button>` }
     ];
   });
   body.innerHTML = zyDT2('dt-credit', {
     cols: ['Date', 'Description', 'Term', 'Currency', 'Amount', 'Due Date', 'Voucher'], rows, sort: 0, dir: -1 });
   zy2Render('dt-credit');
+}
+async function zyAgentCreditPdf(id) {
+  try {
+    const res = await fetch(`/api/credit-notes/${encodeURIComponent(id)}/pdf`, { credentials: 'include' });
+    if (!res.ok) { toast('Failed to load voucher', 'error'); return; }
+    const html = await res.text();
+    if (typeof zyPrintHtml === 'function') zyPrintHtml(html);
+  } catch (_) { toast('Failed to open voucher', 'error'); }
 }
 
 /* ═══ PAYMENT REQUESTS ══════════════════════════════════════ */
@@ -1695,7 +1703,7 @@ async function pgPaymentRequests() {
     thisWeekUsd = Number(earn?.this_week ?? 0);
     if (earn?.week_range) weekRangeStr = earn.week_range;
     if (settings?.min_payout != null) minPayout = Number(settings.min_payout);
-  } catch (e) {}
+  } catch (e) { console.warn('Payment requests earnings fetch error:', e); }
 
   c.innerHTML = `
     <div class="page-header">
@@ -1705,7 +1713,7 @@ async function pgPaymentRequests() {
       </div>
     </div>
     
-    <!-- Astra SMS 2-Card Metric Row -->
+    <!-- Balance 2-Card Metric Row -->
     <div style="display:grid;grid-template-columns:repeat(2, minmax(0, 1fr));gap:12px;margin-bottom:16px;">
       <!-- Main balance ($) -->
       <div class="sp-card" style="padding:14px 16px;border-radius:10px;border:1px solid #cbd5e1;background:#ffffff;box-shadow:0 1px 3px rgba(0,0,0,0.04);display:flex;flex-direction:column;justify-content:space-between;min-height:115px;">
@@ -1765,7 +1773,7 @@ window.zyAgentRequestPayoutModal = async function(currentBal = 0) {
     ]);
     minPayout = Number(settings?.min_payout ?? 10);
     bankAccounts = Array.isArray(banks) ? banks : (banks?.data || []);
-  } catch (e) {}
+  } catch (e) { console.warn('Payout modal settings fetch error:', e); }
 
   const bankOptions = bankAccounts.map(b => `<option value="${zyEsc(b.bank_name)} - ${zyEsc(b.account_no)}">${zyEsc(b.bank_name)} (${zyEsc(b.currency || 'USD')} - ${zyEsc(b.account_no)})</option>`).join('');
 
@@ -1953,8 +1961,11 @@ async function zySaveBank() {
     account_no: document.getElementById('bk-acc').value.trim(),
     beneficiary: document.getElementById('bk-ben').value.trim() };
   if (!p.currency || !p.bank_name) { toast('Currency and bank name required', 'error'); return; }
-  try { await apiFetch('/api/bank-accounts', { method: 'POST', body: JSON.stringify(p) }); } catch (e) {}
-  closeModal(); zyFlash('Bank Account Added.'); loadPage('bank-accounts');
+  try {
+    const res = await apiFetch('/api/bank-accounts', { method: 'POST', body: JSON.stringify(p) });
+    if (!res || res.error) { toast(res?.error || 'Failed to add bank account', 'error'); return; }
+    closeModal(); zyFlash('Bank Account Added.'); loadPage('bank-accounts');
+  } catch (e) { console.error('Save bank error:', e); toast('Failed to save bank account', 'error'); }
 }
 
 /* ═══ STATEMENTS ════════════════════════════════════════════ */

@@ -48,60 +48,17 @@ let CLIENT_USER = {};
 })();
 
 function getAuthToken() {
-  try {
-    const sTok = sessionStorage.getItem('session_token');
-    if (sTok && typeof sTok === 'string' && sTok.trim()) return sTok.trim();
-
-    const uStr = sessionStorage.getItem('admin_user');
-    if (uStr) {
-      const u = JSON.parse(uStr);
-      if (u && u.token && typeof u.token === 'string' && u.token.trim()) return u.token.trim();
-    }
-
-    const lTok = localStorage.getItem('session_token');
-    if (lTok && typeof lTok === 'string' && lTok.trim()) {
-      sessionStorage.setItem('session_token', lTok.trim());
-      return lTok.trim();
-    }
-
-    const luStr = localStorage.getItem('admin_user') || localStorage.getItem('active_session_user');
-    if (luStr) {
-      const lu = JSON.parse(luStr);
-      if (lu && lu.token && typeof lu.token === 'string' && lu.token.trim()) {
-        sessionStorage.setItem('session_token', lu.token.trim());
-        return lu.token.trim();
-      }
-    }
-
-    if (typeof window !== 'undefined' && window.location && window.location.search) {
-      const p = new URLSearchParams(window.location.search);
-      const urlTok = p.get('token') || p.get('session_token');
-      if (urlTok && urlTok.trim()) {
-        sessionStorage.setItem('session_token', urlTok.trim());
-        localStorage.setItem('session_token', urlTok.trim());
-        return urlTok.trim();
-      }
-    }
-  } catch (_) {}
   return '';
 }
 
 // ── API Helpers ──────────────────────────────────────────────────
 async function apiFetch(path, opts = {}, retries = 2) {
   try {
-    const token = getAuthToken();
-    const authHeaders = {};
-    if (token) {
-      authHeaders['Authorization'] = `Bearer ${token}`;
-      authHeaders['X-Session-Token'] = token;
-    }
-
     const response = await fetch(API + path, {
       credentials: 'include',
       headers: {
         'Content-Type': 'application/json',
         'X-Client-ID': CLIENT_ID || '',
-        ...authHeaders,
         ...(opts.headers || {})
       },
       ...opts
@@ -645,7 +602,7 @@ async function pgMyNumbers(page = 1) {
           <div class="page-subtitle">${total} numbers assigned to you</div>
         </div>
         <div class="page-actions">
-          <button class="btn btn-outline btn-sm" onclick="window.open('/api/numbers/download?client_id=${CLIENT_ID}','_blank')">
+          <button class="btn btn-outline btn-sm" onclick="zyDownloadFile('/api/numbers/download?client_id=' + CLIENT_ID, 'my_numbers.csv')">
             <i class="fas fa-download"></i> Download CSV
           </button>
         </div>

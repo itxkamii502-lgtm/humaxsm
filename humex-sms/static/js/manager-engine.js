@@ -49,60 +49,17 @@ let MANAGER_USER = {};
 })();
 
 function getAuthToken() {
-  try {
-    const sTok = sessionStorage.getItem('session_token');
-    if (sTok && typeof sTok === 'string' && sTok.trim()) return sTok.trim();
-
-    const uStr = sessionStorage.getItem('admin_user');
-    if (uStr) {
-      const u = JSON.parse(uStr);
-      if (u && u.token && typeof u.token === 'string' && u.token.trim()) return u.token.trim();
-    }
-
-    const lTok = localStorage.getItem('session_token');
-    if (lTok && typeof lTok === 'string' && lTok.trim()) {
-      sessionStorage.setItem('session_token', lTok.trim());
-      return lTok.trim();
-    }
-
-    const luStr = localStorage.getItem('admin_user') || localStorage.getItem('active_session_user');
-    if (luStr) {
-      const lu = JSON.parse(luStr);
-      if (lu && lu.token && typeof lu.token === 'string' && lu.token.trim()) {
-        sessionStorage.setItem('session_token', lu.token.trim());
-        return lu.token.trim();
-      }
-    }
-
-    if (typeof window !== 'undefined' && window.location && window.location.search) {
-      const p = new URLSearchParams(window.location.search);
-      const urlTok = p.get('token') || p.get('session_token');
-      if (urlTok && urlTok.trim()) {
-        sessionStorage.setItem('session_token', urlTok.trim());
-        localStorage.setItem('session_token', urlTok.trim());
-        return urlTok.trim();
-      }
-    }
-  } catch (_) {}
   return '';
 }
 
 // ── API Helpers ──────────────────────────────────────────────────
 async function apiFetch(path, opts = {}, retries = 2) {
   try {
-    const token = getAuthToken();
-    const authHeaders = {};
-    if (token) {
-      authHeaders['Authorization'] = `Bearer ${token}`;
-      authHeaders['X-Session-Token'] = token;
-    }
-
     const response = await fetch(API + path, {
       credentials: 'include',
       headers: {
         'Content-Type': 'application/json',
         'X-Manager-ID': MANAGER_ID || '',
-        ...authHeaders,
         ...(opts.headers || {})
       },
       ...opts
@@ -990,24 +947,24 @@ async function openEditAgentModal(id) {
       </div>
     ` : '';
 
-    openModal(`Edit Agent — ${a.username}`, `
-      <form id="edit-agent-form" onsubmit="saveAgent(event, ${id})">
+    openModal(`Edit Agent — ${escapeHtml(a.username)}`, `
+      <form id="edit-agent-form" onsubmit="saveAgent(event, ${Number(id)})">
         <div class="form-row">
           <div class="form-group"><label class="form-label">Full Name</label>
-            <input id="ea-name" value="${a.full_name || ''}"></div>
+            <input id="ea-name" value="${escapeHtml(a.full_name || '')}"></div>
           <div class="form-group"><label class="form-label">Email</label>
-            <input id="ea-email" value="${a.email || ''}"></div>
+            <input id="ea-email" value="${escapeHtml(a.email || '')}"></div>
         </div>
         <div class="form-row">
           <div class="form-group"><label class="form-label">Phone</label>
-            <input id="ea-phone" value="${a.phone || ''}"></div>
+            <input id="ea-phone" value="${escapeHtml(a.phone || '')}"></div>
           <div class="form-group"><label class="form-label">Status</label>
-            <input readonly value="${a.status || 'active'}" style="background:var(--bg-hover);cursor:not-allowed;"></div>
+            <input readonly value="${escapeHtml(a.status || 'active')}" style="background:var(--bg-hover);cursor:not-allowed;"></div>
         </div>
         <div class="form-group"><label class="form-label">New Password (optional)</label>
           <input type="password" id="ea-pass" autocomplete="new-password" placeholder="Leave blank to keep current (min 6 characters)"></div>
         <div class="form-group"><label class="form-label">Notes</label>
-          <textarea id="ea-notes" rows="2">${a.notes || ''}</textarea></div>
+          <textarea id="ea-notes" rows="2">${escapeHtml(a.notes || '')}</textarea></div>
         ${allocHtml}
         <div class="form-actions">
           <button type="button" class="btn btn-outline" onclick="closeModal()">Cancel</button>
@@ -1476,13 +1433,13 @@ async function openEditClientModal(id) {
       </div>
     ` : '';
 
-    openModal(`Edit Client — ${c.username}`, `
-      <form id="edit-client-form" onsubmit="saveClient(event, ${id})">
+    openModal(`Edit Client — ${escapeHtml(c.username)}`, `
+      <form id="edit-client-form" onsubmit="saveClient(event, ${Number(id)})">
         <div class="form-row">
           <div class="form-group"><label class="form-label">Full Name</label>
-            <input id="ec-name" value="${c.full_name || ''}"></div>
+            <input id="ec-name" value="${escapeHtml(c.full_name || '')}"></div>
           <div class="form-group"><label class="form-label">Email</label>
-            <input id="ec-email" value="${c.email || ''}"></div>
+            <input id="ec-email" value="${escapeHtml(c.email || '')}"></div>
         </div>
         <div class="form-row">
           <div class="form-group"><label class="form-label">Balance ($)</label>
@@ -1498,13 +1455,13 @@ async function openEditClientModal(id) {
           ${zySelectSearch('ec-agent', 'Search agents…')}
           <select id="ec-agent">
             ${(agents?.data || []).map(a =>
-              `<option value="${a.id}" ${a.id === c.agent_id ? 'selected' : ''}>${a.username}</option>`
+              `<option value="${a.id}" ${a.id === c.agent_id ? 'selected' : ''}>${escapeHtml(a.username)}</option>`
             ).join('')}
           </select></div>
         <div class="form-group"><label class="form-label">New Password (optional)</label>
           <input type="password" id="ec-pass" autocomplete="new-password" placeholder="Leave blank to keep current (min 6 characters)"></div>
         <div class="form-group"><label class="form-label">Notes</label>
-          <textarea id="ec-notes" rows="2">${c.notes || ''}</textarea></div>
+          <textarea id="ec-notes" rows="2">${escapeHtml(c.notes || '')}</textarea></div>
         ${allocHtml}
         <div class="form-actions">
           <button type="button" class="btn btn-outline" onclick="closeModal()">Cancel</button>
@@ -1868,11 +1825,11 @@ function pgTraffic() {
   const labels = [],
     data = [];
   const ctx = document.getElementById('t-chart');
-  const chart = new Chart(ctx, {
+  const chart = (ctx && typeof Chart !== 'undefined') ? new Chart(ctx, {
     type: 'line',
     data: { labels, datasets: [{ data, label: 'MPS', borderColor: '#334155', backgroundColor: 'rgba(51,65,85,0.08)', fill: true, tension: 0.4, pointRadius: 0, borderWidth: 2 }] },
     options: chartOpts()
-  });
+  }) : null;
 
   const wsProto = location.protocol === 'https:' ? 'wss' : 'ws';
   const ws = new WebSocket(`${wsProto}://${location.host}/ws/live-traffic`);
@@ -1890,7 +1847,7 @@ function pgTraffic() {
       data.push(d.mps || 0);
       if (labels.length > 60) { labels.shift();
         data.shift(); }
-      chart.update('none');
+      if (chart) chart.update('none');
     } catch (err) {
       console.warn('WebSocket message error:', err);
     }
@@ -2059,16 +2016,16 @@ async function pgPayoutRequests() {
           ['#', 'Agent', 'Amount', 'Method', 'Wallet', 'Status', 'Time', 'Actions'],
           requests.map(r => [
             r.id || '—',
-            r.user || '—',
+            escapeHtml(r.user || '—'),
             `<strong class="text-success">$${r.amount || 0}</strong>`,
             badge(r.method || '—', 'blue'),
-            `<span class="monospace text-muted" style="font-size:11px;">${r.wallet || '—'}</span>`,
+            `<span class="monospace text-muted" style="font-size:11px;">${escapeHtml(r.wallet || '—')}</span>`,
             statusBadge(r.status),
             fmtShort(r.timestamp),
             r.status === 'pending' ? `
-              <button class="btn btn-success btn-sm" onclick="mgrApprovePayout(${r.id})"><i class="fas fa-check"></i> Approve</button>
-              <button class="btn btn-danger btn-sm" onclick="mgrRejectPayout(${r.id})"><i class="fas fa-times"></i> Reject</button>
-            ` : (r.status === 'paid' ? `<button class="btn btn-outline btn-sm" onclick='downloadPayoutInvoice(${JSON.stringify(r)})'><i class="fas fa-file-invoice"></i> Invoice</button>` : '—')
+              <button class="btn btn-success btn-sm" onclick="mgrApprovePayout(${Number(r.id)})"><i class="fas fa-check"></i> Approve</button>
+              <button class="btn btn-danger btn-sm" onclick="mgrRejectPayout(${Number(r.id)})"><i class="fas fa-times"></i> Reject</button>
+            ` : (r.status === 'paid' ? `<button class="btn btn-outline btn-sm" onclick="downloadPayoutInvoice(${escapeHtml(JSON.stringify(r))})"><i class="fas fa-file-invoice"></i> Invoice</button>` : '—')
           ])
         )}
       </div>
@@ -2093,13 +2050,13 @@ async function mgrRejectPayout(id) {
 
 // ── PAYOUT INVOICE (PDF via print) ─────────────────────────────────
 function downloadPayoutInvoice(r) {
+  const esc = typeof escapeHtml === 'function' ? escapeHtml : (v => String(v ?? ''));
   const siteName = (window.__BRAND_SETTINGS__ && window.__BRAND_SETTINGS__.site_name) || 'HUMEX SMS';
-  const prefix = siteName.replace(/[^A-Za-z0-9]/g, '').slice(0, 5).toUpperCase() || 'ALPHA';
+  const prefix = siteName.replace(/[^A-Za-z0-9]/g, '').slice(0, 5).toUpperCase() || 'HUMEX';
   const invoiceNo = `${prefix}-INV-${String(r.id).padStart(5, '0')}`;
   const dateStr = fmtShort(r.paid_at || r.timestamp);
-  const win = window.open('', '_blank');
-  win.document.write(`
-    <html><head><title>${invoiceNo}</title>
+  const html = `
+    <html><head><title>${esc(invoiceNo)}</title>
     <style>
       body{font-family:'Segoe UI',Arial,sans-serif;padding:40px;color:#222;max-width:700px;margin:0 auto;}
       .inv-header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #1e293b;padding-bottom:20px;margin-bottom:30px;}
@@ -2117,30 +2074,30 @@ function downloadPayoutInvoice(r) {
     <body>
       <div class="inv-header">
         <div>
-          <div class="inv-logo">𝑴𝑨𝑰𝑻 <span>𝑺𝑴𝑺</span></div>
+          <div class="inv-logo">${esc(siteName)}</div>
           <div class="inv-title" style="margin-top:14px;">Payout Invoice</div>
           <span class="paid-stamp">✔ PAID</span>
         </div>
         <div class="inv-meta">
-          <div><strong>${invoiceNo}</strong></div>
-          <div>Date: ${dateStr}</div>
+          <div><strong>${esc(invoiceNo)}</strong></div>
+          <div>Date: ${esc(dateStr)}</div>
         </div>
       </div>
       <table>
         <tr><th>Paid To</th><th>Method</th><th>Wallet / Account</th><th>Request #</th></tr>
         <tr>
-          <td>${r.user || '—'}</td>
-          <td>${r.method || '—'}</td>
-          <td style="font-family:monospace;font-size:12px;">${r.wallet || '—'}</td>
-          <td>#${r.id}</td>
+          <td>${esc(r.user || '—')}</td>
+          <td>${esc(r.method || '—')}</td>
+          <td style="font-family:monospace;font-size:12px;">${esc(r.wallet || '—')}</td>
+          <td>#${esc(r.id)}</td>
         </tr>
       </table>
-      <div class="inv-total">Total Paid: $${(r.amount || 0).toFixed(2)}</div>
-      <div class="inv-footer">Generated by 𝑴𝑨𝑰𝑻 𝑺𝑴𝑺 Panel · This is a system-generated payout invoice.</div>
-      <script>window.onload = () => window.print();</script>
+      <div class="inv-total">Total Paid: $${(Number(r.amount) || 0).toFixed(2)}</div>
+      <div class="inv-footer">Generated by ${esc(siteName)} Panel · This is a system-generated payout invoice.</div>
     </body></html>
-  `);
-  win.document.close();
+  `;
+  if (typeof zyPrintHtml === 'function') { zyPrintHtml(html); return; }
+  toast('Invoice ready — use browser print', 'info');
 }
 
 // ── SMS TEST PANEL ────────────────────────────────────────────────
@@ -2415,7 +2372,7 @@ async function pgNumbers(page = 1) {
           <button class="btn btn-primary btn-sm" onclick="loadPage('assign-numbers')">
             <i class="fas fa-share-from-square"></i> Allocate to Agent
           </button>
-          <button class="btn btn-outline btn-sm" onclick="window.open('/api/numbers/download?manager_id=${MANAGER_ID}','_blank')">
+          <button class="btn btn-outline btn-sm" onclick="zyDownloadFile('/api/numbers/download?manager_id=' + MANAGER_ID, 'numbers.csv')">
             <i class="fas fa-download"></i> Download CSV
           </button>
         </div>
@@ -2756,9 +2713,11 @@ function exportMgrNumbersCsv() {
   toast('CSV exported', 'success');
 }
 function exportMgrNumbersPdf() {
-  const win = window.open('', '_blank');
-  win.document.write(`<html><head><title>Numbers</title><style>body{font-family:sans-serif;padding:20px;}table{width:100%;border-collapse:collapse;}th,td{border:1px solid #ccc;padding:6px;font-size:12px;}</style></head><body>${document.querySelector('.table-wrap').outerHTML}<script>window.onload=()=>window.print();</script></body></html>`);
-  win.document.close();
+  const wrap = document.querySelector('.table-wrap');
+  if (!wrap) return;
+  if (typeof window.zyPrintHtml === 'function') {
+    window.zyPrintHtml(`<!DOCTYPE html><html><head><title>Numbers</title><style>body{font-family:sans-serif;padding:20px;}table{width:100%;border-collapse:collapse;}th,td{border:1px solid #ccc;padding:6px;font-size:12px;}</style></head><body>${wrap.outerHTML}</body></html>`);
+  }
 }
 
 async function searchPoolNumbers() {

@@ -73,8 +73,8 @@
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(text).then(() => {
         if (window.zyShowToast) window.zyShowToast('Copied to clipboard!', 'success');
-        else alert('Copied to clipboard!');
-      });
+        else if (window.toast) window.toast('Copied to clipboard!', 'success');
+      }).catch(() => {});
     } else {
       const ta = document.createElement('textarea');
       ta.value = text;
@@ -83,6 +83,7 @@
       document.execCommand('copy');
       document.body.removeChild(ta);
       if (window.zyShowToast) window.zyShowToast('Copied to clipboard!', 'success');
+      else if (window.toast) window.toast('Copied to clipboard!', 'success');
     }
   }
 
@@ -91,10 +92,8 @@
     if (!grid) return;
     const tableEl = document.getElementById(`apx-tbl-${gridId}`);
     if (!tableEl) return;
-    const win = window.open('', '_blank');
-    if (!win) return;
-    win.document.write(`
-      <html>
+    const html = `
+      <!DOCTYPE html><html>
         <head>
           <title>${apxEscape(grid.title || 'Print Report')}</title>
           <style>
@@ -109,11 +108,24 @@
           <h2>${apxEscape(grid.title || 'HUMEX SMS Report')}</h2>
           <p style="color:#64748b;font-size:10px;">Generated at: ${new Date().toLocaleString()}</p>
           ${tableEl.outerHTML}
-          <script>window.onload = function() { window.print(); window.close(); };<\/script>
         </body>
       </html>
-    `);
-    win.document.close();
+    `;
+    if (typeof window.zyPrintHtml === 'function') {
+      window.zyPrintHtml(html);
+      return;
+    }
+    const frame = document.createElement('iframe');
+    frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden;';
+    document.body.appendChild(frame);
+    const doc = frame.contentDocument || frame.contentWindow.document;
+    doc.open();
+    doc.write(html);
+    doc.close();
+    setTimeout(() => {
+      try { frame.contentWindow.focus(); frame.contentWindow.print(); } catch (_) {}
+      setTimeout(() => { try { frame.remove(); } catch (_) {} }, 1500);
+    }, 150);
   }
 
   // ── 4. Main apxTable Implementation ─────────────────────────────────
@@ -489,7 +501,7 @@
   };
 
   window.apxTableCsv = function (gridId) {
-    exportCsv(gridId, `alpha_report_${Date.now()}`);
+    exportCsv(gridId, `humex_report_${Date.now()}`);
   };
 
   window.apxTableCopy = function (gridId) {

@@ -1,9 +1,9 @@
 /* ═══════════════════════════════════════════════════════════════
-   𝑴𝑨𝑰𝑻 𝑺𝑴𝑺 — TEST PANEL shell + dashboard
-   Same skin as the manager/agent panels (speed-panel.css), but with
-   the test panel's own menu, tiles and pages:
+   HUMEX SMS — TEST PANEL shell + dashboard
+   Same skin as the manager/agent panels, with the test panel's own
+   menu, tiles and pages:
        Dashboard · SMS Test Numbers · Test SMS Summary Reports
-   Loaded FIRST, before speed-kit.js / speed-test-pages.js.
+   Loaded FIRST, before shared-ui-kit.js / testpanel-pages.js.
    ═══════════════════════════════════════════════════════════════ */
 
 /* ── Respect Dark / Light / System theme profile setting ───── */
@@ -70,6 +70,7 @@ function doLogout() {
     window.SpeedAuth.clearSession();
     return;
   }
+  fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => {});
   ['tp_logged_in', 'tp_user', 'admin_logged_in', 'admin_user', 'active_session_active', 'active_session_role'].forEach(k => {
     try { sessionStorage.removeItem(k); } catch (e) {}
     try { localStorage.removeItem(k); } catch (e) {}
@@ -80,11 +81,9 @@ function doLogout() {
 /* ── API + toast (the kit and the pages use these) ───────────── */
 async function apiFetch(path, opts = {}, retries = 2) {
   try {
-    const sTok = sessionStorage.getItem('session_token') || localStorage.getItem('session_token') || '';
-    const authHeaders = sTok ? { 'Authorization': `Bearer ${sTok}`, 'X-Session-Token': sTok } : {};
     const res = await fetch(path, {
       credentials: 'include',
-      headers: { 'Content-Type': 'application/json', ...authHeaders, ...(opts.headers || {}) },
+      headers: { 'Content-Type': 'application/json', ...(opts.headers || {}) },
       ...opts
     });
     if (res.status === 401) {

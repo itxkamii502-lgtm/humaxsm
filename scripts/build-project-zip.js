@@ -35,6 +35,7 @@ const ROOT_FILES_WHITELIST = [
   'server.js',
   'ecosystem.config.cjs',
   'reset-owner-password.js',
+  '.env.example',
   'README.md',
   'VPS_DEPLOYMENT_GUIDE.md'
 ];

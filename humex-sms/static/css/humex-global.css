@@ -792,19 +792,27 @@ tbody tr:nth-child(even) { background:rgba(255,255,255,0.02); }
     box-sizing: border-box !important;
   }
 
-  /* Inputs, selects and buttons take full natural width */
+  /* Inputs, selects and buttons take full natural width and >=16px font to prevent iOS zoom */
   input[type="text"],
   input[type="number"],
   input[type="password"],
   input[type="email"],
+  input[type="search"],
+  input[type="tel"],
   select,
   textarea {
     max-width: 100% !important;
+    font-size: 16px !important;
     box-sizing: border-box !important;
   }
 
   .form-group {
     width: 100% !important;
+  }
+
+  .stats-grid > .stat-card:last-child:nth-child(odd),
+  .zy-tiles > *:last-child:nth-child(odd) {
+    grid-column: span 2;
   }
 
   /* Filter bar wrap on phones */
@@ -1022,6 +1030,14 @@ table.zy-dt2-table td,
   font-size: 12.5px !important;
   text-align: center !important;
   vertical-align: middle !important;
+  font-variant-numeric: tabular-nums;
+}
+
+.stat-value,
+.zy-kpi-value,
+.zy-dt-date,
+.zy-dt-time {
+  font-variant-numeric: tabular-nums;
 }
 
 table.zy-dt td div[style*="max-width"],

@@ -77,7 +77,15 @@ export async function startServer(dir, port, env = {}) {
     return { status: res.status, data, headers: res.headers };
   };
   const login = async (username, password) => {
-    const r = await api('POST', '/api/auth/login', { body: { username, password } });
+    const capRes = await api('GET', '/api/auth/captcha');
+    let captcha_id = '';
+    let captcha_answer = '';
+    if (capRes.data && capRes.data.id && capRes.data.question) {
+      captcha_id = capRes.data.id;
+      const m = String(capRes.data.question).match(/(\d+)\s*\+\s*(\d+)/);
+      if (m) captcha_answer = String(Number(m[1]) + Number(m[2]));
+    }
+    const r = await api('POST', '/api/auth/login', { body: { username, password, captcha_id, captcha_answer } });
     const sc = r.headers.getSetCookie ? r.headers.getSetCookie() : [];
     const tok = sc.map(c => c.split(';')[0]).find(c => c.startsWith('alpha_session_token='));
     return { ok: r.status === 200 && !!tok, cookie: tok || '', res: r };

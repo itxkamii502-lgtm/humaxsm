@@ -1,4 +1,4 @@
-/* MAIT SMS panel — MANAGER pages. Requires speed-kit.js */
+/* HUMEX SMS panel — MANAGER pages. Requires shared-ui-kit.js */
 
 /* ═══ 1. SMS RANGES & RATECARD MASTER CATALOG ═════════════════════════ */
 let ZY_RANGE_LIST = [];
@@ -1733,7 +1733,16 @@ async function pgCreditNotesLoad() {
   zy2Render('dt-credit');
 }
 
-function zyCreditPdf(id) { window.open(`/api/credit-notes/${id}/pdf`, '_blank'); }
+async function zyCreditPdf(id) {
+  try {
+    const res = await fetch(`/api/credit-notes/${Number(id)}/pdf`, { credentials: 'include' });
+    if (!res.ok) { if (typeof toast === 'function') toast('Unable to open voucher', 'error'); return; }
+    const html = await res.text();
+    if (typeof window.zyPrintHtml === 'function') window.zyPrintHtml(html);
+  } catch (_) {
+    if (typeof toast === 'function') toast('Unable to open voucher', 'error');
+  }
+}
 
 /* ═══ 10. PAYMENT REQUESTS ══════════════════════════════════ */
 async function pgPaymentRequests() {
@@ -1745,7 +1754,7 @@ async function pgPaymentRequests() {
   try {
     const mgrUser = await apiFetch(`/api/users/${MANAGER_ID}`);
     mgrBalance = Number(mgrUser?.balance || 0);
-  } catch (e) {}
+  } catch (e) { console.warn('Manager payout balance fetch error:', e); }
 
   c.innerHTML = `
     <div class="zy-intro" style="font-size:13px;color:#475569;margin-bottom:14px;line-height:1.5;">Track downline agent payment requests, review settlement histories, and request commission payouts directly to Owner.</div>
@@ -1784,7 +1793,7 @@ window.zyManagerRequestPayoutModal = async function(currentBal = 0) {
   try {
     const settings = await apiFetch('/api/settings');
     minPayout = Number(settings?.min_payout ?? 10);
-  } catch (e) {}
+  } catch (e) { console.warn('Manager settings fetch error:', e); }
 
   zyModal('Request Commission Payout', `
     <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px 14px;margin-bottom:14px;font-size:13px;">

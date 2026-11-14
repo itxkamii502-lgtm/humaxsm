@@ -1182,7 +1182,8 @@ assertCheck('shared-ui-kit.js table empty row integrates zyEmptyState',
   const speedPanel = fs.readFileSync(path.resolve('humex-sms/static/js/manager-shell.js'), 'utf8');
   const speedClient = fs.readFileSync(path.resolve('humex-sms/static/js/client-shell.js'), 'utf8');
   const speedAdmin = fs.readFileSync(path.resolve('humex-sms/static/js/owner-shell.js'), 'utf8');
-  const testpanelJs = fs.readFileSync(path.resolve('humex-sms/static/js/testpanel.js'), 'utf8');
+  const testpanelShellJs = fs.readFileSync(path.resolve('humex-sms/static/js/testpanel-shell.js'), 'utf8');
+  const testpanelPagesJs = fs.readFileSync(path.resolve('humex-sms/static/js/testpanel-pages.js'), 'utf8');
 
   assertCheck('F2: agent-shell.js ZY_SIDE_ORDER removes account group', !speedAgent.includes("ZY_SIDE_ORDER = ['dashboard', 'clisearch', 'smsmodule', 'smstest', 'users', 'cdr', 'payments', 'account']"));
   assertCheck('F2: manager-shell.js ZY_SIDE_ORDER removes account group', !speedPanel.includes("ZY_SIDE_ORDER = ['dashboard', 'clisearch', 'smsmodule', 'smstest', 'users', 'cdr', 'payments', 'account']"));
@@ -1194,7 +1195,7 @@ assertCheck('shared-ui-kit.js table empty row integrates zyEmptyState',
   assertCheck('F2: manager-shell.js does not render zy-foot-profile box', !speedPanel.includes('zy-foot-profile'));
   assertCheck('F2: client-shell.js does not render zy-foot-profile box', !speedClient.includes('zy-foot-profile'));
   assertCheck('F2: owner-shell.js does not render zy-foot-profile box', !speedAdmin.includes('zy-foot-profile'));
-  assertCheck('F2: testpanel.js does not render zy-foot-profile box', !testpanelJs.includes('zy-foot-profile'));
+  assertCheck('F2: testpanel-shell.js does not render zy-foot-profile box', !testpanelShellJs.includes('zy-foot-profile'));
 
   // 4. REST API and Audit Log moved into profile page as tabs
   assertCheck('F2: shared-profile-security.js defines profile tabs', profileSecJs.includes('zy-profile-tabs') && profileSecJs.includes('tab-btn-api') && profileSecJs.includes('tab-btn-audit'));
@@ -1374,7 +1375,8 @@ assertCheck('shared-ui-kit.js table empty row integrates zyEmptyState',
   const speedAdminJs = fs.readFileSync(path.resolve('humex-sms/static/js/owner-shell.js'), 'utf8');
   const speedAgentPagesJs = fs.readFileSync(path.resolve('humex-sms/static/js/agent-pages.js'), 'utf8');
   const speedClientPagesJs = fs.readFileSync(path.resolve('humex-sms/static/js/client-pages.js'), 'utf8');
-  const testpanelJs = fs.readFileSync(path.resolve('humex-sms/static/js/testpanel.js'), 'utf8');
+  const testpanelPagesJs = fs.readFileSync(path.resolve('humex-sms/static/js/testpanel-pages.js'), 'utf8');
+  const testpanelHtml = fs.readFileSync(path.resolve('humex-sms/static/testpanel.html'), 'utf8');
   const serverJs = fs.readFileSync(path.resolve('server.js'), 'utf8');
 
   // 1. CSS components defined
@@ -1460,34 +1462,30 @@ assertCheck('shared-ui-kit.js table empty row integrates zyEmptyState',
   );
 
   // 7. Testpanel integration
-  assertCheck('F5: testpanel.js uses .zy-filter-grid with 7 chips and toolbar',
-    testpanelJs.includes('class="zy-filter-grid"') && testpanelJs.includes('zy-btn-amber') && testpanelJs.includes('Hour')
+  assertCheck('F5: testpanel-pages.js uses .zy-filter-grid with 7 chips and toolbar',
+    testpanelPagesJs.includes('class="zy-filter-grid"') && testpanelPagesJs.includes('zy-btn-amber') && testpanelPagesJs.includes('Hour')
+  );
+  assertCheck('F5: testpanel.html loads FontAwesome & Chart.js',
+    testpanelHtml.includes('font-awesome') && testpanelHtml.includes('chart.js')
   );
 
-  // 8. Runtime 390px Geometry & Layout Simulation
-  const mockFrom = { id: 'rp-from', col: 1, row: 1, top: 40 };
-  const mockTo = { id: 'rp-to', col: 2, row: 1, top: 40 };
-  const mockRange = { id: 'rp-range', col: 1, row: 2, top: 100 };
-  const mockClient = { id: 'rp-client', col: 2, row: 2, top: 100 };
-  const mockNumber = { id: 'rp-num', col: 1, row: 3, top: 160 };
-  const mockCli = { id: 'rp-cli', col: 2, row: 3, top: 160 };
-  const mockBtnExport = { id: 'btn-export-report', col: 1, row: 1, top: 300 };
-  const mockBtnShow = { id: 'btn-show-report', col: 2, row: 1, top: 300 };
-  const mockChips = ['hour', 'date', 'month', 'range', 'client', 'number', 'cli'];
+  // 8. Real CSS Responsive & Iframe/Storage Hygiene Verification
+  const globalCss = fs.readFileSync(path.resolve('humex-sms/static/css/humex-global.css'), 'utf8');
+  assertCheck('F5 CSS: humex-panel.css includes 2-column grid at mobile/tablet and 16px input guard',
+    speedPanelCss.includes('repeat(2, minmax(0, 1fr))') && speedPanelCss.includes('font-size: 16px')
+  );
+  assertCheck('F5 CSS: humex-global.css enforces tabular-nums and odd KPI card balance',
+    globalCss.includes('tabular-nums') && globalCss.includes('nth-child(odd)')
+  );
 
-  assertCheck('F5 390px layout: From and To have the same top coordinate', mockFrom.top === mockTo.top && mockFrom.row === mockTo.row);
-  assertCheck('F5 390px layout: Range and Client share a row', mockRange.top === mockClient.top && mockRange.row === mockClient.row);
-  assertCheck('F5 390px layout: Number and CLI share a row', mockNumber.top === mockCli.top && mockNumber.row === mockCli.row);
-  assertCheck('F5 390px layout: The two buttons share a row', mockBtnExport.top === mockBtnShow.top && mockBtnExport.row === mockBtnShow.row);
-  assertCheck('F5 390px layout: There are exactly 7 Group By chips', mockChips.length === 7);
-
-  // Verify simulated scrollWidth at 390px
-  const viewportWidth = 390;
-  const cardPadding = 16 * 2; // 32px
-  const gap = 12; // 12px
-  const colWidth = (viewportWidth - cardPadding - gap) / 2; // (390 - 32 - 12)/2 = 173px
-  const rowWidth = colWidth * 2 + gap + cardPadding; // 173*2 + 12 + 32 = 390px
-  assertCheck('F5 390px layout: scrollWidth <= 390 (no horizontal overflow)', rowWidth <= viewportWidth);
+  const clientSideJsFiles = fs.readdirSync(path.resolve('humex-sms/static/js')).filter(f => f.endsWith('.js'));
+  const hasWindowOpen = clientSideJsFiles.some(f => fs.readFileSync(path.resolve('humex-sms/static/js', f), 'utf8').includes('window.open('));
+  const hasTokenRead = clientSideJsFiles.some(f => {
+    const content = fs.readFileSync(path.resolve('humex-sms/static/js', f), 'utf8');
+    return /getItem\(['"]session_token['"]\)|setItem\(['"]session_token['"]/.test(content);
+  });
+  assertCheck('Hygiene: No window.open() popups remain in static frontend JS', !hasWindowOpen);
+  assertCheck('Hygiene: No localStorage/sessionStorage session_token read/write remains in frontend JS', !hasTokenRead);
 })();
 
 if (failed) {

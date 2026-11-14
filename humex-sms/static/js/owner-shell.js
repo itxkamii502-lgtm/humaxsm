@@ -736,7 +736,7 @@ renderMySms = async function (summary = false) {
         <div class="page-subtitle">Here you can view all call detail records, system traffic, and export reports.</div>
       </div>
     </div>
-    <!-- UNIFIED CONTINUOUS SMS REPORTS CARD (AstraSMS reference) -->
+    <!-- UNIFIED CONTINUOUS SMS REPORTS CARD -->
     <div class="zy-filter-grid" data-apx="filter-bar" style="margin-bottom:20px;padding:16px;">
       <div style="font-size:14px;font-weight:700;color:#1e293b;letter-spacing:0.2px;margin-bottom:12px;display:flex;align-items:center;gap:8px;">
         <i class="fas fa-file-invoice" style="color:#0ea5e9;"></i>

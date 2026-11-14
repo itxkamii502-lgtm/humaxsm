@@ -1,20 +1,51 @@
 /* ═══════════════════════════════════════════════════════════════
-   𝑴𝑨𝑰𝑻 𝑺𝑴𝑺 — Manager panel inner pages
+   HUMEX SMS — Manager & Shared Panel Inner Pages Kit
    Same layout as the reference panel: breadcrumb > intro line >
    panel > DataTable toolbar (Search / Show Records / exports) >
    table > "Showing x to y of z entries" + pager.
-   Loaded AFTER speed-panel.js
+   Loaded AFTER panel shell
    ═══════════════════════════════════════════════════════════════ */
+
+function zyPrintHtml(htmlContent) {
+  const html = String(htmlContent || '');
+  const frame = document.createElement('iframe');
+  frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden;';
+  document.body.appendChild(frame);
+  const doc = frame.contentDocument || frame.contentWindow.document;
+  doc.open();
+  doc.write(html);
+  doc.close();
+  setTimeout(() => {
+    try { frame.contentWindow.focus(); frame.contentWindow.print(); } catch (_) {}
+    setTimeout(() => { try { frame.remove(); } catch (_) {} }, 1500);
+  }, 150);
+}
+window.zyPrintHtml = zyPrintHtml;
+
+function zyDownloadFile(url, filename) {
+  if (!url) return;
+  const a = document.createElement('a');
+  a.href = url;
+  if (filename) a.download = filename;
+  a.rel = 'noopener';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+window.zyDownloadFile = zyDownloadFile;
 
 /* ── breadcrumb with sub levels ─────────────────────────────── */
 function zyCrumb(parts) {
   const host = document.querySelector('.zy-crumb-left') || document.querySelector('.zy-crumb');
   if (!host) return;
+  const arr = Array.isArray(parts) ? parts : [];
   host.innerHTML = `<a onclick="loadPage('dashboard')">Home</a>` +
-    parts.map((p, i) => `<span class="zy-sep">&raquo;</span>` +
-      (i < parts.length - 1
-        ? `<a>${p}</a>`
-        : `<span id="breadcrumb">${p}</span>`)).join('');
+    arr.map((p, i) => `<span class="zy-sep">&raquo;</span>` +
+      (i < arr.length - 1
+        ? `<a>${zyEsc(p)}</a>`
+        : `<span class="zy-breadcrumb-current" data-breadcrumb="1">${zyEsc(p)}</span>`)).join('');
+  const topBc = document.getElementById('breadcrumb');
+  if (topBc && !host.contains(topBc) && arr.length) topBc.textContent = String(arr[arr.length - 1] || '');
 }
 
 /* ── DataTable with full toolbar ────────────────────────────── */
@@ -590,10 +621,7 @@ function zyExportHtmlTable(id, kind) {
     return;
   }
   if (kind === 'print') {
-    const w = window.open('', '_blank');
-    w.document.write(`<table border=1 cellspacing=0 cellpadding=6>${visibleRows.map(r => `<tr>${r.map(c => `<td>${c}</td>`).join('')}</tr>`).join('')}</table>`);
-    w.document.close();
-    w.print();
+    zyPrintHtml(`<!DOCTYPE html><html><head><title>${zyEsc(id)}</title><style>body{font-family:sans-serif;padding:16px;}table{width:100%;border-collapse:collapse;}td,th{border:1px solid #cbd5e1;padding:6px 8px;font-size:12px;}</style></head><body><table border=1 cellspacing=0 cellpadding=6>${visibleRows.map(r => `<tr>${r.map(c => `<td>${zyEsc(c)}</td>`).join('')}</tr>`).join('')}</table></body></html>`);
   }
 }
 
@@ -673,10 +701,8 @@ function zy2Export(id, kind) {
     a.download = id + (kind === 'excel' ? '.xls' : '.csv'); a.click();
     return;
   }
-  const w = window.open('', '_blank');
-  w.document.write(`<table border=1 cellspacing=0 cellpadding=6><tr>${visibleCols.map(c => `<th>${c}</th>`).join('')}</tr>` +
-    visibleRows.map(r => `<tr>${r.map(c => `<td>${zyCell2(c).v ?? ''}</td>`).join('')}</tr>`).join('') + `</table>`);
-  w.document.close(); w.print();
+  zyPrintHtml(`<!DOCTYPE html><html><head><title>${zyEsc(id)}</title><style>body{font-family:sans-serif;padding:16px;}table{width:100%;border-collapse:collapse;}th,td{border:1px solid #cbd5e1;padding:6px 8px;font-size:12px;text-align:left;}th{background:#f8fafc;}</style></head><body><table border=1 cellspacing=0 cellpadding=6><tr>${visibleCols.map(c => `<th>${zyEsc(c)}</th>`).join('')}</tr>` +
+    visibleRows.map(r => `<tr>${r.map(c => `<td>${zyEsc(zyCell2(c).v ?? '')}</td>`).join('')}</tr>`).join('') + `</table></body></html>`);
 }
 
 
@@ -750,7 +776,7 @@ function zyModal(title, body, footer) {
 })();
 
 const zyList = v => Array.isArray(v) ? v : ((v && v.data) || []);
-const zyEsc = s => String(s ?? '').replace(/[<>&"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c]));
+const zyEsc = s => String(s ?? '').replace(/[<>&"']/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#39;' }[c]));
 
 /* Request Numbers & Self-Allocate Modals (Real Backend Policy & Limits) */
 window.zyFetchAllocPolicy = async function() {
@@ -1027,7 +1053,6 @@ function zyFilterBox(id, onShow, extraBtn) {
   setInterval(() => {
     const currentDay = getLocalDateStr();
     if (currentDay !== lastDay) {
-      console.log(`[AutoDateWatcher] Date rollover detected: ${lastDay} -> ${currentDay}`);
       const oldDay = lastDay;
       lastDay = currentDay;
 
@@ -1556,8 +1581,8 @@ function zyUpdateBreadcrumb(page, label) {
   const isDash = !page || page === 'dashboard';
   const displayLabel = label || (page ? page.charAt(0).toUpperCase() + page.slice(1).replace(/-/g, ' ') : 'Dashboard');
   const leftHtml = isDash
-    ? `<a onclick="loadPage('dashboard')">Home</a><span class="zy-sep">&raquo;</span><span id="breadcrumb">Dashboard</span>`
-    : `<a onclick="loadPage('dashboard')">Home</a><span class="zy-sep">&raquo;</span><span id="breadcrumb">${displayLabel}</span>`;
+    ? `<a onclick="loadPage('dashboard')">Home</a><span class="zy-sep">&raquo;</span><span id="breadcrumb" class="zy-breadcrumb-current" data-breadcrumb="1">Dashboard</span>`
+    : `<a onclick="loadPage('dashboard')">Home</a><span class="zy-sep">&raquo;</span><span id="breadcrumb" class="zy-breadcrumb-current" data-breadcrumb="1">${zyEsc(displayLabel)}</span>`;
 
   const leftContainer = crumb.querySelector('.zy-crumb-left');
   if (leftContainer) {
@@ -2832,9 +2857,7 @@ window.setupUsernameAvailabilityCheck = function(inputId, feedbackId, submitBtnI
     }
     try {
       const q = `/api/check-username?username=${encodeURIComponent(val)}${excludeId ? `&exclude_id=${excludeId}` : ''}${table ? `&table=${table}` : ''}`;
-      const tok = localStorage.getItem('session_token') || sessionStorage.getItem('session_token') || '';
-      const headers = tok ? { 'Authorization': 'Bearer ' + tok, 'X-Session-Token': tok } : {};
-      const res = await fetch(q, { headers, credentials: 'include' });
+      const res = await fetch(q, { credentials: 'include' });
       const data = await res.json();
       if (data.exists) {
         if (feedback) {

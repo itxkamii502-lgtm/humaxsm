@@ -82,17 +82,13 @@
     return ROLE_ROUTES[nr] || '/owner';
   }
 
-  // Ensure current tab's sessionStorage matches and URL tokens are ingested
+  // Ensure current tab's sessionStorage matches user metadata (auth itself uses HttpOnly cookies)
   function syncSession() {
     try {
-      // 1. Check if token was passed in URL (e.g. from login redirect in iframe)
+      // Clean any legacy ?token= param from address bar if present
       if (window.location.search) {
         const urlParams = new URLSearchParams(window.location.search);
-        const urlToken = urlParams.get('token') || urlParams.get('session_token');
-        if (urlToken) {
-          sessionStorage.setItem('session_token', urlToken);
-          localStorage.setItem('session_token', urlToken);
-          // Clean token from address bar without reloading
+        if (urlParams.has('token') || urlParams.has('session_token')) {
           urlParams.delete('token');
           urlParams.delete('session_token');
           const remainingSearch = urlParams.toString();
@@ -101,16 +97,18 @@
         }
       }
 
-      // 2. Sync session to sessionStorage
+      // Remove any stale raw tokens from Web Storage
+      try { sessionStorage.removeItem('session_token'); } catch (_) {}
+      try { localStorage.removeItem('session_token'); } catch (_) {}
+
+      // Sync non-secret user metadata to sessionStorage
       if (isLoggedIn()) {
         const user = getActiveUser();
         const role = getActiveRole();
         sessionStorage.setItem('admin_logged_in', '1');
         if (role) sessionStorage.setItem('session_role', role);
         if (user) {
-          if (!user.token) {
-            user.token = sessionStorage.getItem('session_token') || localStorage.getItem('session_token') || '';
-          }
+          if (user.token) delete user.token;
           sessionStorage.setItem('admin_user', JSON.stringify(user));
         }
         if (normalizeRole(role) === 'testpanel') {
@@ -121,29 +119,28 @@
     } catch (e) {}
   }
 
-  // Called on login to set this browser's session
-  function setSession(userObj, token) {
+  // Called on login to set this browser's metadata (session secret remains in HttpOnly cookie)
+  function setSession(userObj) {
     try {
       const role = (userObj && userObj.role) ? userObj.role : 'Owner';
-      if (userObj && token) userObj.token = token;
-      const userJson = JSON.stringify(userObj || {});
+      const cleanUser = userObj ? { ...userObj } : {};
+      delete cleanUser.token;
+      const userJson = JSON.stringify(cleanUser);
 
-      // Tab-isolated session
+      // Tab-isolated session metadata
       sessionStorage.setItem('admin_logged_in', '1');
       sessionStorage.setItem('admin_user', userJson);
       sessionStorage.setItem('session_role', role);
-      if (token) sessionStorage.setItem('session_token', token);
+      sessionStorage.removeItem('session_token');
 
-      // Global storage for new tab initial state
+      // Global storage metadata for new tab initial state
       localStorage.setItem('admin_logged_in', '1');
       localStorage.setItem('active_session_active', '1');
       localStorage.setItem('active_session_role', role);
       localStorage.setItem('active_session_user', userJson);
       localStorage.setItem('admin_user', userJson);
       localStorage.setItem('active_session_id', Date.now().toString());
-      if (token) {
-        localStorage.setItem('session_token', token);
-      }
+      localStorage.removeItem('session_token');
 
       if (normalizeRole(role) === 'testpanel') {
         localStorage.setItem('tp_logged_in', '1');
@@ -158,7 +155,6 @@
 
   // Clear session globally across this browser
   function clearSession() {
-    const token = sessionStorage.getItem('session_token') || localStorage.getItem('session_token');
     const keys = [
       'admin_logged_in', 'admin_user', 'active_session_active', 'active_session_role',
       'active_session_user', 'active_session_id', 'session_token', 'session_role', 'tp_logged_in', 'tp_user',
@@ -173,7 +169,7 @@
     try {
       fetch('/api/auth/logout', {
         method: 'POST',
-        headers: token ? { 'Authorization': 'Bearer ' + token } : {}
+        credentials: 'include'
       }).catch(function () {});
     } catch (e) {}
     try {

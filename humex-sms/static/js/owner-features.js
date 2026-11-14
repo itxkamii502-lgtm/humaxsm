@@ -55,7 +55,7 @@ function resetServiceFilters() {
 
 function exportServices() {
   toast('Exporting services...', 'info');
-  window.open('/api/services/export', '_blank');
+  zyDownloadFile('/api/services/export', 'services.csv');
 }
 
 
@@ -249,7 +249,7 @@ function resetCliFilters() {
 
 function exportCli() {
   toast('Exporting CLI routes...', 'info');
-  window.open('/api/cli-routes/export', '_blank');
+  zyDownloadFile('/api/cli-routes/export', 'cli-routes.csv');
 }
 
 
@@ -419,7 +419,7 @@ async function viewTransferDetail(transferId) {
 function exportTransferLog() {
   try {
     toast('Exporting transfer history...', 'info');
-    window.open('/api/number-transfers/export', '_blank');
+    zyDownloadFile('/api/number-transfers/export', 'number-transfers.csv');
   } catch (err) {
     console.error('Export error:', err);
     toast('Failed to export', 'error');
@@ -434,7 +434,7 @@ function downloadTransferLog() {
 function downloadNumbersCSV(params = '') {
   try {
     const url = `/api/numbers/download${params ? '?' + params : ''}`;
-    window.open(url, '_blank');
+    zyDownloadFile(url, 'numbers.csv');
     toast('Downloading numbers CSV...', 'info');
   } catch (err) {
     console.error('Download error:', err);

@@ -43,66 +43,23 @@ const API = '';  // same origin
         User: 'gray'
       };
       const displayRole = (u.role === 'Admin' || u.role === 'Owner') ? 'Owner' : u.role;
-      el.innerHTML = `<i class="fas fa-crown" style="color:#e0a030;"></i><span>${u.username}</span>
-        <span class="badge badge-${roleColor[displayRole] || 'purple'}" style="font-size:10px;">${displayRole}</span>`;
+      el.innerHTML = `<i class="fas fa-crown" style="color:#e0a030;"></i><span>${escapeHtml(u.username)}</span>
+        <span class="badge badge-${roleColor[displayRole] || 'purple'}" style="font-size:10px;">${escapeHtml(displayRole)}</span>`;
     }
   } catch (e) {}
 })();
 
 function getAuthToken() {
-  try {
-    const sTok = sessionStorage.getItem('session_token');
-    if (sTok && typeof sTok === 'string' && sTok.trim()) return sTok.trim();
-
-    const uStr = sessionStorage.getItem('admin_user');
-    if (uStr) {
-      const u = JSON.parse(uStr);
-      if (u && u.token && typeof u.token === 'string' && u.token.trim()) return u.token.trim();
-    }
-
-    const lTok = localStorage.getItem('session_token');
-    if (lTok && typeof lTok === 'string' && lTok.trim()) {
-      sessionStorage.setItem('session_token', lTok.trim());
-      return lTok.trim();
-    }
-
-    const luStr = localStorage.getItem('admin_user') || localStorage.getItem('active_session_user');
-    if (luStr) {
-      const lu = JSON.parse(luStr);
-      if (lu && lu.token && typeof lu.token === 'string' && lu.token.trim()) {
-        sessionStorage.setItem('session_token', lu.token.trim());
-        return lu.token.trim();
-      }
-    }
-
-    if (typeof window !== 'undefined' && window.location && window.location.search) {
-      const p = new URLSearchParams(window.location.search);
-      const urlTok = p.get('token') || p.get('session_token');
-      if (urlTok && urlTok.trim()) {
-        sessionStorage.setItem('session_token', urlTok.trim());
-        localStorage.setItem('session_token', urlTok.trim());
-        return urlTok.trim();
-      }
-    }
-  } catch (_) {}
   return '';
 }
 
 // ── API Helpers ──────────────────────────────────────────────────
 async function apiFetch(path, opts = {}, retries = 2) {
   try {
-    const token = getAuthToken();
-    const authHeaders = {};
-    if (token) {
-      authHeaders['Authorization'] = `Bearer ${token}`;
-      authHeaders['X-Session-Token'] = token;
-    }
-
     const response = await fetch(API + path, {
       credentials: 'include',
       headers: {
         'Content-Type': 'application/json',
-        ...authHeaders,
         ...(opts.headers || {})
       },
       ...opts
@@ -614,10 +571,11 @@ function loadPage(page) {
   if (navEl) navEl.classList.add('active');
 
   const label = navEl ? navEl.querySelector('span')?.textContent || page : page;
-  document.getElementById('breadcrumb').textContent = label;
+  const bcEl = document.getElementById('breadcrumb') || document.querySelector('[data-breadcrumb="1"]');
+  if (bcEl) bcEl.textContent = label;
 
   const content = document.getElementById('page-content');
-  content.innerHTML = `<div class="empty-state"><div class="spinner"></div></div>`;
+  if (content) content.innerHTML = `<div class="empty-state"><div class="spinner"></div></div>`;
 
   const pages = {
     'dashboard': renderDashboard,
@@ -1856,7 +1814,7 @@ async function renderMyNumbers(page = 1, search = '', status = '') {
             <i class="fas fa-hashtag"></i> Manage Numbers Pool
           </div>
           <div class="apx-card-actions">
-            <button class="apx-btn apx-btn-small" onclick="window.open('/api/numbers/download','_blank')" data-apx-tooltip="Download CSV"><i class="fas fa-download"></i> CSV</button>
+            <button class="apx-btn apx-btn-small" onclick="if(typeof zyDownloadFile==='function')zyDownloadFile('/api/numbers/download','numbers.csv')" data-apx-tooltip="Download CSV"><i class="fas fa-download"></i> CSV</button>
           </div>
         </div>
         <div class="apx-card-body zy-panel-body" id="owner-numbers-body" style="padding:0;"><div class="zy-loading" style="padding:30px;text-align:center;">Loading numbers pool…</div></div>
@@ -2605,8 +2563,8 @@ function copyAdminNumbers() {
 function exportAdminNumbersCsv() {
   if (typeof zy2Export === 'function') {
     zy2Export('dt-numbers', 'csv');
-  } else {
-    window.open('/api/numbers/download', '_blank');
+  } else if (typeof zyDownloadFile === 'function') {
+    zyDownloadFile('/api/numbers/download', 'numbers.csv');
   }
 }
 
@@ -4255,7 +4213,7 @@ async function renderTestPanelNumbers(page = 1) {
         <div class="page-actions">
           <button class="btn btn-primary btn-sm" onclick="openTestPanelUploadModal()"><i class="fas fa-upload"></i> Upload Test Numbers</button>
           <button class="btn btn-danger btn-sm" onclick="clearAllTestNumbers()"><i class="fas fa-trash"></i> Clear All</button>
-          <button class="btn btn-outline btn-sm" onclick="window.open('/testpanel','_blank')"><i class="fas fa-vial"></i> Open Test Panel</button>
+          <button class="btn btn-outline btn-sm" onclick="navigator.clipboard?.writeText(location.origin+'/testpanel').catch(()=>{});toast('Test Panel URL copied: /testpanel (sign in with a Test Panel account)','info')"><i class="fas fa-vial"></i> Copy Test Panel URL</button>
         </div>
       </div>
       <div class="stats-grid" style="grid-template-columns:repeat(3,1fr);">
@@ -5843,7 +5801,7 @@ async function renderDeliveryLogs(page = 1) {
             <input type="radio" name="cdr-group" value="" ${adminCdrGroupBy === '' ? 'checked' : ''} onchange="adminCdrGroupBy=''"> None
           </label>
           <div style="margin-left:auto;display:flex;gap:8px;">
-            <button class="btn btn-warning btn-sm" onclick="window.open('/api/numbers/download','_blank')"><i class="fas fa-download"></i> Export Report</button>
+            <button class="btn btn-warning btn-sm" onclick="if(typeof zyDownloadFile==='function')zyDownloadFile('/api/numbers/download','numbers.csv')"><i class="fas fa-download"></i> Export Report</button>
             <button class="btn btn-primary btn-sm" onclick="renderDeliveryLogs(1)"><i class="fas fa-chart-bar"></i> Show Report</button>
           </div>
         </div>
@@ -5959,7 +5917,7 @@ function renderLiveTraffic() {
   let total = 0;
 
   const ctx = document.getElementById('live-traffic-chart');
-  const chart = new Chart(ctx, {
+  const chart = (ctx && typeof Chart !== 'undefined') ? new Chart(ctx, {
     type: 'line',
     data: {
       labels,
@@ -5975,7 +5933,7 @@ function renderLiveTraffic() {
       }]
     },
     options: chartOpts()
-  });
+  }) : null;
 
   const wsProto = location.protocol === 'https:' ? 'wss' : 'ws';
   const ws = new WebSocket(`${wsProto}://${location.host}/ws/live-traffic`);
@@ -5999,7 +5957,7 @@ function renderLiveTraffic() {
 
       if (labels.length > 60) { labels.shift();
         data.shift(); }
-      chart.update('none');
+      if (chart) chart.update('none');
     } catch (err) {
       console.warn('WebSocket message error:', err);
     }
@@ -6245,7 +6203,7 @@ function renderThroughputMonitor() {
   let peak = 0;
 
   const ctx = document.getElementById('tp-chart');
-  const chart = new Chart(ctx, {
+  const chart = (ctx && typeof Chart !== 'undefined') ? new Chart(ctx, {
     type: 'line',
     data: {
       labels,
@@ -6261,7 +6219,7 @@ function renderThroughputMonitor() {
       }]
     },
     options: chartOpts()
-  });
+  }) : null;
 
   const wsProto = location.protocol === 'https:' ? 'wss' : 'ws';
   const ws = new WebSocket(`${wsProto}://${location.host}/ws/smpp-monitor`);
@@ -6283,7 +6241,7 @@ function renderThroughputMonitor() {
 
       if (labels.length > 60) { labels.shift();
         data.shift(); }
-      chart.update('none');
+      if (chart) chart.update('none');
     } catch (err) {
       console.warn('WebSocket message error:', err);
     }
@@ -6551,25 +6509,18 @@ function downloadPayoutInvoice(r) {
       <table>
         <tr><th>Paid To</th><th>Method</th><th>Wallet / Account</th><th>Request #</th></tr>
         <tr>
-          <td>${r.user || '—'}</td>
-          <td>${r.method || '—'}</td>
-          <td style="font-family:monospace;font-size:12px;">${r.wallet || '—'}</td>
-          <td>#${r.id}</td>
+          <td>${escapeHtml(r.user || '—')}</td>
+          <td>${escapeHtml(r.method || '—')}</td>
+          <td style="font-family:monospace;font-size:12px;">${escapeHtml(r.wallet || '—')}</td>
+          <td>#${escapeHtml(r.id)}</td>
         </tr>
       </table>
       <div class="inv-total">Total Paid: $${(Number(r.amount) || 0).toFixed(2)}</div>
       <div class="inv-footer">Generated by HUMEX SMS Panel · System-generated payout invoice.</div>
     </body></html>
   `;
-  try {
-    const win = window.open('', '_blank');
-    if (win && win.document) {
-      win.document.write(invoiceHtml + '<script>window.onload = () => window.print();</script>');
-      win.document.close();
-      return;
-    }
-  } catch (_) {}
-  openModal(`Payout Invoice — #${invoiceNo}`, `
+  if (typeof zyPrintHtml === 'function') { zyPrintHtml(invoiceHtml); return; }
+  openModal(`Payout Invoice — #${escapeHtml(invoiceNo)}`, `
     <div style="background:#fff;border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:14px;">
       ${invoiceHtml}
     </div>
@@ -6767,18 +6718,18 @@ async function renderManagers() {
           ['#', 'Username', 'Email', 'Commission %', 'Balance', 'Status', 'Created', 'Actions'],
           (data?.data || []).map((u, idx) => [
             `<strong class="monospace">#${idx + 1}</strong>`,
-            `<strong>${u.username || '—'}</strong>`,
-            u.email || '—',
+            `<strong>${escapeHtml(u.username || '—')}</strong>`,
+            escapeHtml(u.email || '—'),
             `<span class="badge badge-blue font-bold">${u.commission_percent ?? u.commission_rate ?? 0}%</span>`,
             `<span class="text-success">$${u.balance || 0}</span>`,
             statusBadge(u.status),
             fmtShort(u.created),
             `<div style="display:inline-flex;gap:4px;align-items:center;">
-              <button class="btn btn-outline btn-sm" onclick="openViewUserModal(${u.id},'manager')" title="View Details"><i class="fas fa-eye"></i></button>
-              <button class="btn btn-outline btn-sm" onclick="openEditUserModal(${u.id})" title="Edit Details"><i class="fas fa-pen"></i></button>
-              <button class="btn btn-outline btn-sm" onclick="openResetPasswordModal(${u.id},'${u.username}','users')" title="Reset Password"><i class="fas fa-key"></i></button>
-              <button class="btn btn-primary btn-sm" onclick="loginAsManager(${u.id},'${u.username}')" title="Access Manager Panel"><i class="fas fa-arrow-right-to-bracket"></i></button>
-              <button class="btn btn-${u.status === 'active' ? 'warning' : 'success'} btn-sm" onclick="toggleUser(${u.id},'${u.status}')" title="${u.status === 'active' ? 'Suspend' : 'Activate'}">
+              <button class="btn btn-outline btn-sm" onclick="openViewUserModal(${Number(u.id)},'manager')" title="View Details"><i class="fas fa-eye"></i></button>
+              <button class="btn btn-outline btn-sm" onclick="openEditUserModal(${Number(u.id)})" title="Edit Details"><i class="fas fa-pen"></i></button>
+              <button class="btn btn-outline btn-sm" onclick="openResetPasswordModal(${Number(u.id)},'${escapeHtml(u.username)}','users')" title="Reset Password"><i class="fas fa-key"></i></button>
+              <button class="btn btn-primary btn-sm" onclick="loginAsManager(${Number(u.id)},'${escapeHtml(u.username)}')" title="Manager Panel Info"><i class="fas fa-arrow-right-to-bracket"></i></button>
+              <button class="btn btn-${u.status === 'active' ? 'warning' : 'success'} btn-sm" onclick="toggleUser(${Number(u.id)},'${escapeHtml(u.status)}')" title="${u.status === 'active' ? 'Suspend' : 'Activate'}">
                 <i class="fas fa-${u.status === 'active' ? 'pause' : 'play'}"></i>
               </button>
             </div>`
@@ -6893,10 +6844,18 @@ async function submitAddManager(event) {
 }
 
 function loginAsManager(id, username) {
-  const prev = sessionStorage.getItem('admin_user');
-  sessionStorage.setItem('admin_user', JSON.stringify({ id, username, role: 'Manager' }));
-  window.open('/manager', '_blank');
-  sessionStorage.setItem('admin_user', prev);
+  openModal('Manager Panel Access', `
+    <p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px;">
+      Sessions use isolated server-side HttpOnly cookies. To sign in as <strong>${escapeHtml(username || ('Manager #' + id))}</strong>, open an incognito/private window at:
+    </p>
+    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px 12px;font-family:monospace;font-size:12.5px;margin-bottom:14px;">
+      ${escapeHtml(location.origin)}/manager
+    </div>
+    <div class="form-actions">
+      <button type="button" class="btn btn-outline" onclick="closeModal()">Close</button>
+      <button type="button" class="btn btn-primary" onclick="navigator.clipboard?.writeText(location.origin+'/manager').catch(()=>{});toast('Manager login URL copied','success')"><i class="fas fa-copy"></i> Copy URL</button>
+    </div>
+  `);
 }
 
 async function openAdminAddAgentModal() {
@@ -7070,9 +7029,9 @@ async function renderAdminAgents(page = 1) {
           ['#', 'Username', 'Manager', 'Full Name', 'Balance', 'Clients', 'Numbers', 'Today OTP', 'Commission', 'Status', 'Actions'],
           (data?.data || []).map((a, idx) => [
             `<strong class="monospace">#${(page - 1) * 25 + idx + 1}</strong>`,
-            `<strong>${a.username || '—'}</strong>`,
+            `<strong>${escapeHtml(a.username || '—')}</strong>`,
             mgrMap[a.manager_id] ? badge(mgrMap[a.manager_id], 'purple') : badge('Unassigned', 'gray'),
-            a.full_name || '—',
+            escapeHtml(a.full_name || '—'),
             `<span class="text-success fw-600">$${(a.balance || 0).toFixed(2)}</span>`,
             a.clients_count || 0,
             a.numbers_assigned || 0,
@@ -7080,12 +7039,12 @@ async function renderAdminAgents(page = 1) {
             (a.commission_rate || 0) + '%',
             statusBadge(a.status),
             `<div style="display:inline-flex;gap:4px;align-items:center;">
-              <button class="btn btn-outline btn-sm" onclick="openViewUserModal(${a.id},'agent')" title="View Agent Details"><i class="fas fa-eye"></i></button>
-              <button class="btn btn-outline btn-sm" onclick="openEditAgentModal(${a.id})" title="Edit Agent"><i class="fas fa-pen"></i></button>
-              <button class="btn btn-outline btn-sm" onclick="openResetPasswordModal(${a.id},'${a.username}','agents')" title="Reset Password"><i class="fas fa-key"></i></button>
-              <button class="btn btn-outline btn-sm" onclick="openAgentBalanceModal(${a.id},'${a.username}',${a.balance || 0})" title="Adjust Balance"><i class="fas fa-dollar-sign"></i></button>
-              <button class="btn btn-${a.status === 'active' ? 'warning' : 'success'} btn-sm" onclick="toggleAgentAdmin(${a.id},'${a.status}')" title="${a.status === 'active' ? 'Suspend' : 'Activate'}"><i class="fas fa-${a.status === 'active' ? 'pause' : 'play'}"></i></button>
-              <button class="btn btn-danger btn-sm" onclick="deleteAgentAdmin(${a.id})" title="Delete"><i class="fas fa-trash"></i></button>
+              <button class="btn btn-outline btn-sm" onclick="openViewUserModal(${Number(a.id)},'agent')" title="View Agent Details"><i class="fas fa-eye"></i></button>
+              <button class="btn btn-outline btn-sm" onclick="openEditAgentModal(${Number(a.id)})" title="Edit Agent"><i class="fas fa-pen"></i></button>
+              <button class="btn btn-outline btn-sm" onclick="openResetPasswordModal(${Number(a.id)},'${escapeHtml(a.username)}','agents')" title="Reset Password"><i class="fas fa-key"></i></button>
+              <button class="btn btn-outline btn-sm" onclick="openAgentBalanceModal(${Number(a.id)},'${escapeHtml(a.username)}',${Number(a.balance) || 0})" title="Adjust Balance"><i class="fas fa-dollar-sign"></i></button>
+              <button class="btn btn-${a.status === 'active' ? 'warning' : 'success'} btn-sm" onclick="toggleAgentAdmin(${Number(a.id)},'${escapeHtml(a.status)}')" title="${a.status === 'active' ? 'Suspend' : 'Activate'}"><i class="fas fa-${a.status === 'active' ? 'pause' : 'play'}"></i></button>
+              <button class="btn btn-danger btn-sm" onclick="deleteAgentAdmin(${Number(a.id)})" title="Delete"><i class="fas fa-trash"></i></button>
             </div>`
           ]),
           { id: 'tbl-agents', title: 'Agents List', toolbar: true }
@@ -7100,7 +7059,7 @@ async function renderAdminAgents(page = 1) {
 }
 
 function openAgentBalanceModal(id, username, current) {
-  openModal(`Adjust Balance — ${username}`, `
+  openModal(`Adjust Balance — ${escapeHtml(username)}`, `
     <p class="text-muted" style="margin-bottom:16px;">Current balance: <strong class="text-success">$${(current || 0).toFixed(2)}</strong></p>
     <form onsubmit="submitAgentBalance(event, ${id})">
       <div class="form-group">
@@ -7174,15 +7133,15 @@ async function openEditAgentModal(id) {
   try {
     const agent = await apiFetch(`/api/agents/${id}`);
     if (!agent) return;
-    openModal(`Edit Agent — ${agent.username}`, `
-      <form id="edit-agent-form" onsubmit="submitEditAgent(event, ${id})" autocomplete="off">
+    openModal(`Edit Agent — ${escapeHtml(agent.username)}`, `
+      <form id="edit-agent-form" onsubmit="submitEditAgent(event, ${Number(id)})" autocomplete="off">
         <div class="form-row">
-          <div class="form-group"><label class="form-label">Username</label><input value="${agent.username || ''}" id="edit-ag-user" required autocomplete="off"></div>
-          <div class="form-group"><label class="form-label">Full Name</label><input value="${agent.full_name || ''}" id="edit-ag-fullname" autocomplete="off"></div>
+          <div class="form-group"><label class="form-label">Username</label><input value="${escapeHtml(agent.username || '')}" id="edit-ag-user" required autocomplete="off"></div>
+          <div class="form-group"><label class="form-label">Full Name</label><input value="${escapeHtml(agent.full_name || '')}" id="edit-ag-fullname" autocomplete="off"></div>
         </div>
         <div class="form-row">
-          <div class="form-group"><label class="form-label">Email</label><input type="email" value="${agent.email || ''}" id="edit-ag-email" autocomplete="off"></div>
-          <div class="form-group"><label class="form-label">Commission %</label><input type="number" value="${agent.commission_rate || 0}" id="edit-ag-comm" step="0.1" min="0" max="100"></div>
+          <div class="form-group"><label class="form-label">Email</label><input type="email" value="${escapeHtml(agent.email || '')}" id="edit-ag-email" autocomplete="off"></div>
+          <div class="form-group"><label class="form-label">Commission %</label><input type="number" value="${Number(agent.commission_rate) || 0}" id="edit-ag-comm" step="0.1" min="0" max="100"></div>
         </div>
         <div class="form-group"><label class="form-label">New Password (optional)</label><input type="password" id="edit-ag-pass" autocomplete="new-password" placeholder="Leave blank to keep current"></div>
         <div style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:10px;padding:12px 14px;margin-bottom:14px;">
@@ -7272,20 +7231,20 @@ async function renderAdminClients(page = 1) {
           ['#', 'Username', 'Agent', 'Manager', 'Balance', 'Numbers', 'Status', 'Last Active', 'Actions'],
           (data?.data || []).map((c, idx) => [
             `<strong class="monospace">#${(page - 1) * 25 + idx + 1}</strong>`,
-            `<strong>${c.username || '—'}</strong>`,
-            badge(c.agent_username ? `Agent: ${c.agent_username}` : (c.agent_name || (c.agent_id ? `Agent #${c.agent_id}` : '—')), 'blue'),
-            badge(c.manager_username ? `Mgr: ${c.manager_username}` : (c.manager_name || (c.manager_id ? `Mgr #${c.manager_id}` : '—')), 'purple'),
+            `<strong>${escapeHtml(c.username || '—')}</strong>`,
+            badge(c.agent_username ? `Agent: ${escapeHtml(c.agent_username)}` : (escapeHtml(c.agent_name) || (c.agent_id ? `Agent #${c.agent_id}` : '—')), 'blue'),
+            badge(c.manager_username ? `Mgr: ${escapeHtml(c.manager_username)}` : (escapeHtml(c.manager_name) || (c.manager_id ? `Mgr #${c.manager_id}` : '—')), 'purple'),
             `<span class="text-success">$${c.balance || 0}</span>`,
             c.numbers_assigned || 0,
             statusBadge(c.status),
             fmtShort(c.last_active),
             `<div style="display:inline-flex;gap:4px;align-items:center;">
-              <button class="btn btn-outline btn-sm" onclick="openViewUserModal(${c.id},'client')" title="View Client Details"><i class="fas fa-eye"></i></button>
-              <button class="btn btn-outline btn-sm" onclick="openEditClientModal(${c.id})" title="Edit Client"><i class="fas fa-pen"></i></button>
-              <button class="btn btn-outline btn-sm" onclick="openResetPasswordModal(${c.id},'${c.username}','clients')" title="Reset Password"><i class="fas fa-key"></i></button>
-              <button class="btn btn-outline btn-sm" onclick="openClientBalanceModal(${c.id},'${c.username}',${c.balance || 0})" title="Adjust Balance"><i class="fas fa-dollar-sign"></i></button>
-              <button class="btn btn-${c.status === 'active' ? 'warning' : 'success'} btn-sm" onclick="toggleClientAdmin(${c.id},'${c.status}')" title="${c.status === 'active' ? 'Suspend' : 'Activate'}"><i class="fas fa-${c.status === 'active' ? 'pause' : 'play'}"></i></button>
-              <button class="btn btn-danger btn-sm" onclick="deleteClientAdmin(${c.id})" title="Delete"><i class="fas fa-trash"></i></button>
+              <button class="btn btn-outline btn-sm" onclick="openViewUserModal(${Number(c.id)},'client')" title="View Client Details"><i class="fas fa-eye"></i></button>
+              <button class="btn btn-outline btn-sm" onclick="openEditClientModal(${Number(c.id)})" title="Edit Client"><i class="fas fa-pen"></i></button>
+              <button class="btn btn-outline btn-sm" onclick="openResetPasswordModal(${Number(c.id)},'${escapeHtml(c.username)}','clients')" title="Reset Password"><i class="fas fa-key"></i></button>
+              <button class="btn btn-outline btn-sm" onclick="openClientBalanceModal(${Number(c.id)},'${escapeHtml(c.username)}',${Number(c.balance) || 0})" title="Adjust Balance"><i class="fas fa-dollar-sign"></i></button>
+              <button class="btn btn-${c.status === 'active' ? 'warning' : 'success'} btn-sm" onclick="toggleClientAdmin(${Number(c.id)},'${escapeHtml(c.status)}')" title="${c.status === 'active' ? 'Suspend' : 'Activate'}"><i class="fas fa-${c.status === 'active' ? 'pause' : 'play'}"></i></button>
+              <button class="btn btn-danger btn-sm" onclick="deleteClientAdmin(${Number(c.id)})" title="Delete"><i class="fas fa-trash"></i></button>
             </div>`
           ]),
           { id: 'tbl-clients', title: 'Clients List', toolbar: true }
@@ -7326,7 +7285,7 @@ async function deleteClientAdmin(id) {
 }
 
 function openClientBalanceModal(id, username, current) {
-  openModal(`Adjust Balance — ${username}`, `
+  openModal(`Adjust Balance — ${escapeHtml(username)}`, `
     <p class="text-muted" style="margin-bottom:16px;">Current balance: <strong class="text-success">$${(current || 0).toFixed(2)}</strong></p>
     <form onsubmit="submitClientBalance(event, ${id})">
       <div class="form-group">
@@ -7375,13 +7334,13 @@ async function openEditClientModal(id) {
   try {
     const client = await apiFetch(`/api/clients/${id}`);
     if (!client) return;
-    openModal(`Edit Client — ${client.username}`, `
-      <form id="edit-client-form" onsubmit="submitEditClient(event, ${id})" autocomplete="off">
+    openModal(`Edit Client — ${escapeHtml(client.username)}`, `
+      <form id="edit-client-form" onsubmit="submitEditClient(event, ${Number(id)})" autocomplete="off">
         <div class="form-row">
-          <div class="form-group"><label class="form-label">Username</label><input value="${client.username || ''}" id="edit-cl-user" required autocomplete="off"></div>
-          <div class="form-group"><label class="form-label">Full Name</label><input value="${client.full_name || ''}" id="edit-cl-fullname" autocomplete="off"></div>
+          <div class="form-group"><label class="form-label">Username</label><input value="${escapeHtml(client.username || '')}" id="edit-cl-user" required autocomplete="off"></div>
+          <div class="form-group"><label class="form-label">Full Name</label><input value="${escapeHtml(client.full_name || '')}" id="edit-cl-fullname" autocomplete="off"></div>
         </div>
-        <div class="form-group"><label class="form-label">Email</label><input type="email" value="${client.email || ''}" id="edit-cl-email" autocomplete="off"></div>
+        <div class="form-group"><label class="form-label">Email</label><input type="email" value="${escapeHtml(client.email || '')}" id="edit-cl-email" autocomplete="off"></div>
         <div class="form-group"><label class="form-label">New Password (optional)</label><input type="password" id="edit-cl-pass" autocomplete="new-password" placeholder="Leave blank to keep current"></div>
         <div style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:10px;padding:12px 14px;margin-bottom:14px;">
           <div style="font-weight:700;font-size:12px;color:#475569;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Number Acquisition Override (Optional)</div>
@@ -7501,12 +7460,12 @@ async function renderHierarchy() {
                 <i class="fas fa-user-tie"></i>
               </div>
               <div>
-                <div style="font-size:16px;font-weight:700;">${mgr.username || '—'}</div>
-                <div class="text-muted fs-12">${mgr.email || 'Manager'} · $${mgr.balance || 0}</div>
+                <div style="font-size:16px;font-weight:700;">${escapeHtml(mgr.username || '—')}</div>
+                <div class="text-muted fs-12">${escapeHtml(mgr.email || 'Manager')} · $${mgr.balance || 0}</div>
               </div>
               <div style="margin-left:auto;display:flex;gap:8px;">
                 ${statusBadge(mgr.status)}
-                <button class="btn btn-outline btn-sm" onclick="openEditUserModal(${mgr.id})"><i class="fas fa-pen"></i></button>
+                <button class="btn btn-outline btn-sm" onclick="openEditUserModal(${Number(mgr.id)})"><i class="fas fa-pen"></i></button>
               </div>
             </div>
             <div style="margin-left:20px;border-left:2px solid var(--border);padding-left:16px;display:flex;flex-direction:column;gap:12px;">
@@ -7518,7 +7477,7 @@ async function renderHierarchy() {
                       <i class="fas fa-user-secret"></i>
                     </div>
                     <div>
-                      <div class="fw-600">${agent.username || '—'}</div>
+                      <div class="fw-600">${escapeHtml(agent.username || '—')}</div>
                       <div class="text-muted fs-12">${agent.clients_count || 0} clients · ${agent.commission_rate || 0}% commission</div>
                     </div>
                     ${statusBadge(agent.status)}
@@ -7528,7 +7487,7 @@ async function renderHierarchy() {
                       <div style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;
                         padding:4px 10px;font-size:11px;display:flex;align-items:center;gap:6px;">
                         <i class="fas fa-user" style="color:var(--text-muted);font-size:9px;"></i>
-                        <span>${cl.username || '—'}</span>
+                        <span>${escapeHtml(cl.username || '—')}</span>
                         ${statusBadge(cl.status)}
                       </div>
                     `).join('')}
@@ -8435,7 +8394,7 @@ function downloadReportCsv() {
   const blob = new Blob([csv], { type: 'text/csv' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  const sitePrefix = ((window.__BRAND_SETTINGS__?.site_name) || 'alpha_sms').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'alpha_sms';
+  const sitePrefix = ((window.__BRAND_SETTINGS__?.site_name) || 'humex_sms').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'humex_sms';
   a.href = url; a.download = `${sitePrefix}_report_${d.date_from}_to_${d.date_to}.csv`; a.click();
   URL.revokeObjectURL(url);
   toast('CSV downloaded', 'success');
@@ -8444,8 +8403,7 @@ function downloadReportCsv() {
 function downloadReportPdf() {
   const d = _lastReportData;
   if (!d) return;
-  const win = window.open('', '_blank');
-  win.document.write(`
+  const html = `
     <html><head><title>Business Report</title>
     <style>
       body{font-family:'Segoe UI',Arial,sans-serif;padding:40px;color:#222;max-width:800px;margin:0 auto;}
@@ -8461,26 +8419,26 @@ function downloadReportPdf() {
     </style></head>
     <body>
       <h1>HUMEX SMS — Business Report</h1>
-      <p style="color:#666;">${d.date_from} → ${d.date_to}</p>
+      <p style="color:#666;">${escapeHtml(d.date_from)} → ${escapeHtml(d.date_to)}</p>
       <div class="stats">
-        <div class="stat-box"><div class="label">Total SMS</div><div class="value">${d.total_sms}</div></div>
-        <div class="stat-box"><div class="label">Delivered</div><div class="value">${d.delivered}</div></div>
-        <div class="stat-box"><div class="label">Success Rate</div><div class="value">${d.success_rate}%</div></div>
-        <div class="stat-box"><div class="label">Revenue</div><div class="value">$${d.total_revenue.toFixed(2)}</div></div>
+        <div class="stat-box"><div class="label">Total SMS</div><div class="value">${Number(d.total_sms) || 0}</div></div>
+        <div class="stat-box"><div class="label">Delivered</div><div class="value">${Number(d.delivered) || 0}</div></div>
+        <div class="stat-box"><div class="label">Success Rate</div><div class="value">${Number(d.success_rate) || 0}%</div></div>
+        <div class="stat-box"><div class="label">Revenue</div><div class="value">$${Number(d.total_revenue || 0).toFixed(2)}</div></div>
       </div>
       <h3>Top Agents by Revenue</h3>
       <table><tr><th>Agent</th><th>SMS Count</th><th>Revenue</th></tr>
-        ${d.top_agents.map(a => `<tr><td>${a.agent}</td><td>${a.sms_count}</td><td>$${a.revenue.toFixed(2)}</td></tr>`).join('') || '<tr><td colspan="3">No data</td></tr>'}
+        ${d.top_agents.map(a => `<tr><td>${escapeHtml(a.agent)}</td><td>${Number(a.sms_count) || 0}</td><td>$${Number(a.revenue || 0).toFixed(2)}</td></tr>`).join('') || '<tr><td colspan="3">No data</td></tr>'}
       </table>
       <h3>Top Numbers by SMS Count</h3>
       <table><tr><th>Number</th><th>SMS Count</th></tr>
-        ${d.top_numbers.map(n => `<tr><td>${n.number}</td><td>${n.sms_count}</td></tr>`).join('') || '<tr><td colspan="2">No data</td></tr>'}
+        ${d.top_numbers.map(n => `<tr><td>${escapeHtml(n.number)}</td><td>${Number(n.sms_count) || 0}</td></tr>`).join('') || '<tr><td colspan="2">No data</td></tr>'}
       </table>
       <div class="footer">Generated by HUMEX SMS Panel on ${new Date().toISOString().split('T')[0]}</div>
-      <script>window.onload = () => window.print();</script>
     </body></html>
-  `);
-  win.document.close();
+  `;
+  if (typeof zyPrintHtml === 'function') { zyPrintHtml(html); return; }
+  window.print();
 }
 
 // ─── PERMISSIONS ──────────────────────────────────────────────────
@@ -9909,14 +9867,14 @@ async function renderGeneralSettings() {
                       <span class="badge badge-black" style="font-size:10px;padding:2px 8px;background:#0284c7;color:#fff;"><i class="fas fa-database"></i> Permanent Storage</span>
                     </div>
                     <div style="font-size:11.5px;color:#64748b;margin-bottom:8px;line-height:1.4;">
-                      Image will be permanently stored in project assets (<code>Alpha SMS/static/img/custom-logo.png</code>) and database. It remains active across all panels even if original local files are moved.
+                      Image will be permanently stored in project assets (<code>humex-sms/static/img/custom-logo.png</code>) and database. It remains active across all panels even if original local files are moved.
                     </div>
                     <input type="file" id="logo-file-input" accept="image/*" onchange="directUploadLogo(event)" style="font-size:12px;display:block;margin-bottom:10px;">
                     <div style="display:flex;gap:8px;flex-wrap:wrap;">
                       <button type="button" class="btn btn-primary btn-sm" onclick="document.getElementById('logo-file-input').click()" style="font-size:11.5px;padding:6px 14px;background:#00a86b;color:#fff;border:none;border-radius:8px;font-weight:600;">
                         <i class="fas fa-upload" style="margin-right:4px;"></i> Upload Picture
                       </button>
-                      <button type="button" class="btn btn-outline btn-sm" onclick="resetDefaultLogo()" style="font-size:11.5px;padding:6px 12px;border-radius:8px;" title="Reset to official HUMAX SMS logo">
+                      <button type="button" class="btn btn-outline btn-sm" onclick="resetDefaultLogo()" style="font-size:11.5px;padding:6px 12px;border-radius:8px;" title="Reset to official HUMEX SMS logo">
                         <i class="fas fa-rotate-left" style="margin-right:4px;"></i> Reset HUMEX Logo
                       </button>
                       <button type="button" class="btn btn-outline btn-sm" onclick="cropCurrentLogo()" style="font-size:11.5px;padding:6px 12px;border-radius:8px;">
@@ -11579,7 +11537,7 @@ async function doBackup() {
     const blob = await response.blob();
     const disposition = response.headers.get('Content-Disposition') || '';
     const match = disposition.match(/filename=(?:["']?)([^"';]+)(?:["']?)/);
-    const sitePrefix = ((window.__BRAND_SETTINGS__?.site_name) || 'alpha_sms').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'alpha_sms';
+    const sitePrefix = ((window.__BRAND_SETTINGS__?.site_name) || 'humex_sms').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'humex_sms';
     const filename = match ? match[1].replace(/['"]/g, '').trim() : `${sitePrefix}_backup_${new Date().toISOString().split('T')[0]}.zip`;
 
     const url = URL.createObjectURL(blob);

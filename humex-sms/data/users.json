@@ -2,7 +2,7 @@
   {
     "id": 1,
     "username": "Kamran_Bhatti",
-    "password": "$2b$10$KrTihVTodWn.w6gEiVYzWetgxUmkVAv8GCDfn8kj6C36fT6DM2Jau",
+    "password": "$2b$10$vwiG55mL2kBd9mgFXOvw1eV3E27GBCLHNAQRHjBWYQwbItNxl4g/.",
     "role": "Owner",
     "email": "kamran@alphasms.com",
     "balance": 0,
@@ -10,6 +10,6 @@
     "numbers": 0,
     "created": "2026-08-19T03:08:57.860Z",
     "notes": "System Owner",
-    "updated_at": "2026-11-09T08:48:28.482Z"
+    "updated_at": "2026-11-14T14:21:03.557Z"
   }
 ]

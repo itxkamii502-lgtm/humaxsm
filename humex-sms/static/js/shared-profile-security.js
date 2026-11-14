@@ -12,9 +12,8 @@
 
   async function loadUserProfile() {
     try {
-      const token = localStorage.getItem('session_token') || sessionStorage.getItem('session_token');
       const res = await fetch('/api/user/profile', {
-        headers: token ? { 'Authorization': 'Bearer ' + token } : {}
+        credentials: 'include'
       });
       if (res.ok) {
         const data = await res.json();
@@ -231,28 +230,20 @@
         <div class="card" style="background:#ffffff; border:1px solid #e2e8f0; border-radius:12px; padding:22px; box-shadow:0 1px 3px rgba(0,0,0,0.05);">
           <div style="border-bottom: 1px solid #f1f5f9; padding-bottom: 12px; margin-bottom: 18px;">
             <div style="font-size: 14px; font-weight: 800; color: #0f172a; text-transform: uppercase; letter-spacing: 0.5px;">REST API INTEGRATION</div>
-            <div style="font-size: 12px; color: #64748b; margin-top: 3px;">REST API credentials and webhooks for automated SMS and CDR streaming</div>
-          </div>
-          
-          <div style="margin-bottom: 20px;">
-            <label style="display:block; font-size:13px; font-weight:600; color:#334155; margin-bottom:6px;">API Base Endpoint</label>
-            <div style="display:flex; gap:8px;">
-              <input type="text" readonly value="${window.location.origin}/api/v1" style="flex:1; height:40px; border:1px solid #cbd5e1; border-radius:8px; padding:0 12px; font-size:13px; font-family:monospace; background:#f8fafc; color:#0f172a;">
-              <button type="button" class="btn btn-secondary" onclick="navigator.clipboard.writeText(window.location.origin + '/api/v1'); if(window.toast) window.toast('Endpoint copied!','success'); else if(window.showToast) window.showToast('Endpoint copied!','success'); else console.log('Endpoint copied!');" style="height:40px; padding:0 16px; border-radius:8px; cursor:pointer;">Copy</button>
-            </div>
+            <div style="font-size: 12px; color: #64748b; margin-top: 3px;">Live REST API endpoints and scoped bearer tokens for automated SMS &amp; CDR retrieval</div>
           </div>
 
-          <div>
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-              <label style="font-size:13px; font-weight:600; color:#334155; margin:0;">Active API Token</label>
-              <span style="font-size:11px; font-weight:700; padding:2px 8px; border-radius:9999px; background:#ecfdf5; color:#059669;">Active</span>
-            </div>
-            <div style="font-size:12px; color:#64748b; margin-bottom:8px;">Include this header in API requests: <code>Authorization: Bearer &lt;token&gt;</code></div>
+          <div style="margin-bottom: 18px;">
+            <label style="display:block; font-size:13px; font-weight:600; color:#334155; margin-bottom:6px;">SMS Logs Endpoint (GET)</label>
             <div style="display:flex; gap:8px;">
-              <input type="text" id="pro-api-token-val" readonly value="asms_live_${(user.id || 1)}_${(user.username || 'user')}_token" style="flex:1; height:40px; border:1px solid #cbd5e1; border-radius:8px; padding:0 12px; font-size:13px; font-family:monospace; background:#f8fafc; color:#0f172a;">
-              <button type="button" class="btn btn-primary" onclick="const tok='asms_live_' + ${user.id || 1} + '_' + Math.random().toString(36).substring(2,10) + '_' + Date.now().toString(36); document.getElementById('pro-api-token-val').value=tok; if(window.toast) window.toast('API Token refreshed successfully!','success'); else if(window.showToast) window.showToast('API Token refreshed successfully!','success');" style="height:40px; padding:0 16px; border-radius:8px; background:#0284c7; color:#fff; border:none; cursor:pointer;">Regenerate</button>
-              <button type="button" class="btn btn-outline" onclick="navigator.clipboard.writeText(document.getElementById('pro-api-token-val').value); if(window.toast) window.toast('API Token copied!','success'); else if(window.showToast) window.showToast('API Token copied!','success'); else console.log('API Token copied!');" style="height:40px; padding:0 16px; border-radius:8px; border:1px solid #cbd5e1; background:#fff; cursor:pointer;">Copy</button>
+              <input type="text" id="pro-api-endpoint-val" readonly value="${escapeHtml(window.location.origin)}/api/sms" style="flex:1; height:40px; border:1px solid #cbd5e1; border-radius:8px; padding:0 12px; font-size:13px; font-family:monospace; background:#f8fafc; color:#0f172a;">
+              <button type="button" class="btn btn-secondary" onclick="window.SpeedProfile.copyText(document.getElementById('pro-api-endpoint-val').value, 'Endpoint copied!')" style="height:40px; padding:0 16px; border-radius:8px; cursor:pointer;">Copy</button>
             </div>
+            <div style="font-size:12px; color:#64748b; margin-top:6px;">Authenticate requests with header <code>X-API-Token: &lt;token&gt;</code> or <code>Authorization: Bearer &lt;token&gt;</code>. Query stats via <code>/crapi/viewstats</code>.</div>
+          </div>
+
+          <div id="pro-api-tokens-wrap">
+            <div style="padding:16px; text-align:center; color:#64748b; font-size:13px;">Loading API tokens...</div>
           </div>
         </div>
       </div>
@@ -299,8 +290,142 @@
     if (btnApi) btnApi.style.cssText = isApi ? activeStyle : inactiveStyle;
     if (btnAudit) btnAudit.style.cssText = isAudit ? activeStyle : inactiveStyle;
 
+    if (isApi) {
+      loadApiTokens();
+    }
     if (isAudit) {
       loadAuditLogs();
+    }
+  }
+
+  async function loadApiTokens() {
+    const wrap = document.getElementById('pro-api-tokens-wrap');
+    if (!wrap) return;
+    try {
+      const res = await fetch('/api/tokens', { credentials: 'include' });
+      if (res.status === 403) {
+        wrap.innerHTML = `<div style="padding:14px 16px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; font-size:13px; color:#475569;">
+          API tokens are issued and managed by your Manager or Owner via the <b>REST API Keys</b> screen.
+        </div>`;
+        return;
+      }
+      if (!res.ok) {
+        wrap.innerHTML = `<div style="padding:14px 16px; color:#ef4444; font-size:13px;">Unable to load API tokens.</div>`;
+        return;
+      }
+      const tokens = await res.json();
+      const list = Array.isArray(tokens) ? tokens : (tokens.data || []);
+      const agRes = await fetch('/api/agents?limit=200', { credentials: 'include' });
+      const agData = agRes.ok ? await agRes.json() : { data: [] };
+      const agents = Array.isArray(agData) ? agData : (agData.data || []);
+
+      wrap.innerHTML = `
+        <form onsubmit="window.SpeedProfile.createApiToken(event)" style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px; align-items:center;">
+          <input type="text" id="pro-new-tok-name" placeholder="Token label (e.g. Production Pull)" required style="flex:1; min-width:180px; height:38px; border:1px solid #cbd5e1; border-radius:8px; padding:0 12px; font-size:13px;">
+          ${agents.length ? `
+            <select id="pro-new-tok-agent" style="min-width:160px; height:38px; border:1px solid #cbd5e1; border-radius:8px; padding:0 10px; font-size:13px; background:#fff;">
+              <option value="">Scope to Agent...</option>
+              ${agents.map(a => `<option value="${Number(a.id)}">${escapeHtml(a.username)}</option>`).join('')}
+            </select>
+          ` : ''}
+          <button type="submit" class="btn btn-primary" style="height:38px; padding:0 16px; border-radius:8px; background:#0284c7; color:#fff; border:none; font-size:13px; font-weight:600; cursor:pointer;">Create Token</button>
+        </form>
+        <div id="pro-created-token-box" style="display:none; margin-bottom:16px; padding:12px 14px; background:#ecfdf5; border:1px solid #a7f3d0; border-radius:8px;">
+          <div style="font-size:12px; font-weight:700; color:#065f46; margin-bottom:6px;">Copy your new API token now — it will only be shown once:</div>
+          <div style="display:flex; gap:8px;">
+            <input type="text" id="pro-created-token-val" readonly style="flex:1; height:36px; border:1px solid #6ee7b7; border-radius:6px; padding:0 10px; font-family:monospace; font-size:13px; background:#fff;">
+            <button type="button" class="btn btn-outline" onclick="window.SpeedProfile.copyText(document.getElementById('pro-created-token-val').value, 'Token copied!')" style="height:36px; padding:0 14px; border-radius:6px; border:1px solid #10b981; background:#fff; cursor:pointer;">Copy</button>
+          </div>
+        </div>
+        ${list.length ? `
+          <div style="overflow-x:auto;">
+            <table style="width:100%; border-collapse:collapse; text-align:left;">
+              <thead>
+                <tr style="background:#f8fafc; border-bottom:1px solid #e2e8f0; font-size:11.5px; font-weight:700; color:#475569; text-transform:uppercase;">
+                  <th style="padding:9px 12px;">Label</th>
+                  <th style="padding:9px 12px;">Agent Scope</th>
+                  <th style="padding:9px 12px;">Token Preview</th>
+                  <th style="padding:9px 12px;">Calls</th>
+                  <th style="padding:9px 12px;">Created</th>
+                  <th style="padding:9px 12px;">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${list.map(t => `
+                  <tr style="border-bottom:1px solid #f1f5f9; font-size:12.5px;">
+                    <td style="padding:9px 12px; font-weight:600; color:#0f172a;">${escapeHtml(t.name || 'API Key')}</td>
+                    <td style="padding:9px 12px; color:#334155;">${escapeHtml(t.agent_username || 'All Chain')}</td>
+                    <td style="padding:9px 12px; font-family:monospace; color:#475569;">${escapeHtml(t.token_masked || ('••••••••' + (t.token_hint || '')))}</td>
+                    <td style="padding:9px 12px; font-variant-numeric:tabular-nums;">${Number(t.calls || 0)}</td>
+                    <td style="padding:9px 12px; color:#64748b; white-space:nowrap;">${escapeHtml((t.created || '').slice(0, 10) || '—')}</td>
+                    <td style="padding:9px 12px;">
+                      <button type="button" onclick="window.SpeedProfile.revokeApiToken(${Number(t.id)})" style="padding:4px 10px; border-radius:6px; border:1px solid #fecaca; background:#fef2f2; color:#dc2626; font-size:12px; font-weight:600; cursor:pointer;">Revoke</button>
+                    </td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        ` : `<div style="padding:18px; text-align:center; color:#94a3b8; font-size:13px;">No API tokens created yet.</div>`}
+      `;
+    } catch (err) {
+      wrap.innerHTML = `<div style="padding:14px 16px; color:#ef4444; font-size:13px;">Failed to load API tokens.</div>`;
+    }
+  }
+
+  async function createApiToken(e) {
+    if (e) e.preventDefault();
+    const name = document.getElementById('pro-new-tok-name')?.value.trim();
+    const agentSel = document.getElementById('pro-new-tok-agent');
+    const agent_id = agentSel && agentSel.value ? Number(agentSel.value) : null;
+    if (!name) return;
+    try {
+      const res = await fetch('/api/tokens', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, ...(agent_id ? { agent_id } : {}) })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        showToast(data.error || 'Failed to create API token.', 'error');
+        return;
+      }
+      await loadApiTokens();
+      if (data.token) {
+        const box = document.getElementById('pro-created-token-box');
+        const val = document.getElementById('pro-created-token-val');
+        if (val) val.value = data.token;
+        if (box) box.style.display = 'block';
+      }
+      showToast('API token created!', 'success');
+    } catch (err) {
+      showToast('Network error creating API token.', 'error');
+    }
+  }
+
+  async function revokeApiToken(id) {
+    try {
+      const res = await fetch(`/api/tokens/${Number(id)}`, {
+        method: 'DELETE',
+        credentials: 'include'
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        showToast(data.error || 'Failed to revoke token.', 'error');
+        return;
+      }
+      showToast('API token revoked.', 'info');
+      loadApiTokens();
+    } catch (err) {
+      showToast('Network error revoking API token.', 'error');
+    }
+  }
+
+  function copyText(text, successMsg) {
+    if (!text) return;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(() => showToast(successMsg || 'Copied!', 'success')).catch(() => {});
     }
   }
 
@@ -309,7 +434,7 @@
     if (!wrap) return;
     wrap.innerHTML = '<div style="padding:24px; text-align:center; color:#64748b; font-size:13px;"><div class="spinner" style="margin:0 auto 10px;"></div>Loading audit logs...</div>';
     try {
-      const res = await fetch('/api/audit-logs?limit=50');
+      const res = await fetch('/api/audit-logs?limit=50', { credentials: 'include' });
       let data = [];
       if (res.ok) {
         const json = await res.json();
@@ -363,14 +488,11 @@
       window.toast(msg, type);
     } else if (typeof window.showToast === 'function') {
       window.showToast(msg, type);
-    } else {
-      console.log(`[Toast ${type}]`, msg);
     }
   }
 
   async function savePersonal(e) {
     if (e) e.preventDefault();
-    const token = localStorage.getItem('session_token') || sessionStorage.getItem('session_token');
     const full_name = document.getElementById('pro-fullname')?.value || '';
     const email = document.getElementById('pro-email')?.value.trim() || '';
     const phone = document.getElementById('pro-phone')?.value || '';
@@ -384,10 +506,8 @@
     try {
       const res = await fetch('/api/user/profile/update', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': 'Bearer ' + token } : {})
-        },
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ full_name, email, phone, teams })
       });
       const data = await res.json();
@@ -411,14 +531,11 @@
       return;
     }
 
-    const token = localStorage.getItem('session_token') || sessionStorage.getItem('session_token');
     try {
       const res = await fetch('/api/user/password/change', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': 'Bearer ' + token } : {})
-        },
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ current_password, new_password })
       });
       const data = await res.json();
@@ -440,14 +557,11 @@
       return;
     }
 
-    const token = localStorage.getItem('session_token') || sessionStorage.getItem('session_token');
     try {
       const res = await fetch('/api/user/2fa/setup', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': 'Bearer ' + token } : {})
-        },
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ password: pwd })
       });
       const data = await res.json();
@@ -483,14 +597,11 @@
       return;
     }
 
-    const token = localStorage.getItem('session_token') || sessionStorage.getItem('session_token');
     try {
       const res = await fetch('/api/user/2fa/enable', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': 'Bearer ' + token } : {})
-        },
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code })
       });
       const data = await res.json();
@@ -516,14 +627,11 @@
       return;
     }
 
-    const token = localStorage.getItem('session_token') || sessionStorage.getItem('session_token');
     try {
       const res = await fetch('/api/user/2fa/disable', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': 'Bearer ' + token } : {})
-        },
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ password: pwd, code })
       });
       const data = await res.json();
@@ -542,6 +650,10 @@
     render: renderProfileView,
     switchTab: switchProfileTab,
     loadAuditLogs,
+    loadApiTokens,
+    createApiToken,
+    revokeApiToken,
+    copyText,
     renderTab: (tab, containerId) => renderProfileView(containerId, tab),
     savePersonal,
     changePassword,

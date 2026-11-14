@@ -308,7 +308,7 @@ loadPage = function (page) {
   window.scrollTo({ top: 0 });
 };
 
-/* ── DataTable (MAIT SMS / DataTables look) ────────────────────── */
+/* ── DataTable (HUMEX SMS / DataTables look) ───────────────────── */
 const ZYT = {};
 function zyTable(id, headers, rows, perPage) {
   ZYT[id] = { headers, rows, perPage: perPage || 5, sort: 0, dir: 1, page: 1 };

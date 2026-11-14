@@ -5682,3 +5682,23 @@ body.dark .zy-num-copy-box.copied {
   background: rgba(16, 185, 129, 0.25) !important;
 }
 
+.stat-value,
+.zy-kpi-value,
+.zy-dt-date,
+.zy-dt-time,
+td .monospace {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 768px) {
+  .zy-filter-input,
+  .zy-input,
+  .zy-panel input:not([type="checkbox"]):not([type="radio"]),
+  .zy-panel select,
+  .zy-panel textarea,
+  .modal input:not([type="checkbox"]):not([type="radio"]),
+  .modal select,
+  .modal textarea {
+    font-size: 16px !important;
+  }
+}
