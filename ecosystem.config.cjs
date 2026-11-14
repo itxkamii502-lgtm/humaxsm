@@ -4,6 +4,7 @@ module.exports = {
       name: 'humex-sms',
       script: 'server.js',
       args: '--port 3000',
+      exec_mode: 'fork',
       instances: 1, // Fork mode recommended for stateful memory & SMPP listener
       autorestart: true,
       watch: false,

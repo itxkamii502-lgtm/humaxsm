@@ -6080,17 +6080,26 @@ const smppServerState = {
 };
 
 function handleIncomingSmppSession(session) {
+  const remoteIp = (session.socket && session.socket.remoteAddress)
+    ? session.socket.remoteAddress.replace(/^::ffff:/i, '')
+    : '127.0.0.1';
+  session._ip = remoteIp;
+  logSmppEvent('tcp_connect', remoteIp, `Incoming TCP connection on SMPP port ${smppServerState.port}`);
+
   session.on('error', (err) => {
     // Prevent unhandled errors from ever crashing the server
     const remote = session.socket ? `${session.socket.remoteAddress}:${session.socket.remotePort}` : 'unknown';
-    logSmppEvent('disconnect', session._ip || '127.0.0.1', `Session error (${err.message}) on ${remote}`);
+    session._errLogged = true;
+    logSmppEvent('disconnect', session._ip || remoteIp, `Session error (${err.message}) on ${remote}`, { system_id: session._systemId || '' });
   });
 
   session.on('close', () => {
     if (session._liveId) {
       liveSmppSessions.delete(session._liveId);
       syncLiveSessionsToDb();
-      logSmppEvent('disconnect', session._ip || '127.0.0.1', `Session closed for ${session._systemId || 'unknown'}`, { system_id: session._systemId });
+      logSmppEvent('disconnect', session._ip || remoteIp, `Session closed for ${session._systemId || 'unknown'}`, { system_id: session._systemId });
+    } else if (!session._bindFailedLogged && !session._errLogged) {
+      logSmppEvent('disconnect', session._ip || remoteIp, `TCP connection closed before completing SMPP bind`, { system_id: session._systemId || '' });
     }
   });
 
@@ -6126,44 +6135,51 @@ function handleIncomingSmppSession(session) {
       const cleanPass = String(pdu.password || '');
 
       const accounts = readDb('smpp_accounts') || [];
-      const acc = accounts.find(a => (a.interconnect_type || 'smpp') === 'smpp' &&
-        String(a.system_id || '').toLowerCase() === cleanSysId.toLowerCase());
+      const matchingAccounts = accounts.filter(a => (a.interconnect_type || 'smpp') === 'smpp' &&
+        String(a.system_id || '').trim().toLowerCase() === cleanSysId.toLowerCase());
 
+      let acc = null;
       let authOk = false;
       let failReason = '';
-      if (!acc) {
+      if (!matchingAccounts.length) {
         failReason = `Unknown system_id '${cleanSysId}'`;
-      } else if ((acc.status || 'active') !== 'active') {
-        failReason = `Account '${acc.company}' (${cleanSysId}) is inactive`;
       } else {
-        if (acc.password_hash) {
-          try {
-            authOk = await bcrypt.compare(cleanPass, acc.password_hash);
-          } catch (_) {
-            authOk = false;
-          }
-        } else if (acc.password) {
-          authOk = safeEqual(cleanPass, acc.password);
-        }
-
-        if (!authOk) {
-          failReason = `Invalid password for system_id '${cleanSysId}'`;
-        }
-
-        if (session.socket && session.socket.destroyed) {
-          session._binding = false;
-          return;
-        }
-
-        if (authOk && acc.whitelist_ip && String(acc.whitelist_ip).trim()) {
-          if (!ipMatchesAllowlist(ip, acc.whitelist_ip)) {
-            authOk = false;
-            failReason = `IP ${ip} not in whitelist (${acc.whitelist_ip}) for '${cleanSysId}'`;
+        const activeMatches = matchingAccounts.filter(a => (a.status || 'active') === 'active');
+        if (!activeMatches.length) {
+          failReason = `Account '${matchingAccounts[0].company}' (${cleanSysId}) is inactive`;
+        } else {
+          for (const candidate of activeMatches) {
+            let passOk = false;
+            if (candidate.password_hash) {
+              try {
+                passOk = await bcrypt.compare(cleanPass, candidate.password_hash);
+              } catch (_) {
+                passOk = false;
+              }
+            } else if (candidate.password) {
+              passOk = safeEqual(cleanPass, candidate.password);
+            }
+            if (session.socket && session.socket.destroyed) {
+              session._binding = false;
+              return;
+            }
+            if (!passOk) {
+              if (!failReason) failReason = `Invalid password for system_id '${cleanSysId}'`;
+              continue;
+            }
+            if (candidate.whitelist_ip && String(candidate.whitelist_ip).trim() && !ipMatchesAllowlist(ip, candidate.whitelist_ip)) {
+              failReason = `IP ${ip} not in whitelist (${candidate.whitelist_ip}) for '${cleanSysId}'`;
+              continue;
+            }
+            acc = candidate;
+            authOk = true;
+            failReason = '';
+            break;
           }
         }
 
         // Connection limits
-        if (authOk) {
+        if (authOk && acc) {
           const settings = readDb('settings') || {};
           const globalMax = Number(settings.smpp_max_connections) || 100;
           if (liveSmppSessions.size >= globalMax) {
@@ -6741,6 +6757,10 @@ app.post('/api/smpp/accounts', (req, res) => {
     if (icType === 'smpp') {
       if (!payload.system_id || !String(payload.system_id).trim()) {
         return res.status(400).json({ error: 'System ID is required' });
+      }
+      const sysLower = String(payload.system_id).trim().toLowerCase();
+      if (data.some(a => (a.interconnect_type || 'smpp') === 'smpp' && String(a.system_id || '').trim().toLowerCase() === sysLower)) {
+        return res.status(400).json({ error: `System ID '${String(payload.system_id).trim()}' already exists. Edit the existing account or use a different System ID.` });
       }
     } else if (icType === 'smpp-client') {
       if (!payload.host || !String(payload.host).trim()) {
