@@ -5938,8 +5938,65 @@ function recordFailedSmppBind(ip, systemId = '') {
 }
 
 function clearFailedSmppBinds(ip) {
-  const cleanIp = String(ip || '127.0.0.1').trim().replace(/^::ffff:/, '');
+  const cleanIp = String(ip || '127.0.0.1').trim().replace(/^::ffff:/i, '');
   failedSmppBinds.delete(cleanIp);
+}
+
+function ipMatchesAllowlist(clientIp, allowlistStr) {
+  const cleanIp = String(clientIp || '').trim().replace(/^::ffff:/i, '');
+  if (!allowlistStr || !String(allowlistStr).trim()) return true;
+  const entries = String(allowlistStr).split(',').map(s => s.trim().replace(/^::ffff:/i, '')).filter(Boolean);
+  if (!entries.length) return true;
+
+  const ipToLong = (v) => {
+    const parts = v.split('.');
+    if (parts.length !== 4) return null;
+    let out = 0;
+    for (const p of parts) {
+      if (!/^\d+$/.test(p)) return null;
+      const n = Number(p);
+      if (n < 0 || n > 255) return null;
+      out = ((out << 8) | n) >>> 0;
+    }
+    return out;
+  };
+
+  for (const rule of entries) {
+    if (rule === '*' || rule === '0.0.0.0/0' || rule === cleanIp) return true;
+    if (rule.includes('/')) {
+      const [base, bitsStr] = rule.split('/');
+      const bits = parseInt(bitsStr, 10);
+      const ipNum = ipToLong(cleanIp);
+      const baseNum = ipToLong(base);
+      if (ipNum !== null && baseNum !== null && Number.isFinite(bits) && bits >= 0 && bits <= 32) {
+        const mask = bits === 0 ? 0 : (0xffffffff << (32 - bits)) >>> 0;
+        if ((ipNum & mask) === (baseNum & mask)) return true;
+      }
+    } else if (rule.includes('*')) {
+      const escaped = rule.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*');
+      if (new RegExp('^' + escaped + '$').test(cleanIp)) return true;
+    }
+  }
+  return false;
+}
+
+function unblockSmppAccountIps(whitelistStr) {
+  if (!whitelistStr || !String(whitelistStr).trim()) return;
+  const ips = String(whitelistStr).split(',').map(s => s.trim().replace(/^::ffff:/i, '')).filter(Boolean);
+  for (const ip of ips) {
+    failedSmppBinds.delete(ip);
+  }
+  try {
+    const blocked = readDb('blocked_ips') || [];
+    const filtered = blocked.filter(b => {
+      const bIp = String(b?.ip || '').trim().replace(/^::ffff:/i, '');
+      const isAutoSmpp = String(b?.reason || '').includes('SMPP 5 failed binds');
+      return !(isAutoSmpp && ipMatchesAllowlist(bIp, whitelistStr));
+    });
+    if (filtered.length !== blocked.length) {
+      writeDb('blocked_ips', filtered);
+    }
+  } catch (_) {}
 }
 
 // ── Live SMPP Sessions State ────────────────────────────────────
@@ -6051,11 +6108,12 @@ function handleIncomingSmppSession(session) {
       } catch (_) {}
 
       const ip = (session.socket && session.socket.remoteAddress)
-        ? session.socket.remoteAddress.replace(/^.*:/, '')
+        ? session.socket.remoteAddress.replace(/^::ffff:/i, '')
         : '127.0.0.1';
 
       if (isIpBlocked(ip)) {
         logFirewallEvent(ip, 'SMPP Blocked IP Connection Attempt', 'smpp:bind');
+        logSmppEvent('bind_fail', ip, `Rejected bind for '${pdu.system_id || ''}' (IP blocked in Firewall)`, { system_id: String(pdu.system_id || '') });
         try {
           session.send(pdu.response({ command_status: smpp.ESME_RBINDFAIL }));
           session.destroy();
@@ -6072,7 +6130,12 @@ function handleIncomingSmppSession(session) {
         String(a.system_id || '').toLowerCase() === cleanSysId.toLowerCase());
 
       let authOk = false;
-      if (acc && (acc.status || 'active') === 'active') {
+      let failReason = '';
+      if (!acc) {
+        failReason = `Unknown system_id '${cleanSysId}'`;
+      } else if ((acc.status || 'active') !== 'active') {
+        failReason = `Account '${acc.company}' (${cleanSysId}) is inactive`;
+      } else {
         if (acc.password_hash) {
           try {
             authOk = await bcrypt.compare(cleanPass, acc.password_hash);
@@ -6083,15 +6146,19 @@ function handleIncomingSmppSession(session) {
           authOk = safeEqual(cleanPass, acc.password);
         }
 
+        if (!authOk) {
+          failReason = `Invalid password for system_id '${cleanSysId}'`;
+        }
+
         if (session.socket && session.socket.destroyed) {
           session._binding = false;
           return;
         }
 
         if (authOk && acc.whitelist_ip && String(acc.whitelist_ip).trim()) {
-          const allowed = String(acc.whitelist_ip).split(',').map(s => s.trim().replace(/^.*:/, '')).filter(Boolean);
-          if (allowed.length && !allowed.includes(ip)) {
+          if (!ipMatchesAllowlist(ip, acc.whitelist_ip)) {
             authOk = false;
+            failReason = `IP ${ip} not in whitelist (${acc.whitelist_ip}) for '${cleanSysId}'`;
           }
         }
 
@@ -6100,6 +6167,7 @@ function handleIncomingSmppSession(session) {
           const settings = readDb('settings') || {};
           const globalMax = Number(settings.smpp_max_connections) || 100;
           if (liveSmppSessions.size >= globalMax) {
+            logSmppEvent('bind_fail', ip, `Global max_connections (${globalMax}) reached for '${cleanSysId}'`, { system_id: cleanSysId });
             try {
               session.send(pdu.response({ command_status: smpp.ESME_RALYBND }));
               session.close();
@@ -6114,6 +6182,7 @@ function handleIncomingSmppSession(session) {
             if (s.account_id === acc.id) currentAccConnections++;
           }
           if (currentAccConnections >= accountMax) {
+            logSmppEvent('bind_fail', ip, `Account max_connections (${accountMax}) reached for '${cleanSysId}'`, { system_id: cleanSysId });
             try {
               session.send(pdu.response({ command_status: smpp.ESME_RALYBND }));
               session.close();
@@ -6126,6 +6195,9 @@ function handleIncomingSmppSession(session) {
 
       if (!authOk || (session.socket && session.socket.destroyed)) {
         recordFailedSmppBind(ip, cleanSysId);
+        if (failReason) {
+          logSmppEvent('bind_fail', ip, failReason, { system_id: cleanSysId });
+        }
         try {
           session.send(pdu.response({ command_status: smpp.ESME_RBINDFAIL }));
           session.close();
@@ -6182,7 +6254,7 @@ function handleIncomingSmppSession(session) {
       logSmppEvent('bind_ok', ip, `Bound as ${bindType} for account ${acc.company} (${acc.system_id})`, { system_id: acc.system_id });
 
       try {
-        session.send(pdu.response());
+        session.send(pdu.response({ system_id: acc.system_id || 'HUMEX-SMS' }));
         session.resume();
       } catch (_) {}
       session._binding = false;
@@ -6719,6 +6791,7 @@ app.post('/api/smpp/accounts', (req, res) => {
 
     data.push(newAccount);
     writeDb('smpp_accounts', data);
+    if (newAccount.whitelist_ip) unblockSmppAccountIps(newAccount.whitelist_ip);
 
     if (newAccount.interconnect_type === 'smpp-client' && newAccount.status === 'active') {
       startClientAccountConnection(newAccount);
@@ -6770,6 +6843,7 @@ const handleUpdateSmppAccount = (req, res) => {
 
     data[idx] = current;
     writeDb('smpp_accounts', data);
+    if (current.whitelist_ip) unblockSmppAccountIps(current.whitelist_ip);
 
     if (current.interconnect_type === 'smpp-client') {
       if (current.status === 'active') {
