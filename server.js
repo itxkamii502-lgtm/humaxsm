@@ -6369,19 +6369,58 @@ function handleDlrDeliveryReceipt(text, pdu) {
   }
 }
 
+function normalizeSmppHostPort(rawHost, rawPort) {
+  let raw = String(rawHost || '').trim();
+  let useTls = false;
+  if (/^ssmpp:\/\//i.test(raw)) {
+    useTls = true;
+    raw = raw.replace(/^ssmpp:\/\//i, '');
+  } else {
+    raw = raw.replace(/^(?:smpp|tcp|https?):\/\//i, '');
+  }
+  raw = raw.split('/')[0].trim();
+  let host = raw;
+  let portNum = Number(rawPort);
+  // Extract embedded :port when host isn't an IPv6 bracketed/multi-colon literal
+  const colonCount = (raw.match(/:/g) || []).length;
+  if (colonCount === 1) {
+    const parts = raw.split(':');
+    host = parts[0].trim();
+    const embeddedPort = parseInt(parts[1], 10);
+    if (!Number.isFinite(portNum) || portNum <= 0 || portNum === 2775) {
+      if (embeddedPort >= 1 && embeddedPort <= 65535) portNum = embeddedPort;
+    }
+  } else if (raw.startsWith('[')) {
+    const m = raw.match(/^\[([^\]]+)\](?::(\d+))?$/);
+    if (m) {
+      host = m[1];
+      const embeddedPort = m[2] ? parseInt(m[2], 10) : NaN;
+      if ((!Number.isFinite(portNum) || portNum <= 0) && embeddedPort >= 1 && embeddedPort <= 65535) {
+        portNum = embeddedPort;
+      }
+    }
+  }
+  if (!Number.isFinite(portNum) || portNum < 1 || portNum > 65535) {
+    portNum = useTls ? 3550 : 2775;
+  }
+  return { host, port: portNum, useTls };
+}
+
 function startClientAccountConnection(acc) {
   stopClientAccountConnection(acc.id);
   if ((acc.status || 'active') !== 'active') return;
 
   const plainPass = decryptSmppSecret(acc.password_enc) || acc.password || '';
-  if (!acc.host || !acc.system_id) return;
+  const { host: cleanHost, port: cleanPort, useTls } = normalizeSmppHostPort(acc.host, acc.port);
+  if (!cleanHost || !acc.system_id) return;
 
   const mgr = { backoff: 5000, reconnectTimer: null, session: null };
   clientAccountManagers.set(acc.id, mgr);
 
   function connectToCarrier() {
     try {
-      const url = `smpp://${acc.host}:${acc.port || 2775}`;
+      const proto = (useTls || acc.tls === true) ? 'ssmpp' : 'smpp';
+      const url = `${proto}://${cleanHost}:${cleanPort}`;
       const session = smpp.connect({
         url,
         auto_enquire_link_period: 30000 // enquire_link every 30s
@@ -6653,6 +6692,13 @@ app.post('/api/smpp/accounts', (req, res) => {
     const cleanPayload = { ...payload };
     delete cleanPayload.password;
 
+    if (icType === 'smpp-client') {
+      const norm = normalizeSmppHostPort(payload.host, payload.port);
+      cleanPayload.host = norm.host;
+      cleanPayload.port = norm.port;
+      if (norm.useTls) cleanPayload.tls = true;
+    }
+
     const newAccount = {
       ...cleanPayload,
       id: nextId(data),
@@ -6713,6 +6759,12 @@ const handleUpdateSmppAccount = (req, res) => {
     delete current.password;
 
     Object.assign(current, updates);
+    if ((current.interconnect_type || 'smpp') === 'smpp-client' && current.host) {
+      const norm = normalizeSmppHostPort(current.host, current.port);
+      current.host = norm.host;
+      current.port = norm.port;
+      if (norm.useTls) current.tls = true;
+    }
     current.id = Number(idStr) || current.id;
     current.updated_at = new Date().toISOString();
 
@@ -6794,43 +6846,110 @@ app.post('/api/smpp/accounts/:id/test', async (req, res) => {
     const icType = acc.interconnect_type || 'smpp';
 
     if (icType === 'smpp-client') {
-      const host = acc.host || '127.0.0.1';
-      const port = Number(acc.port) || 2775;
+      const { host: cleanHost, port: cleanPort, useTls } = normalizeSmppHostPort(acc.host || '127.0.0.1', acc.port || 2775);
       const plainPass = decryptSmppSecret(acc.password_enc) || acc.password || '';
+      const bindType = acc.bind_type || 'transceiver';
+
+      // If this client account already has an active live session, verify it via enquire_link
+      // instead of opening a 2nd simultaneous connection (many carriers limit max_connections=1).
+      let existingLive = null;
+      for (const s of liveSmppSessions.values()) {
+        if (s.direction === 'outbound' && Number(s.account_id) === Number(acc.id) && s.sessionObj?.socket?.writable) {
+          existingLive = s;
+          break;
+        }
+      }
+
+      if (existingLive) {
+        const liveCheck = await new Promise((resolve) => {
+          let done = false;
+          const t = setTimeout(() => {
+            if (done) return;
+            done = true;
+            resolve(null);
+          }, 4000);
+          try {
+            existingLive.sessionObj.enquire_link((pdu) => {
+              if (done) return;
+              done = true;
+              clearTimeout(t);
+              if (pdu && pdu.command_status === 0) {
+                resolve({
+                  success: true,
+                  response_time: Date.now() - start,
+                  message: `SMPP live session active & verified (enquire_link 0x0) to ${cleanHost}:${cleanPort}`,
+                  system_id: acc.system_id,
+                  interconnect_type: icType
+                });
+              } else {
+                resolve(null);
+              }
+            });
+          } catch (_) {
+            clearTimeout(t);
+            resolve(null);
+          }
+        });
+        if (liveCheck) {
+          return res.json(liveCheck);
+        }
+      }
 
       const testResult = await new Promise((resolve) => {
         let finished = false;
+        let tcpConnected = false;
         let testSession = null;
-        const timer = setTimeout(() => {
+        const finish = (payload) => {
           if (finished) return;
           finished = true;
+          clearTimeout(timer);
+          resolve(payload);
+        };
+
+        const timer = setTimeout(() => {
           try { if (testSession) testSession.destroy(); } catch (_) {}
-          resolve({ success: false, response_time: Date.now() - start, error: 'SMPP connect timed out after 8s' });
+          const errMsg = tcpConnected
+            ? `TCP connected to ${cleanHost}:${cleanPort}, but carrier did not reply to ${bindType} bind within 8s (check System ID/Password or TLS)`
+            : `TCP connect timed out after 8s to ${cleanHost}:${cleanPort} (carrier IP/port unreachable or firewall/IP whitelist blocking)`;
+          logSmppEvent('test_timeout', cleanHost, errMsg, { system_id: acc.system_id, port: cleanPort, tcp_connected: tcpConnected });
+          finish({ success: false, response_time: Date.now() - start, error: errMsg });
         }, 8000);
 
+        const proto = (useTls || acc.tls === true) ? 'ssmpp' : 'smpp';
         try {
-          testSession = smpp.connect({ url: `smpp://${host}:${port}` });
+          testSession = smpp.connect({ url: `${proto}://${cleanHost}:${cleanPort}` });
         } catch (e) {
-          clearTimeout(timer);
-          return resolve({ success: false, response_time: Date.now() - start, error: e.message });
+          logSmppEvent('test_error', cleanHost, e.message, { system_id: acc.system_id, port: cleanPort });
+          return finish({ success: false, response_time: Date.now() - start, error: e.message });
         }
 
-        testSession.on('error', (err) => {
-          if (finished) return;
-          finished = true;
-          clearTimeout(timer);
-          try { testSession.destroy(); } catch (_) {}
-          resolve({ success: false, response_time: Date.now() - start, error: err.message || 'Connection failed' });
+        testSession.on('connect', () => {
+          tcpConnected = true;
+        });
+        testSession.on('secureConnect', () => {
+          tcpConnected = true;
         });
 
-        const bindFn = testSession['bind_' + (acc.bind_type || 'transceiver')] || testSession.bind_transceiver;
+        testSession.on('error', (err) => {
+          try { testSession.destroy(); } catch (_) {}
+          const errMsg = `${err.message || 'Connection failed'} (${cleanHost}:${cleanPort})`;
+          logSmppEvent('test_error', cleanHost, errMsg, { system_id: acc.system_id, port: cleanPort });
+          finish({ success: false, response_time: Date.now() - start, error: errMsg });
+        });
+
+        testSession.on('close', () => {
+          const errMsg = tcpConnected
+            ? `Carrier ${cleanHost}:${cleanPort} closed socket during ${bindType} bind (check IP whitelist, System ID/Password, or max_connections limit)`
+            : `TCP connection to ${cleanHost}:${cleanPort} closed before handshake`;
+          logSmppEvent('test_close', cleanHost, errMsg, { system_id: acc.system_id, port: cleanPort });
+          finish({ success: false, response_time: Date.now() - start, error: errMsg });
+        });
+
+        const bindFn = testSession['bind_' + bindType] || testSession.bind_transceiver;
         bindFn.call(testSession, {
           system_id: acc.system_id || '',
           password: plainPass
         }, (pdu) => {
-          if (finished) return;
-          finished = true;
-          clearTimeout(timer);
           const latency = Date.now() - start;
           if (pdu.command_status === 0) {
             try {
@@ -6840,19 +6959,21 @@ app.post('/api/smpp/accounts/:id/test', async (req, res) => {
             } catch (_) {
               try { testSession.close(); } catch (_) {}
             }
-            resolve({
+            finish({
               success: true,
               response_time: latency,
-              message: `SMPP bind succeeded (status 0x0) to ${acc.company}`,
+              message: `SMPP bind succeeded (status 0x0) to ${acc.company} (${cleanHost}:${cleanPort})`,
               system_id: acc.system_id,
               interconnect_type: icType
             });
           } else {
             try { testSession.close(); } catch (_) {}
-            resolve({
+            const errMsg = `SMPP bind rejected by ${cleanHost}:${cleanPort} (command_status 0x${pdu.command_status.toString(16)})`;
+            logSmppEvent('bind_fail', cleanHost, errMsg, { system_id: acc.system_id, port: cleanPort });
+            finish({
               success: false,
               response_time: latency,
-              error: `SMPP bind failed with command_status 0x${pdu.command_status.toString(16)}`,
+              error: errMsg,
               system_id: acc.system_id,
               interconnect_type: icType
             });

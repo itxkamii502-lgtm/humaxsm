@@ -1305,7 +1305,7 @@ async function submitSmppAccount(event) {
       if (!password || password.length < 4) { toast('Password must be at least 4 characters', 'error'); return; }
       if (password.length > 8) { toast('Password must be max 8 ASCII characters', 'error'); return; }
 
-      payload = { ...payload, system_id: systemId, password: btoa(password), bind_type: 'transceiver' };
+      payload = { ...payload, system_id: systemId, password: password, bind_type: 'transceiver' };
     } else if (icType === 'smpp-client') {
       const host = document.getElementById('smpp-host').value.trim();
       const port = parseInt(document.getElementById('smpp-port').value) || 2775;
@@ -1318,7 +1318,7 @@ async function submitSmppAccount(event) {
       if (password.length > 8) { toast('Password must be max 8 ASCII characters', 'error'); return; }
       if (port < 1 || port > 65535) { toast('Port must be between 1 and 65535', 'error'); return; }
 
-      payload = { ...payload, host, port, system_id: systemId, password: btoa(password), bind_type: 'transceiver' };
+      payload = { ...payload, host, port, system_id: systemId, password: password, bind_type: 'transceiver' };
     } else {
       const method = document.getElementById('smpp-http-method').value;
       payload = { ...payload, http_method: method, forward_url: window.location.origin + '/api/sms/inbound' };
@@ -1541,7 +1541,7 @@ async function submitEditSmppAccount(event, id) {
     };
 
     if (password && password.length >= 4 && password.length <= 8) {
-      payload.password = btoa(password);
+      payload.password = password;
     }
 
     const result = await apiFetch(`/api/smpp/accounts/${id}`, {
